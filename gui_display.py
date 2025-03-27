@@ -40,7 +40,6 @@ class ConfigWindow(tk.Tk):
         self.robot_ip = tk.StringVar()
         self.robot_port = tk.IntVar(value=5050)
 
-        # Opción de conexión: Simulador o Robot Real
         frame_mode = ttk.LabelFrame(self, text="Selecciona el modo de conexión")
         frame_mode.pack(padx=10, pady=10, fill="x")
 
@@ -49,7 +48,6 @@ class ConfigWindow(tk.Tk):
         rb_sim.pack(anchor="w", padx=5, pady=2)
         rb_real.pack(anchor="w", padx=5, pady=2)
 
-        # Campos de IP y puerto (solo se usan para Robot Real)
         self.frame_ip_port = ttk.LabelFrame(self, text="Datos del Robot Real")
         self.frame_ip_port.pack(padx=10, pady=5, fill="x")
 
@@ -61,11 +59,10 @@ class ConfigWindow(tk.Tk):
         self.entry_port = ttk.Entry(self.frame_ip_port, textvariable=self.robot_port, width=10)
         self.entry_port.grid(row=1, column=1, padx=5, pady=2)
 
-        # Botón de iniciar
         btn_start = ttk.Button(self, text="Iniciar", command=self.on_start)
         btn_start.pack(pady=10)
 
-        self.toggle_fields()  # ocultar al inicio si es simulador
+        self.toggle_fields()
 
     def toggle_fields(self):
         state = "normal" if self.selected_mode.get() == "real" else "disabled"
@@ -90,11 +87,9 @@ class RobotDataGUI(tk.Tk):
         self.port = port
         self.running = True
 
-        # Diccionarios para almacenar las etiquetas por cada articulación
         self.position_labels = {}
         self.temperature_labels = {}
 
-        # Crear marcos para cada grupo de articulaciones
         self.frames = {}
         for group, joints in JOINT_GROUPS.items():
             frame = ttk.LabelFrame(self, text=group)
@@ -112,16 +107,15 @@ class RobotDataGUI(tk.Tk):
                 self.position_labels[joint] = lbl_pos
                 self.temperature_labels[joint] = lbl_temp
 
-        # Inicia el hilo para actualizar datos
         threading.Thread(target=self.update_data, daemon=True).start()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def update_data(self):
-        # Esperar un momento para asegurar la conexión
         time.sleep(1)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.connect((self.host, self.port))
+                s.sendall(b"GUI\n")  # Identifica a la GUI al servidor
             except Exception as e:
                 print(f"Error al conectar a {self.host}:{self.port}", e)
                 return
@@ -138,7 +132,6 @@ class RobotDataGUI(tk.Tk):
     def update_labels(self, robot_data):
         positions = robot_data.get("Position", [])
         temperatures = robot_data.get("Temperature", [])
-        # Para cada articulación, usar el índice de JOINT_INDEX para actualizar
         for joint, idx in JOINT_INDEX.items():
             if idx < len(positions):
                 self.position_labels[joint].config(text=f"Pos: {positions[idx]}")
@@ -150,10 +143,7 @@ class RobotDataGUI(tk.Tk):
         self.destroy()
 
 ###############################################################################
-# Función principal: Inicia la Configuración y luego la GUI
-###############################################################################
 def main():
-    # Mostrar ventana de configuración
     config = ConfigWindow()
     config.mainloop()
 
@@ -167,7 +157,6 @@ def main():
         port = config.port
         sim_proc = None
 
-    # Inicia la GUI principal con los parámetros configurados
     gui = RobotDataGUI(mode=config.mode, host=host, port=port)
     gui.mainloop()
 
