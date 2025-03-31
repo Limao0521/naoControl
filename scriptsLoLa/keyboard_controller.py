@@ -17,7 +17,7 @@ def is_safe_to_move():
     En este ejemplo se simula que siempre es seguro.
     """
     # TODO: Implementar comprobaciones reales.
-    return True
+    return True 
 
 def send_command(position_array):
     """
