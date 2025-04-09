@@ -88,11 +88,9 @@ class RobotDataGUI(tk.Tk):
         self.port = port
         self.running = True
 
-        # Crear un contenedor para dividir la ventana en dos secciones
         container = ttk.Frame(self)
         container.pack(side="top", fill="both", expand=True)
 
-        # Sección izquierda: Monitor de datos del robot
         data_frame = ttk.Frame(container)
         data_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
 
@@ -116,12 +114,11 @@ class RobotDataGUI(tk.Tk):
                 self.position_labels[joint] = lbl_pos
                 self.temperature_labels[joint] = lbl_temp
 
-        # Sección derecha: Control por teclado
         kb_container = ttk.Frame(container)
         kb_container.pack(side="right", fill="y", padx=10, pady=10)
         kb_label = ttk.Label(kb_container, text="Control de Movimiento (WASD)", font=("Arial", 12))
         kb_label.pack(pady=5)
-        # Se instancia el KeyboardController del módulo keyboard_controller
+
         self.keyboard_controller = keyboard_controller.KeyboardController(master=kb_container)
         self.keyboard_controller.pack(fill="both", expand=True)
 
@@ -129,11 +126,11 @@ class RobotDataGUI(tk.Tk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def update_data(self):
-        time.sleep(1)
+        time.sleep(0.5)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.connect((self.host, self.port))
-                s.sendall(b"GUI\n")  # Identifica a la GUI al servidor
+                s.sendall(b"GUI\n")
             except Exception as e:
                 print(f"Error al conectar a {self.host}:{self.port}", e)
                 return
