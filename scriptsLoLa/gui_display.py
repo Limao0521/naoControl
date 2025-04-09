@@ -2,6 +2,7 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import socket, msgpack, threading, time, subprocess, os, sys
+import keyboard_controller  # Importamos el módulo del controlador de teclado
 
 # Lista completa de 25 articulaciones en el orden esperado por LoLA
 JOINT_NAMES = [
@@ -21,10 +22,10 @@ JOINT_GROUPS = {
                 "RHipRoll", "RHipPitch", "RKneePitch", "RAnklePitch", "RAnkleRoll"]
 }
 
-# Utilidad para obtener el índice de cada articulación (basado en JOINT_NAMES)
+# Utilidad para obtener el índice de cada articulación
 JOINT_INDEX = {name: i for i, name in enumerate(JOINT_NAMES)}
 
-# Valores por defecto para conexión TCP
+# Configuración por defecto para el simulador
 DEFAULT_HOST = 'localhost'
 DEFAULT_PORT = 9999
 
@@ -76,23 +77,29 @@ class ConfigWindow(tk.Tk):
         self.destroy()
 
 ###############################################################################
-# Interfaz Gráfica Principal (Monitor)
+# Interfaz Gráfica Principal (Monitor) con integración del control por teclado
 ###############################################################################
 class RobotDataGUI(tk.Tk):
     def __init__(self, mode, host, port):
         super().__init__()
-        self.title("Monitor de Datos del Robot")
+        self.title("Monitor y Control del Robot")
         self.mode = mode
         self.host = host
         self.port = port
         self.running = True
 
+        container = ttk.Frame(self)
+        container.pack(side="top", fill="both", expand=True)
+
+        data_frame = ttk.Frame(container)
+        data_frame.pack(side="left", fill="both", expand=True, padx=10, pady=10)
+
         self.position_labels = {}
         self.temperature_labels = {}
-
         self.frames = {}
+
         for group, joints in JOINT_GROUPS.items():
-            frame = ttk.LabelFrame(self, text=group)
+            frame = ttk.LabelFrame(data_frame, text=group)
             frame.pack(padx=10, pady=5, fill="x")
             self.frames[group] = frame
             for joint in joints:
@@ -107,15 +114,23 @@ class RobotDataGUI(tk.Tk):
                 self.position_labels[joint] = lbl_pos
                 self.temperature_labels[joint] = lbl_temp
 
+        kb_container = ttk.Frame(container)
+        kb_container.pack(side="right", fill="y", padx=10, pady=10)
+        kb_label = ttk.Label(kb_container, text="Control de Movimiento (WASD)", font=("Arial", 12))
+        kb_label.pack(pady=5)
+
+        self.keyboard_controller = keyboard_controller.KeyboardController(master=kb_container)
+        self.keyboard_controller.pack(fill="both", expand=True)
+
         threading.Thread(target=self.update_data, daemon=True).start()
         self.protocol("WM_DELETE_WINDOW", self.on_close)
 
     def update_data(self):
-        time.sleep(1)
+        time.sleep(0.5)
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             try:
                 s.connect((self.host, self.port))
-                s.sendall(b"GUI\n")  # Identifica a la GUI al servidor
+                s.sendall(b"GUI\n")
             except Exception as e:
                 print(f"Error al conectar a {self.host}:{self.port}", e)
                 return
