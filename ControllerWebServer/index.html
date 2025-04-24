@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NAO – Control</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+
+<!--  tabindex="0" permite recibir foco inmediatamente -->
+<body tabindex="0">
+  <main class="nes-pad">
+    <!-- ────────── D-Pad ────────── -->
+    <section class="dpad">
+      <div class="plus-center"></div>
+      <button class="plus up"    data-action="moveUp"    data-key="ArrowUp"></button>
+      <button class="plus down"  data-action="moveDown"  data-key="ArrowDown"></button>
+      <button class="plus left"  data-action="moveLeft"  data-key="ArrowLeft"></button>
+      <button class="plus right" data-action="moveRight" data-key="ArrowRight"></button>
+    </section>
+
+    <!-- ────────── SELECT / START ────────── -->
+    <section class="center">
+      <button class="small-btn" data-action="select" data-key="KeyE">SELECT</button>
+      <button class="small-btn" data-action="start"  data-key="KeyD">START</button>
+    </section>
+
+    <!-- ────────── B / A ────────── -->
+    <section class="ab">
+      <button class="ab-btn b" data-action="btnB" data-key="KeyB">B</button>
+      <button class="ab-btn a" data-action="btnA" data-key="KeyA">A</button>
+    </section>
+  </main>
+
+  <script src="logic.js"></script>
+</body>
+</html>

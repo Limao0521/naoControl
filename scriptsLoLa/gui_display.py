@@ -147,11 +147,22 @@ class RobotDataGUI(tk.Tk):
     def update_labels(self, robot_data):
         positions = robot_data.get("Position", [])
         temperatures = robot_data.get("Temperature", [])
-        for joint, idx in JOINT_INDEX.items():
-            if idx < len(positions):
-                self.position_labels[joint].config(text=f"Pos: {positions[idx]}")
-            if idx < len(temperatures):
-                self.temperature_labels[joint].config(text=f"Temp: {temperatures[idx]}")
+        battery = robot_data.get("Battery", [])
+
+    # Actualización de articulaciones (sin cambios)
+    for joint, idx in JOINT_INDEX.items():
+        if idx < len(positions):
+            self.position_labels[joint].config(text=f"Pos: {positions[idx]}")
+        if idx < len(temperatures):
+            self.temperature_labels[joint].config(text=f"Temp: {temperatures[idx]}")
+
+    # Actualización de batería (nuevo código)
+    if len(battery) >= 4:
+        self.battery_labels["Charge"].config(text=f"Carga: {battery[0]:.2f}%")
+        self.battery_labels["Current"].config(text=f"Corriente: {battery[1]:.2f} A")
+        self.battery_labels["Status"].config(text=f"Estado: {battery[2]:.2f}")
+        self.battery_labels["Temperature"].config(text=f"Temperatura: {battery[3]:.2f} °C")
+
 
     def on_close(self):
         self.running = False
