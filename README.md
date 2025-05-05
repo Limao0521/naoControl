@@ -1,59 +1,116 @@
-Sistema de Comunicación entre Robot NAOv6 y GUI de Monitoreo 
+# Control‑NAO — Documentación definitiva (mayo 2025)
 
-1. Archivos del Proyecto 
+## Changelog de mejoras
 
-El sistema se compone de los siguientes scripts en Python: 
+* **V1**: Prototipo inicial con puente UDP (`ws2udp.py`) y servidor UDP (`walk_server.py`).
+* **V2**: Eliminación de puente. Introducción de servidor WebSocket directo en Python 2.7 (`walk_ws_server.py`).
+* **V3**: Añadidos *prints* para trazabilidad: conexiones, peticiones, normalizaciones y watchdog.
+* **V4**: Correcciones de compatibilidad Py2.7: eliminación de f‑strings, uso de `.format()`, hilos demonio con `setDaemon()`.
 
-• gui_display.py 
+---
 
-• data_simulator.py 
+## 1 · Arquitectura general
 
-• nao_combined_server.py 
+```
+[ Navegador ]  index.html + styles.css + logic.js
+        │  WebSocket ws://<NAO_IP>:6671
+        ▼
+[ walk_ws_server.py ]  WebSocket → ALMotion.moveToward
+        │  (Python 2.7 + NAOqi 2.8, puerto 9559)
+        ▼
+[   NAO real   ]  motores y desplazamiento
+```
 
-2. Descripción de Archivos 
+### Flujo de datos
 
-2.1 gui_display.py 
+| Nº | Emisor (WS)            | Receptor            | Formato         | Descripción                               |
+| -- | ---------------------- | ------------------- | --------------- | ----------------------------------------- |
+| ①  | `logic.js` (browser)   | `walk_ws_server.py` | WebSocket texto | “walk vx vy wz” \~15 Hz                   |
+| ②  | `walk_ws_server.py`    | `ALMotion`          | API NAOqi       | `moveToward(vx, vy, wz)`                  |
+| ③  | `watchdog_loop` (hilo) | `ALMotion`          | API NAOqi       | `stopMove()` tras WATCHDOG s sin comandos |
 
-Este archivo contiene la interfaz gráfica que permite visualizar en tiempo real los datos del robot NAO (posición y temperatura de articulaciones). Permite seleccionar entre modo Simulador o Robot Real y establece conexión por medio de protocolo TCP/IP, requiriendo una IP y un puerto. 
+---
 
-Características: 
+## 2 · Archivos y responsabilidades
 
-- Visualización por grupos de articulaciones. 
+| Archivo                      | Lenguaje   | Rol                                                         |
+| ---------------------------- | ---------- | ----------------------------------------------------------- |
+| **index.html**               | HTML       | Estructura del mando (cruceta NES + joystick táctil)        |
+| **styles.css**               | CSS        | Responsividad y animaciones de botones/joystick             |
+| **logic.js**                 | JavaScript | Captura toques/teclas, normaliza e invoca WS dinámico       |
+| **SimpleWebSocketServer.py** | Python 2   | Implementación pura Python del protocolo WebSocket          |
+| **walk\_ws\_server.py**      | Python 2.7 | Servidor WS + watchdog → `ALMotion.moveToward`/`stopMove()` |
 
-- Conexión por TCP/IP con el robot o con el simulador local. 
+*Coloca `SimpleWebSocketServer.py` y `walk_ws_server.py` en la misma carpeta `/home/nao/remote_control`.*
 
-- Entrada manual de IP y puerto si se selecciona Robot Real. 
+---
 
-- Envía 'GUI' como identificador al servidor del robot para recibir datos. 
+## 3 · Instalación en NAO real (manteniendo Python 2.7)
 
-2.2 data_simulator.py 
+1. **Copiar ficheros**
 
-Simula datos realistas de un robot NAO para pruebas locales. Abre un socket TCP en localhost:9999 y envía periódicamente paquetes con datos de posición y temperatura en formato msgpack. 
+   ```bash
+   # en tu PC:
+   scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
+   ```
+2. **Instalar dependencias Py2** (si no están presentes)
 
-2.3 nao_combined_server.py 
+   ```bash
+   ssh nao@<IP_NAO>
+   pip2 install argparse websocket-client --user
+   ```
+3. **Servir la web**
 
-Este servidor debe ejecutarse dentro del robot NAO. Cumple una doble función: envía continuamente datos al GUI y recibe comandos desde un control remoto físico por TCP/IP, que son reenviados al sistema LoLA del robot mediante el socket local /tmp/robocup. 
+   ```bash
+   cd ~/remote_control
+   python2 -m SimpleHTTPServer 8000 &   # HTTP en 8000
+   ```
+4. **Lanzar servidor WebSocket**
 
-Características: 
+   ```bash
+   cd ~/remote_control
+   python2 walk_ws_server.py &
+   ```
+5. **Conectar y probar**
 
-- Escucha en un puerto TCP (por defecto 5050). 
+   * Desde el móvil/PC: `http://<IP_NAO>:8000`.
+   * Abrir consola SSH en el NAO para ver logs de conexiones, peticiones y watchdog.
 
-- Distingue el tipo de conexión (GUI o CONTROL) mediante el primer mensaje. 
+---
 
-- Recibe mensajes msgpack desde el cliente remoto y los reenvía a LoLA. 
+## 4 · Seguridad y buenas prácticas
 
-- Reenvía los datos de LoLA hacia cualquier GUI conectada. 
+* **Zona despejada** (≥1 × 1 m) sin obstáculos.
+* **Superficie antideslizante**.
+* **Batería** ≥30 % para evitar fallos de tensión.
+* **Watchdog interno**: frena en 0.6 s sin datos.
+* **Stiffness** ON solo al tele-operar; OFF para manipular a mano.
+* **AutonomousLife** desactivado por `walk_ws_server.py`.
+* **No ejecutar** simultáneamente otros clientes que usen ALMotion.
 
-3. Flujo del Sistema 
+---
 
-1. El GUI se conecta por TCP/IP al NAO (puerto configurado) y se identifica como 'GUI'. 
- 2. El robot le envía datos en tiempo real (posición, temperatura). 
- 3. El control remoto también se conecta al NAO y se identifica como 'CONTROL'. 
- 4. El servidor del robot reenvía los comandos recibidos desde el control al subsistema LoLA. 
- 5. La GUI muestra los valores en tiempo real agrupados por zona corporal. 
+## 5 · Explicación detallada de `walk_ws_server.py`
 
-4. Anexos 
+1. **Imports y path**: añade la carpeta local para importar `SimpleWebSocketServer.py`.
+2. **Configurables**: IP, puertos y WATCHDOG al inicio.
+3. **Inicialización NAOqi**:
 
-Repositorio de GitHub: https://github.com/Limao0521/scriptsLoLa 
+   * `ALMotion`, `ALAutonomousLife`, `ALRobotPosture`.
+   * Apaga gestos automáticos y fija postura de pie.
+4. **Clase WalkWS**:
 
- 
+   * `handleConnected`/`handleClose`: logs de conexión.
+   * `handleMessage`: parseo de “walk vx vy wz”, validación, normalización, llamada a `moveToward`, log de envío.
+5. **Watchdog**:
+
+   * Hilo demonio via `threading.Thread` + `setDaemon(True)`.
+   * Cada 50 ms comprueba si `time()-last_cmd > WATCHDOG` → `stopMove()`.
+6. **Arranque de servidor**:
+
+   * `SimpleWebSocketServer("", WS_PORT, WalkWS).serveforever()`.
+   * `KeyboardInterrupt` → frena motores y sale.
+
+---
+
+© 2025 Control‑NAO Project — Universidad de La Sabana
