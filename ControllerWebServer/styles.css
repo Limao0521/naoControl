@@ -1,103 +1,88 @@
-/*════════════════════  PALETA  ════════════════════*/
-:root{
-    --dark-gray:#3d3d3d;   /* cuerpo del mando                     */
-    --light-gray:#bfbfbf;  /* borde claro NES                      */
-    --shadow:rgba(0,0,0,.45);
-  
-    --joy-base:#222;       /* base del joystick                    */
-    --joy-knob:#cf2626;    /* *** pomo rojo ***                    */
-  }
-  
-  /*════════════════════  ESCENARIO  ═════════════════*/
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;
-                       font-family:"Segoe UI",sans-serif;}
-  html{font-size:clamp(14px,2.8vw,18px);}
-  body{
-    display:flex;justify-content:center;align-items:center;
-    min-height:100vh;background:#1a1a1a;color:white;
-  }
-  
-  /*════════════════════  CHASIS  ═════════════════════*/
-  .nes-pad{
-    display:grid;
-    /* 3 columnas fijas → D-pad | SELECT/START | joystick */
-    grid-template-columns:min-content 1fr min-content;
-    align-items:center;
-    gap:2rem;
-  
-    padding:1.5rem 2rem;
-    background:var(--dark-gray);
-    border:8px solid var(--light-gray);
-    border-radius:.8rem;
-    box-shadow:0 .6rem 1rem var(--shadow);
-    max-width:90vw;
-  }
-  
-  /*════════════════════  D-PAD  ══════════════════════*/
-  .dpad{position:relative;width:7rem;height:7rem;}
-  .plus-center{
-    position:absolute;inset:50% 50%;width:2rem;height:2rem;
-    background:#222;border-radius:.25rem;
-    transform:translate(-50%,-50%);
-    box-shadow:inset 0 -.2rem 0 var(--shadow);
-  }
-  .plus{
-    position:absolute;
-    background:#222;border:none;border-radius:.25rem;
-    touch-action:none;           /* evita zoom doble-tap en móvil */
-    box-shadow:inset 0 -.2rem 0 var(--shadow);
-    transition:transform .05s,box-shadow .05s;
-  }
-  /* brazos */
-  .up   {width:2rem;height:2.6rem;top:0;left:50%;transform:translate(-50%,0);}
-  .down {width:2rem;height:2.6rem;bottom:0;left:50%;transform:translate(-50%,0);}
-  .left {width:2.6rem;height:2rem;left:0;top:50%;transform:translate(0,-50%);}
-  .right{width:2.6rem;height:2rem;right:0;top:50%;transform:translate(0,-50%);}
-  
-  /*════════════════════  START / SELECT  ════════════*/
-  .center{display:flex;flex-direction:column;gap:.8rem;}
-  .small-btn{
-    padding:.35rem 1.3rem;
-    font-size:.7rem;letter-spacing:.06em;
-    color:#222;background:var(--light-gray);
-    border:none;border-radius:.3rem;
-    box-shadow:inset 0 -.15rem 0 var(--shadow);
-    touch-action:none;
-    transition:transform .05s;
-  }
-  
-  /*════════════════════  JOYSTICK  ═══════════════════*/
-  .joy-wrapper{display:flex;justify-content:center;}
-  .joy-base{
-    position:relative;
-    width:7rem;height:7rem;
-    background:var(--joy-base);
-    border-radius:50%;
-    box-shadow:inset 0 -.3rem .5rem rgba(0,0,0,.5);
-    touch-action:none;
-  }
-  .joy-knob{
-    position:absolute;left:50%;top:50%;
-    width:3rem;height:3rem;
-    background:var(--joy-knob);       /* rojo definido arriba */
-    border-radius:50%;
-    /* 1er translate centra, 2º será añadido por JS */
-    transform:translate(-50%,-50%);
-    box-shadow:
-        0 .2rem .4rem rgba(0,0,0,.6),
-        inset 0 -.2rem .2rem rgba(255,255,255,.1);
-    /* animación suave tanto al mover como al volver */
-    transition:transform .06s cubic-bezier(.25,.46,.45,.94);
-  }
-  
-  /*════════════════════  EFECTO .pressed  ════════════*/
-  button:active,
-  .pressed:not(.plus){
-    transform:translateY(2px);
-    filter:brightness(.85);
-  }
-  .plus.pressed{
-    transform:scale(.96);
-    box-shadow:inset 0 .15rem .4rem rgba(0,0,0,.65);
-  }
-  
+:root {
+  --dark-gray: #3d3d3d;
+  --light-gray: #bfbfbf;
+  --shadow: rgba(0,0,0,.45);
+  --joy-base: #222;
+  --joy-knob: #cf2626;
+  --menu-bg: rgba(0,0,0,0.8);
+  --btn-size: clamp(2rem,10vw,3rem);
+}
+
+/* Reset & layout */
+*,*::before,*::after{ box-sizing:border-box; margin:0; padding:0; }
+html{font-size:clamp(14px,3vw,18px);}
+body{ background:#111; color:#fff; min-height:100vh; display:flex;
+  flex-direction:column; align-items:center; }
+
+/* ─── Contenedor principal ─── */
+.nes-pad{ display:grid;
+  grid-template-columns:1fr min-content 1fr;
+  align-items:center; gap:1rem;
+  background:var(--dark-gray); border:6px solid var(--light-gray);
+  border-radius:.5rem; padding:1rem; max-width:95vw; margin-top:1rem;
+}
+
+/* ─── Panel de modos ─── */
+.mode-panel{ display:flex; flex-direction:column; gap:.5rem; }
+.mode-btn{
+  background:var(--light-gray); color:#222; border:none; border-radius:.3rem;
+  padding:.5rem; font-size:1rem; box-shadow:inset 0 -.2rem 0 var(--shadow);
+  transition:transform .05s;
+}
+.mode-btn.active, .mode-btn:active {
+  transform:translateY(2px); filter:brightness(.9);
+}
+
+/* ─── SELECT / START ─── */
+.center{ display:flex; flex-direction:column; gap:.5rem; }
+.small-btn{
+  background:var(--light-gray); color:#222; border:none; border-radius:.3rem;
+  padding:.4rem .8rem; font-size:.9rem; box-shadow:inset 0 -.2rem 0 var(--shadow);
+  transition:transform .05s;
+}
+.small-btn:active{ transform:translateY(2px); }
+
+/* ─── JOYSTICK ─── */
+.joy-wrapper{ display:flex; justify-content:center; }
+.joy-base{
+  position:relative; width:clamp(120px,40vw,200px); height:clamp(120px,40vw,200px);
+  background:var(--joy-base); border-radius:50%;
+  box-shadow:inset 0 -.5rem 1rem rgba(0,0,0,.6);
+  touch-action:none;
+}
+.joy-knob{
+  position:absolute; left:50%; top:50%;
+  width:clamp(50px,15vw,80px); height:clamp(50px,15vw,80px);
+  background:var(--joy-knob); border-radius:50%;
+  transform:translate(-50%,-50%);
+  transition:transform .1s cubic-bezier(.25,.46,.45,.94);
+  box-shadow:0 .2rem .5rem rgba(0,0,0,.6), inset 0 -.2rem .2rem rgba(255,255,255,.1);
+}
+
+/* ─── Extras nav ─── */
+.extras-nav{ margin:1rem 0; display:flex; gap:1rem; }
+.extra-btn{
+  background:var(--light-gray); color:#222; font-size:1.5rem; padding:.5rem;
+  border:none; border-radius:.3rem; box-shadow:inset 0 -.2rem 0 var(--shadow);
+  transition:transform .05s;
+}
+.extra-btn:active{ transform:translateY(2px); }
+
+/* ─── Menús overlay ─── */
+.menu{
+  position:fixed; top:0; left:0; width:100%; height:100%;
+  background:var(--menu-bg); display:none; flex-direction:column;
+  padding:1rem;
+}
+.menu.active{ display:flex; }
+.menu header{ display:flex; justify-content:space-between; align-items:center; margin-bottom:1rem; }
+.close-btn{
+  background:none; border:none; color:#fff; font-size:1.5rem; cursor:pointer;
+}
+.menu textarea{ flex:1; border:none; border-radius:.3rem; padding:.5rem; font-size:1rem; margin-bottom:.5rem; }
+.menu button{ background:var(--light-gray); color:#222; border:none; padding:.5rem; border-radius:.3rem; }
+
+/* ─── Stats table ─── */
+#stat-joints{ width:100%; border-collapse:collapse; margin-top:1rem; }
+#stat-joints th,#stat-joints td{ border:1px solid #444; padding:.3rem; text-align:center; }
+#camera-feed{ width:100%; border:3px solid #444; border-radius:.3rem; }

@@ -1,59 +1,129 @@
-Sistema de Comunicación entre Robot NAOv6 y GUI de Monitoreo 
+Documentación actualizada
+1 · Arquitectura general
+less
+Copiar
+Editar
+[ Navegador ]   index.html + styles.css + logic.js
+      │   WebSocket ws://<IP_NAO>:6671
+      ▼
+[ control_server.py ]  NAOqi dispatcher (Python 2.7)
+      │   JSON actions: walk/move/led/say/posture/getInfo
+      ▼
+[    NAO real   ]  ALMotion, ALLeds, ALTextToSpeech, ALMemory
+Flujo de datos
+#	Emisor	Receptor	Formato	Descripción
+①	logic.js (web)	control_server.py	JSON via WS	{action:'walk',vx,vy,wz} (15 Hz)
+②	logic.js (web)	control_server.py	JSON via WS	{action:'move',joint,value}
+③	logic.js (web)	control_server.py	JSON via WS	{action:'led',groups,r,g,b}
+④	logic.js (web)	control_server.py	JSON via WS	{action:'say',text}
+⑤	logic.js (web)	control_server.py	JSON via WS	{action:'posture',value:'Sit}
+⑥	logic.js (web)	control_server.py	JSON via WS	{action:'getInfo'} → stats
+⑦	control_server.py	NAOqi	API interna	moveToward, setAngles, fadeRGB, etc.
 
-1. Archivos del Proyecto 
+2 · Archivos y responsabilidades
+Archivo	Lenguaje	Rol	Por qué es necesario
+index.html	HTML	Estructura de la UI (modos, joystick, menús)	Punto de entrada: se sirve desde python -m http.server.
+styles.css	CSS	Layout responsive, estética NES, animaciones táctiles	Usabilidad y aspecto en móvil/PC
+logic.js	JavaScript	Lógica de UI: WebSocket, joystick, botones, menús, envío	Control completo desde el navegador
+control_server.py	Python 2.7	Recibe WS, despacha a NAOqi (walk, move, led, say, posture, getInfo)	Conecta navegador ↔ NAOqi
 
-El sistema se compone de los siguientes scripts en Python: 
+3 · Instalación en el NAO real (Python 2.7)
+Copiar carpeta
 
-• gui_display.py 
+bash
+Copiar
+Editar
+scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
+Servir la web
 
-• data_simulator.py 
+bash
+Copiar
+Editar
+ssh nao@<IP_NAO>
+cd ~/remote_control
+python2 -m SimpleHTTPServer 8000 &   # o python -m http.server 8000 si tiene py3
+Dependencias Python 2.7
 
-• nao_combined_server.py 
+bash
+Copiar
+Editar
+pip2 install SimpleWebSocketServer pillow
+Arrancar servidor de control
 
-2. Descripción de Archivos 
+bash
+Copiar
+Editar
+cd ~/remote_control
+python2 control_server.py &
+python2 video_stream_py2.py &   # stream MJPEG cámara top
+Conectar desde móvil/PC
+Abrir http://<IP_NAO>:8000 → UI aparece → controla el robot.
 
-2.1 gui_display.py 
+4 · Seguridad y buenas prácticas
+Zona libre – mínimo 1 × 1 m despejado.
 
-Este archivo contiene la interfaz gráfica que permite visualizar en tiempo real los datos del robot NAO (posición y temperatura de articulaciones). Permite seleccionar entre modo Simulador o Robot Real y establece conexión por medio de protocolo TCP/IP, requiriendo una IP y un puerto. 
+Watch-dog – control_server.py detiene marcha si no recibe walk en 0.6 s.
 
-Características: 
+Stiffness OFF – para manipular articulaciones: motion.setStiffnesses("Body",0).
 
-- Visualización por grupos de articulaciones. 
+No mezclar clientes – evita que Choregraphe o scripts externos interfieran.
 
-- Conexión por TCP/IP con el robot o con el simulador local. 
+Menús restringidos – limita acceso a tu LAN confiable (firewall).
 
-- Entrada manual de IP y puerto si se selecciona Robot Real. 
+5 · Explicación detallada de scripts
+5.1 logic.js
+WebSocket con reconexión automática.
 
-- Envía 'GUI' como identificador al servidor del robot para recibir datos. 
+handleWS procesa msg.info y actualiza IP, batería y tabla de joints.
 
-2.2 data_simulator.py 
+Modos: cambia mode y aplica clase .active.
 
-Simula datos realistas de un robot NAO para pruebas locales. Abre un socket TCP en localhost:9999 y envía periódicamente paquetes con datos de posición y temperatura en formato msgpack. 
+Stand/Sit: manda {action:'posture',value}.
 
-2.3 nao_combined_server.py 
+Menús: abre/ cierra, y para cámara inyecta src MJPEG.
 
-Este servidor debe ejecutarse dentro del robot NAO. Cumple una doble función: envía continuamente datos al GUI y recibe comandos desde un control remoto físico por TCP/IP, que son reenviados al sistema LoLA del robot mediante el socket local /tmp/robocup. 
+Voz: envía {action:'say',text}.
 
-Características: 
+LEDs: lee checkboxes .led-checkbox, envía {action:'led',groups,r,g,b} o apagado.
 
-- Escucha en un puerto TCP (por defecto 5050). 
+Joystick: calcula vx,vy, limita a círculo, envía cada 1/15 s según mode.
 
-- Distingue el tipo de conexión (GUI o CONTROL) mediante el primer mensaje. 
+Polling de estado cada 1 s: {action:'getInfo'}.
 
-- Recibe mensajes msgpack desde el cliente remoto y los reenvía a LoLA. 
+5.2 control_server.py
+SimpleWebSocketServer escucha en :6671.
 
-- Reenvía los datos de LoLA hacia cualquier GUI conectada. 
+RobotWS.handleMessage: parsea JSON y despacha a:
 
-3. Flujo del Sistema 
+walk → motion.moveToward
 
-1. El GUI se conecta por TCP/IP al NAO (puerto configurado) y se identifica como 'GUI'. 
- 2. El robot le envía datos en tiempo real (posición, temperatura). 
- 3. El control remoto también se conecta al NAO y se identifica como 'CONTROL'. 
- 4. El servidor del robot reenvía los comandos recibidos desde el control al subsistema LoLA. 
- 5. La GUI muestra los valores en tiempo real agrupados por zona corporal. 
+move → motion.setAngles
 
-4. Anexos 
+led → leds.fadeRGB en cada grupo
 
-Repositorio de GitHub: https://github.com/Limao0521/scriptsLoLa 
+say → tts.say
 
- 
+posture → posture.goToPosture
+
+getInfo → lee batería, joints + temperaturas → devuelve JSON
+
+Watchdog en hilo paralelo para stopMove si no hay walk en 0.6 s.
+
+6 · Prueba rápida (check-list)
+NAO encendido y en tu LAN.
+
+Copia remote_control/ y lanza HTTP server.
+
+Instala deps y lanza control_server.py & video_stream_py2.py.
+
+Desde móvil: abre http://<IP_NAO>:8000.
+
+Cambia modo, usa joystick para caminar, brazos, cabeza.
+
+Envía voz, enciende/apaga LEDs por grupo.
+
+Abre menú cámara → stream vivo.
+
+Cierra página → tras 0.6 s la marcha se detiene.
+
+© 2025 Control NAO – Universidad de La Sabana

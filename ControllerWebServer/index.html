@@ -3,39 +3,98 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NAO – Mando NES + Joystick</title>
-
-  <!-- Enlazamos la hoja de estilos -->
+  <title>NAO – Panel de Control Total</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-
-<!-- tabindex="0" → el body puede tomar foco y el teclado funciona sin clic -->
 <body tabindex="0">
+
   <main class="nes-pad">
 
-    <!-- ───────────  D-PAD  (cruz) ─────────── -->
-    <section class="dpad">
-      <div class="plus-center"></div>
-      <button class="plus up"    data-action="moveUp"    data-key="ArrowUp"></button>
-      <button class="plus down"  data-action="moveDown"  data-key="ArrowDown"></button>
-      <button class="plus left"  data-action="moveLeft"  data-key="ArrowLeft"></button>
-      <button class="plus right" data-action="moveRight" data-key="ArrowRight"></button>
+    <!-- ───────────  MODOS DE CONTROL  ─────────── -->
+    <section class="mode-panel">
+      <button class="mode-btn active" data-mode="walk">Caminata</button>
+      <button class="mode-btn" data-mode="larm">Brazo Izq.</button>
+      <button class="mode-btn" data-mode="rarm">Brazo Der.</button>
+      <button class="mode-btn" data-mode="head">Cabeza</button>
     </section>
 
-    <!-- ───────────  SELECT  /  START  ─────────── -->
+    <!-- ───────────  SELECT / START (Stand / Sit) ─────────── -->
     <section class="center">
-      <button class="small-btn" data-action="select" data-key="KeyE">SELECT</button>
-      <button class="small-btn" data-action="start"  data-key="KeyD">START</button>
+      <button class="small-btn" id="btn-stop" data-key="KeyE">STAND</button>
+      <button class="small-btn" id="btn-sit"  data-key="KeyD">SIT</button>
     </section>
 
     <!-- ───────────  JOYSTICK  ─────────── -->
     <section class="joy-wrapper">
       <div class="joy-base">
-        <div class="joy-knob"></div> <!-- pomo rojo -->
+        <div class="joy-knob"></div>
       </div>
     </section>
+
   </main>
 
-  <!-- Lógica de interacción -->
+  <!-- ───────────  NAVEGACIÓN EXTRA (Voz/Cámara/LEDs/Stats) ─────────── -->
+  <nav class="extras-nav">
+    <button class="extra-btn" data-menu="voice">🎤</button>
+    <button class="extra-btn" data-menu="camera">📷</button>
+    <button class="extra-btn" data-menu="leds">💡</button>
+    <button class="extra-btn" data-menu="stats">📊</button>
+  </nav>
+
+  <!-- ───────────  MENÚ: VOZ  ─────────── -->
+  <div id="voice-menu" class="menu">
+    <header>
+      <h3>Voz</h3>
+      <button class="close-btn">✕</button>
+    </header>
+    <textarea id="voice-text" placeholder="Texto a hablar"></textarea>
+    <button id="voice-send">Hablar</button>
+  </div>
+
+  <!-- ───────────  MENÚ: CÁMARA  ─────────── -->
+  <div id="camera-menu" class="menu">
+    <header>
+      <h3>Cámara</h3>
+      <button class="close-btn">✕</button>
+    </header>
+    <!-- Apunta a tu servidor MJPEG en el NAO -->
+    <img id="camera-feed" src="http://&lt;IP_NAO&gt;:8080/video.mjpeg" alt="Video MJPEG">
+  </div>
+
+  <!-- ───────────  MENÚ: LEDs  ─────────── -->
+  <div id="leds-menu" class="menu">
+    <header>
+      <h3>LEDs</h3>
+      <button class="close-btn">✕</button>
+    </header>
+    <fieldset>
+      <legend>Selecciona grupos de LEDs</legend>
+      <label><input type="checkbox" class="led-checkbox" value="ChestLeds"> Pecho</label>
+      <label><input type="checkbox" class="led-checkbox" value="FaceLeds"> Cara</label>
+      <label><input type="checkbox" class="led-checkbox" value="EarsLeds"> Orejas</label>
+      <!-- Agrega más según tu NAO -->
+    </fieldset>
+    <input type="color" id="led-color" value="#ff0000">
+    <button id="btn-led-set">Encender</button>
+    <button id="btn-led-off">Apagar</button>
+  </div>
+
+  <!-- ───────────  MENÚ: ESTADÍSTICAS  ─────────── -->
+  <div id="stats-menu" class="menu">
+    <header>
+      <h3>Estadísticas</h3>
+      <button class="close-btn">✕</button>
+    </header>
+    <p>IP: <span id="stat-ip"></span></p>
+    <p>Batería: <span id="stat-batt"></span>%</p>
+    <table id="stat-joints">
+      <thead>
+        <tr><th>Joint</th><th>Pos</th><th>Temp</th></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
   <script src="logic.js"></script>
 </body>
+</html>
