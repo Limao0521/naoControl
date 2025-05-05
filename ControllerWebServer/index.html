@@ -3,14 +3,17 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NAO – Control</title>
+  <title>NAO – Mando NES + Joystick</title>
+
+  <!-- Enlazamos la hoja de estilos -->
   <link rel="stylesheet" href="styles.css" />
 </head>
 
-<!--  tabindex="0" permite recibir foco inmediatamente -->
+<!-- tabindex="0" → el body puede tomar foco y el teclado funciona sin clic -->
 <body tabindex="0">
   <main class="nes-pad">
-    <!-- ────────── D-Pad ────────── -->
+
+    <!-- ───────────  D-PAD  (cruz) ─────────── -->
     <section class="dpad">
       <div class="plus-center"></div>
       <button class="plus up"    data-action="moveUp"    data-key="ArrowUp"></button>
@@ -19,19 +22,20 @@
       <button class="plus right" data-action="moveRight" data-key="ArrowRight"></button>
     </section>
 
-    <!-- ────────── SELECT / START ────────── -->
+    <!-- ───────────  SELECT  /  START  ─────────── -->
     <section class="center">
       <button class="small-btn" data-action="select" data-key="KeyE">SELECT</button>
       <button class="small-btn" data-action="start"  data-key="KeyD">START</button>
     </section>
 
-    <!-- ────────── B / A ────────── -->
-    <section class="ab">
-      <button class="ab-btn b" data-action="btnB" data-key="KeyB">B</button>
-      <button class="ab-btn a" data-action="btnA" data-key="KeyA">A</button>
+    <!-- ───────────  JOYSTICK  ─────────── -->
+    <section class="joy-wrapper">
+      <div class="joy-base">
+        <div class="joy-knob"></div> <!-- pomo rojo -->
+      </div>
     </section>
   </main>
 
+  <!-- Lógica de interacción -->
   <script src="logic.js"></script>
 </body>
-</html>

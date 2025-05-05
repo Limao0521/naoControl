@@ -1,64 +1,101 @@
-/*========== PALETA ==========*/
+/*════════════════════  PALETA  ════════════════════*/
 :root{
-    --dark-gray:#3d3d3d; --light-gray:#bfbfbf;
-    --red-btn:#d62727;   --shadow:rgba(0,0,0,.45);
+    --dark-gray:#3d3d3d;   /* cuerpo del mando                     */
+    --light-gray:#bfbfbf;  /* borde claro NES                      */
+    --shadow:rgba(0,0,0,.45);
+  
+    --joy-base:#222;       /* base del joystick                    */
+    --joy-knob:#cf2626;    /* *** pomo rojo ***                    */
   }
   
-  /*========== ESCENARIO ==========*/
+  /*════════════════════  ESCENARIO  ═════════════════*/
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;
                        font-family:"Segoe UI",sans-serif;}
   html{font-size:clamp(14px,2.8vw,18px);}
-  body{display:flex;justify-content:center;align-items:center;
-       min-height:100vh;background:#1a1a1a;color:white;}
-  /*========== CHASIS ==========*/
-  .nes-pad{
-    display:grid;grid-template-columns:min-content 1fr min-content;
-    align-items:center;gap:2rem;
-    padding:1.5rem 2rem;background:var(--dark-gray);
-    border:8px solid var(--light-gray);border-radius:.8rem;
-    box-shadow:0 .6rem 1rem var(--shadow);max-width:90vw;
+  body{
+    display:flex;justify-content:center;align-items:center;
+    min-height:100vh;background:#1a1a1a;color:white;
   }
   
-  /*========== CRUZETA ==========*/
-  .dpad{position:relative;width:7rem;height:7rem;}
-  .plus-center{position:absolute;inset:50% 50%;width:2rem;height:2rem;
-    background:#222;border-radius:.25rem;
-    transform:translate(-50%,-50%);box-shadow:inset 0 -.2rem 0 var(--shadow);}
-  .plus{
-    position:absolute;background:#222;border:none;border-radius:.25rem;
-    touch-action:none;box-shadow:inset 0 -.2rem 0 var(--shadow);
-    transition:transform .05s,box-shadow .05s;       /* animación suave */
+  /*════════════════════  CHASIS  ═════════════════════*/
+  .nes-pad{
+    display:grid;
+    /* 3 columnas fijas → D-pad | SELECT/START | joystick */
+    grid-template-columns:min-content 1fr min-content;
+    align-items:center;
+    gap:2rem;
+  
+    padding:1.5rem 2rem;
+    background:var(--dark-gray);
+    border:8px solid var(--light-gray);
+    border-radius:.8rem;
+    box-shadow:0 .6rem 1rem var(--shadow);
+    max-width:90vw;
   }
-  /*  Brazos  */
+  
+  /*════════════════════  D-PAD  ══════════════════════*/
+  .dpad{position:relative;width:7rem;height:7rem;}
+  .plus-center{
+    position:absolute;inset:50% 50%;width:2rem;height:2rem;
+    background:#222;border-radius:.25rem;
+    transform:translate(-50%,-50%);
+    box-shadow:inset 0 -.2rem 0 var(--shadow);
+  }
+  .plus{
+    position:absolute;
+    background:#222;border:none;border-radius:.25rem;
+    touch-action:none;           /* evita zoom doble-tap en móvil */
+    box-shadow:inset 0 -.2rem 0 var(--shadow);
+    transition:transform .05s,box-shadow .05s;
+  }
+  /* brazos */
   .up   {width:2rem;height:2.6rem;top:0;left:50%;transform:translate(-50%,0);}
   .down {width:2rem;height:2.6rem;bottom:0;left:50%;transform:translate(-50%,0);}
   .left {width:2.6rem;height:2rem;left:0;top:50%;transform:translate(0,-50%);}
   .right{width:2.6rem;height:2rem;right:0;top:50%;transform:translate(0,-50%);}
   
-  /*========== START / SELECT ==========*/
+  /*════════════════════  START / SELECT  ════════════*/
   .center{display:flex;flex-direction:column;gap:.8rem;}
   .small-btn{
-    padding:.35rem 1.2rem;font-size:.7rem;letter-spacing:.06em;color:#222;
-    background:var(--light-gray);border:none;border-radius:.3rem;
-    box-shadow:inset 0 -.15rem 0 var(--shadow);touch-action:none;
+    padding:.35rem 1.3rem;
+    font-size:.7rem;letter-spacing:.06em;
+    color:#222;background:var(--light-gray);
+    border:none;border-radius:.3rem;
+    box-shadow:inset 0 -.15rem 0 var(--shadow);
+    touch-action:none;
     transition:transform .05s;
   }
   
-  /*========== A / B ==========*/
-  .ab{display:flex;gap:2rem;}
-  .ab-btn{
-    width:3.6rem;height:3.6rem;background:var(--red-btn);border:none;
-    border-radius:50%;color:#fff;font-weight:700;font-size:1.2rem;
-    box-shadow:inset 0 -.3rem 0 var(--shadow);touch-action:none;
-    transition:transform .05s;
+  /*════════════════════  JOYSTICK  ═══════════════════*/
+  .joy-wrapper{display:flex;justify-content:center;}
+  .joy-base{
+    position:relative;
+    width:7rem;height:7rem;
+    background:var(--joy-base);
+    border-radius:50%;
+    box-shadow:inset 0 -.3rem .5rem rgba(0,0,0,.5);
+    touch-action:none;
+  }
+  .joy-knob{
+    position:absolute;left:50%;top:50%;
+    width:3rem;height:3rem;
+    background:var(--joy-knob);       /* rojo definido arriba */
+    border-radius:50%;
+    /* 1er translate centra, 2º será añadido por JS */
+    transform:translate(-50%,-50%);
+    box-shadow:
+        0 .2rem .4rem rgba(0,0,0,.6),
+        inset 0 -.2rem .2rem rgba(255,255,255,.1);
+    /* animación suave tanto al mover como al volver */
+    transition:transform .06s cubic-bezier(.25,.46,.45,.94);
   }
   
-  /*========== EFECTO PRESSED ==========*/
-  /*  Botones redondos y rectangulares se hunden 2 px  */
+  /*════════════════════  EFECTO .pressed  ════════════*/
   button:active,
-  .pressed:not(.plus){transform:translateY(2px);filter:brightness(.85);}
-  
-  /*  Brazos de la cruzeta: escalan y se oscurece interior  */
+  .pressed:not(.plus){
+    transform:translateY(2px);
+    filter:brightness(.85);
+  }
   .plus.pressed{
     transform:scale(.96);
     box-shadow:inset 0 .15rem .4rem rgba(0,0,0,.65);
