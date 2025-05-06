@@ -16,7 +16,7 @@ PORT_NAO    = 9559
 HTTP_PORT   = 8080
 FPS         = 10
 CAMERA_NAME = "camera_stream"
-
+#eliminar la suscripcion y usar opencv
 # Inicializar captura de imágenes
 video = ALProxy("ALVideoDevice", IP_NAO, PORT_NAO)
 client = video.subscribeCamera(CAMERA_NAME, 0, 11, 13, FPS)  # cámara 0, 640x480 RGB
