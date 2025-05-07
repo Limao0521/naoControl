@@ -35,26 +35,8 @@
       console.warn("[WS] JSON inválido:", evt.data);
       return;
     }
-    if(msg.info){
-      // IP y batería
-      const ipElem   = document.getElementById('stat-ip');
-      const battElem = document.getElementById('stat-batt');
-      if(ipElem)   ipElem.textContent   = host;
-      if(battElem) battElem.textContent = msg.info.battery;
-      // Joints
-      const tbody = document.querySelector('#stat-joints tbody');
-      if(tbody){
-        tbody.innerHTML = '';
-        for(const [j,st] of Object.entries(msg.info.joints)){
-          const row = `<tr>
-            <td>${j}</td>
-            <td>${st.pos.toFixed(2)}</td>
-          </tr>`;
-          tbody.insertAdjacentHTML('beforeend', row);
-        }
-      }
-      console.log('[WS] Stats actualizadas');
-    }
+    // (sin getInfo para no inundar)
+    console.log("[WS] Message recibido:", msg);
   }
 
   // ─── 3. MODOS ────────────────────────────────────────────────────
@@ -99,13 +81,22 @@
     });
   });
 
-  // Voz
+  // Voz: decir texto
   document.getElementById('voice-send').addEventListener('click', ()=>{
     const txt = document.getElementById('voice-text').value || '';
     if(ws.readyState===1){
       ws.send(JSON.stringify({action:'say',text:txt}));
     }
     console.log('[UI] say →', txt);
+  });
+
+  // Cambio de idioma
+  document.getElementById('lang-send').addEventListener('click', ()=>{
+    const lang = document.getElementById('tts-lang').value;
+    if(ws.readyState===1){
+      ws.send(JSON.stringify({action:'language',value:lang}));
+    }
+    console.log('[UI] setLanguage →', lang);
   });
 
   // LEDs
@@ -145,7 +136,8 @@
     if(ws.readyState!==1) return;
     switch(mode){
       case 'walk':
-+       ws.send(JSON.stringify({action: 'walk',vx: vy,vy: vx,wz: 0}));
+        // ↺ (swap) corregido: mover adelante = pujar knob hacia arriba
+        ws.send(JSON.stringify({action:'walk', vx:vy, vy:vx, wz:0}));
         break;
       case 'larm':
         ws.send(JSON.stringify({action:'move',joint:'LShoulderPitch',value:vy}));
@@ -181,43 +173,57 @@
   function centerKnob(){
     knob.style.transition = 'transform .1s';
     setKnob(0,0);
-    setTimeout(()=> knob.style.transition = '', 120);
+    setTimeout(function(){ knob.style.transition = ''; }, 120);
   }
 
   function handleMove(evt){
     if(!active) return;
-    let x,y;
+    var x,y;
     if(evt.touches){
-      const t = [...evt.touches].find(t=>t.identifier===touchId);
-      if(!t) return;
-      x=t.clientX; y=t.clientY;
+      for(var i=0;i<evt.touches.length;i++){
+        if(evt.touches[i].identifier===touchId){
+          x=evt.touches[i].clientX; y=evt.touches[i].clientY;
+        }
+      }
+      if(x===undefined) return;
     } else {
       x=evt.clientX; y=evt.clientY;
     }
-    const rect = base.getBoundingClientRect();
-    let dx = x - rect.left - R,
+    var rect = base.getBoundingClientRect();
+    var dx = x - rect.left - R,
         dy = y - rect.top  - R;
-    const d = Math.hypot(dx,dy),
-          f = d > LIM ? LIM/d : 1;
+    var d = Math.hypot(dx,dy), f = d > LIM ? LIM/d : 1;
     dx *= f; dy *= f;
     setKnob(dx,dy);
-    const nx = dx/LIM, ny = -dy/LIM;
+    var nx = dx/LIM, ny = -dy/LIM;
     vx = Math.abs(nx)>0.05? nx:0;
     vy = Math.abs(ny)>0.05? ny:0;
   }
 
-  base.addEventListener('mousedown', e=>{ active=true; touchId=null; startSend(); handleMove(e); });
+  base.addEventListener('mousedown', function(e){
+    active=true; touchId=null; startSend(); handleMove(e);
+  });
   window.addEventListener('mousemove', handleMove);
-  window.addEventListener('mouseup', ()=>{ active=false; centerKnob(); stopSend(); });
+  window.addEventListener('mouseup', function(){
+    active=false; centerKnob(); stopSend();
+  });
 
-  base.addEventListener('touchstart', e=>{ e.preventDefault(); active=true; touchId=e.touches[0].identifier; startSend(); handleMove(e); },{passive:false});
-  window.addEventListener('touchmove', handleMove,{passive:false});
-  window.addEventListener('touchend', ()=>{ active=false; centerKnob(); stopSend(); });
+  base.addEventListener('touchstart', function(e){
+    e.preventDefault();
+    active=true; touchId=e.touches[0].identifier;
+    startSend(); handleMove(e);
+  }, {passive:false});
+  window.addEventListener('touchmove', handleMove, {passive:false});
+  window.addEventListener('touchend', function(){
+    active=false; centerKnob(); stopSend();
+  });
 
   // ─── 7. (opcional) Desactivar getInfo automático para no inundar
-  // setInterval(()=>{ if(ws.readyState===1) ws.send(JSON.stringify({action:'getInfo'})); },1000);
+  // setInterval(function(){
+  //   if(ws.readyState===1) ws.send(JSON.stringify({action:'getInfo'}));
+  // },1000);
 
   // ─── 8. Enfoque para teclado ─────────────────────────────────────
-  window.addEventListener('load', ()=>document.body.focus());
+  window.addEventListener('load', function(){ document.body.focus(); });
 
 })();

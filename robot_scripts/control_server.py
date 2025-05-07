@@ -3,7 +3,7 @@
 """
 control_server.py – WebSocket → NAOqi dispatcher
 • ws://0.0.0.0:6671
-• JSON actions: walk, move, posture, led, say
+• JSON actions: walk, move, posture, led, say, language
 • Watchdog detiene la marcha si no recibe walk en WATCHDOG s
 """
 
@@ -16,7 +16,7 @@ from naoqi import ALProxy
 sys.path.insert(0, os.path.dirname(__file__))
 from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 
-# Configuración
+# — Configuración —
 IP_NAO    = "127.0.0.1"
 PORT_NAO  = 9559
 WS_PORT   = 6671
@@ -26,24 +26,25 @@ def log(tag, msg):
     ts = datetime.now().strftime("%H:%M:%S")
     print("{0} [{1}] {2}".format(ts, tag, msg))
 
-# Proxies NAOqi
+# — Proxies NAOqi —
 motion  = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
 posture = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
 life    = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
 leds    = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
 tts     = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
 battery = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
-# eliminamos ALMemory/getInfo problemático
+# NO usamos ALMemory/getInfo para evitar errores
 
-# Setup inicial
+# — Setup inicial —
 life.setState("disabled")
 motion.setStiffnesses("Body", 1.0)
-log("NAO", "AutonomousLife disabled; Body stiffness ON")
+# Fijamos idioma por defecto
+tts.setLanguage("English")
+log("NAO", "AutonomousLife disabled; Body stiffness ON; Lang=English")
 
 last_walk = time.time()
 
 class RobotWS(WebSocket):
-
     def handleConnected(self):
         log("WS", "Conectado %s" % (self.address,))
 
@@ -77,7 +78,6 @@ class RobotWS(WebSocket):
             elif action == "move":
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0.0))
-                # usamos overload escalar
                 motion.setAngles(str(joint), val, 0.1)
                 log("SIM", "setAngles('%s', %.2f)" % (joint,val))
 
@@ -88,7 +88,6 @@ class RobotWS(WebSocket):
 
             elif action == "led":
                 grp = msg.get("group","ChestLeds")
-                # asegurar str
                 if isinstance(grp, unicode):
                     grp = grp.encode('utf-8')
                 r = float(msg.get("r",0.0))
@@ -102,6 +101,11 @@ class RobotWS(WebSocket):
                 tts.say(str(txt))
                 log("SIM", "say('%s')" % txt)
 
+            elif action == "language":
+                lang = msg.get("value","English")
+                tts.setLanguage(str(lang))
+                log("SIM", "setLanguage('%s')" % lang)
+
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
 
@@ -109,7 +113,7 @@ class RobotWS(WebSocket):
             log("WS", "Excepción en %s: %s" % (action, e))
 
 
-# Watchdog para stopMove
+# — Watchdog para stopMove —
 def watchdog():
     global last_walk
     log("Watchdog","Iniciado (%.1fs)"%WATCHDOG)
@@ -124,7 +128,7 @@ wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
 
-# Servidor WS (reintenta si el puerto está ocupado)
+# — Servidor WS (reintenta si puerto ocupado) —
 if __name__ == "__main__":
     log("Server","Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
     while True:
