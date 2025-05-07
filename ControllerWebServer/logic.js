@@ -145,7 +145,8 @@
     if(ws.readyState!==1) return;
     switch(mode){
       case 'walk':
-        ws.send(JSON.stringify({action:'walk',vx,vy,wz:0})); break;
++       ws.send(JSON.stringify({action: 'walk',vx: vy,vy: vx,wz: 0}));
+        break;
       case 'larm':
         ws.send(JSON.stringify({action:'move',joint:'LShoulderPitch',value:vy}));
         ws.send(JSON.stringify({action:'move',joint:'LShoulderRoll', value:vx}));
