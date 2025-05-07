@@ -83,7 +83,7 @@ class RobotWS(WebSocket):
 
             elif action == "posture":
                 pst = msg.get("value","Stand")
-                posture.goToPosture(str(pst), 0.5)
+                posture.goToPosture(str(pst), 0.7)
                 log("SIM", "goToPosture('%s')" % pst)
 
             elif action == "led":
