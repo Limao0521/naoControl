@@ -1,129 +1,150 @@
-Documentación actualizada
-1 · Arquitectura general
-less
-Copiar
-Editar
-[ Navegador ]   index.html + styles.css + logic.js
-      │   WebSocket ws://<IP_NAO>:6671
-      ▼
-[ control_server.py ]  NAOqi dispatcher (Python 2.7)
-      │   JSON actions: walk/move/led/say/posture/getInfo
-      ▼
-[    NAO real   ]  ALMotion, ALLeds, ALTextToSpeech, ALMemory
-Flujo de datos
-#	Emisor	Receptor	Formato	Descripción
-①	logic.js (web)	control_server.py	JSON via WS	{action:'walk',vx,vy,wz} (15 Hz)
-②	logic.js (web)	control_server.py	JSON via WS	{action:'move',joint,value}
-③	logic.js (web)	control_server.py	JSON via WS	{action:'led',groups,r,g,b}
-④	logic.js (web)	control_server.py	JSON via WS	{action:'say',text}
-⑤	logic.js (web)	control_server.py	JSON via WS	{action:'posture',value:'Sit}
-⑥	logic.js (web)	control_server.py	JSON via WS	{action:'getInfo'} → stats
-⑦	control_server.py	NAOqi	API interna	moveToward, setAngles, fadeRGB, etc.
+Pensado durante un par de segundos
 
-2 · Archivos y responsabilidades
-Archivo	Lenguaje	Rol	Por qué es necesario
-index.html	HTML	Estructura de la UI (modos, joystick, menús)	Punto de entrada: se sirve desde python -m http.server.
-styles.css	CSS	Layout responsive, estética NES, animaciones táctiles	Usabilidad y aspecto en móvil/PC
-logic.js	JavaScript	Lógica de UI: WebSocket, joystick, botones, menús, envío	Control completo desde el navegador
-control_server.py	Python 2.7	Recibe WS, despacha a NAOqi (walk, move, led, say, posture, getInfo)	Conecta navegador ↔ NAOqi
+# Control-NAO Remote Control Suite
 
-3 · Instalación en el NAO real (Python 2.7)
-Copiar carpeta
+> Tele-operación completa de NAO a través de navegador web y WebSocket
+> Compatible con Python 2.7 + NAOqi 2.8
 
-bash
-Copiar
-Editar
-scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
-Servir la web
+---
 
-bash
-Copiar
-Editar
-ssh nao@<IP_NAO>
-cd ~/remote_control
-python2 -m SimpleHTTPServer 8000 &   # o python -m http.server 8000 si tiene py3
-Dependencias Python 2.7
+## 📖 Descripción
 
-bash
-Copiar
-Editar
-pip2 install SimpleWebSocketServer pillow
-Arrancar servidor de control
+Control-NAO es un sistema de control remoto para robots NAO desde cualquier navegador (móvil o PC), sin dependencias adicionales más allá de Python 2.7 y NAOqi. Permite:
 
-bash
-Copiar
-Editar
-cd ~/remote_control
-python2 control_server.py &
-python2 video_stream_py2.py &   # stream MJPEG cámara top
-Conectar desde móvil/PC
-Abrir http://<IP_NAO>:8000 → UI aparece → controla el robot.
+* **Tele-operar** la locomoción (caminata) con joystick virtual.
+* **Mover** brazos (izquierdo/derecho) y cabeza con el mismo joystick.
+* **Posturas** básicas: Stand / Sit.
+* **Control de LEDs** por grupos (pecho, cara, ojos) y color vía selector.
+* **Síntesis de voz** (“say”).
+* **Watchdog** de parada de emergencia si no llegan comandos de walk.
+* **Reconexión automática** WebSocket en caso de desconexión.
 
-4 · Seguridad y buenas prácticas
-Zona libre – mínimo 1 × 1 m despejado.
+---
 
-Watch-dog – control_server.py detiene marcha si no recibe walk en 0.6 s.
+## 🚀 Características Principales
 
-Stiffness OFF – para manipular articulaciones: motion.setStiffnesses("Body",0).
+* **Interfaz web** responsive y ligera (HTML5 + CSS3 + JavaScript puro).
+* **WebSocket server** en Python 2.7: despacha mensajes a NAOqi.
+* **Joystick táctil** con cálculos en \[-1,1], corrección de orientación.
+* **Control granular de LEDs**: seleccionar uno o varios grupos, ajustar color.
+* **Voice** y **MJPEG camera feed** integrados (cámara sin servidor extra).
+* **Logs detallados** en consola NAO y navegador.
+* **Watchdog** que detiene la marcha automáticamente si no hay comandos de walk en 0.6 s.
+* **AutonomousLife** desactivado, stiffness en Body al iniciar.
 
-No mezclar clientes – evita que Choregraphe o scripts externos interfieran.
+---
 
-Menús restringidos – limita acceso a tu LAN confiable (firewall).
+## 🏗️ Estructura del Proyecto
 
-5 · Explicación detallada de scripts
-5.1 logic.js
-WebSocket con reconexión automática.
+```
+remote_control/
+├─ index.html               # UI principal
+├─ styles.css               # Estilos y layout responsive
+├─ logic.js                 # Lógica de cliente (WebSocket, joystick, menús)
+├─ SimpleWebSocketServer.py # Biblioteca WS pura Python
+└─ walk_ws_server.py        # Servidor WS → NAOqi (Python 2.7)
+```
 
-handleWS procesa msg.info y actualiza IP, batería y tabla de joints.
+---
 
-Modos: cambia mode y aplica clase .active.
+## 🔧 Requisitos
 
-Stand/Sit: manda {action:'posture',value}.
+* **Robot NAO** con NAOqi 2.8 instalado.
+* **Python 2.7** en NAO (incluye `pip2`).
+* Navegador moderno con soporte WebSocket (Chrome, Firefox, Edge, Safari).
 
-Menús: abre/ cierra, y para cámara inyecta src MJPEG.
+---
 
-Voz: envía {action:'say',text}.
+## 📥 Instalación
 
-LEDs: lee checkboxes .led-checkbox, envía {action:'led',groups,r,g,b} o apagado.
+1. **Clona o descarga** este repositorio en tu máquina local.
+2. **Copia** la carpeta al NAO:
 
-Joystick: calcula vx,vy, limita a círculo, envía cada 1/15 s según mode.
+   ```bash
+   scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
+   ```
+3. **Dependencias Python** (en NAO):
 
-Polling de estado cada 1 s: {action:'getInfo'}.
+   ```bash
+   ssh nao@<IP_NAO>
+   pip2 install websocket-server --user
+   ```
 
-5.2 control_server.py
-SimpleWebSocketServer escucha en :6671.
+   > *Nota: `SimpleWebSocketServer.py` ya está incluido, esta línea es opcional si prefieres instalar otra implementación WS.*
 
-RobotWS.handleMessage: parsea JSON y despacha a:
+---
 
-walk → motion.moveToward
+## ⚙️ Despliegue
 
-move → motion.setAngles
+1. **Servir la interfaz web** desde NAO:
 
-led → leds.fadeRGB en cada grupo
+   ```bash
+   cd ~/remote_control
+   python2 -m SimpleHTTPServer 8000 &
+   ```
+2. **Iniciar servidor WebSocket**:
 
-say → tts.say
+   ```bash
+   cd ~/remote_control
+   python2 walk_ws_server.py &
+   ```
+3. **Abrir navegador** y visitar:
 
-posture → posture.goToPosture
+   ```
+   http://<IP_NAO>:8000/
+   ```
 
-getInfo → lee batería, joints + temperaturas → devuelve JSON
+---
 
-Watchdog en hilo paralelo para stopMove si no hay walk en 0.6 s.
+## 📑 Uso
 
-6 · Prueba rápida (check-list)
-NAO encendido y en tu LAN.
+* **Modos de control**: elije “Caminata”, “Brazo Izq.”, “Brazo Der.” o “Cabeza”.
+* **Joystick**: arrastra para generar vectores `vx`, `vy`; se ha corregido la orientación de ejes.
+* **Stand / Sit**: botones para cambiar postura.
+* **LEDs**: abre menú 💡, selecciona grupo, color y “Encender” / “Apagar”.
+* **Voz**: abre menú 🎤, escribe texto y pulsa “Hablar”.
+* **Cámara**: menú 📷 muestra stream MJPEG nativo (no requiere script extra).
 
-Copia remote_control/ y lanza HTTP server.
+> **Reconnect** automático si pierdes conexión WS: la UI reintenta en 3 s.
 
-Instala deps y lanza control_server.py & video_stream_py2.py.
+---
 
-Desde móvil: abre http://<IP_NAO>:8000.
+## 🛠️ Estructura y Puntos Clave de los Scripts
 
-Cambia modo, usa joystick para caminar, brazos, cabeza.
+### walk\_ws\_server.py
 
-Envía voz, enciende/apaga LEDs por grupo.
+* **Imports y configuración** de NAOqi (`ALMotion`, `ALLeds`, `ALTextToSpeech`, `ALAutonomousLife`).
+* **Clase `RobotWS`** extiende `WebSocket`:
 
-Abre menú cámara → stream vivo.
+  * `handleMessage` parsea JSON y despacha a NAOqi.
+* **Watchdog thread**: llama `motion.stopMove()` cada 0.6 s sin comandos `walk`.
+* **Puerto WebSocket** con reintentos y `SO_REUSEADDR` para evitar “Address in use”.
 
-Cierra página → tras 0.6 s la marcha se detiene.
+### logic.js
 
-© 2025 Control NAO – Universidad de La Sabana
+* **Conexión WS** dinámica con reconexión en 3 s.
+* **Joystick**: cálculo de radio, knob, normalización, corrección de ejes para que “adelante” sea arrastrar knob hacia arriba.
+* **sendCmd()**: despacho de JSON con `{action, vx, vy, ...}` según modo.
+* **Menús**: toggle de clases `.active`.
+* **LEDs**: selector de grupo + color HEX → valores `[0–1]`.
+* **Voz** y **Cámara MJPEG** integrados.
+
+---
+
+## 🔎 Solución de Problemas
+
+* **“Address already in use”**: asegúrate de que no haya instancias previas; el script reintenta por ti.
+* **WS desconectado constantemente**: verifica IP de NAO y habilita puertos en tu red.
+* **Joystick girado**: corregido intercambiando `vx` y `vy` en `sendCmd()`.
+* **getInfo / Stats**: deshabilitado temporalmente en UI. Puedes reactivar `handleWS` y mostrar `<div id="stats">…`.
+
+---
+
+## ⚖️ Licencia & Créditos
+
+* **Proyecto Open Source** para investigación y educación.
+* Inspirado en control remoto de NAO de Universidad de La Sabana.
+
+---
+
+¡Disfruta pilotar a tu NAO! 🤖🚀
