@@ -10,7 +10,7 @@
 
   <main class="nes-pad">
 
-    <!-- MODOS DE CONTROL -->
+    <!-- ───────────  MODOS DE CONTROL  ─────────── -->
     <section class="mode-panel">
       <button class="mode-btn active" data-mode="walk">Caminata</button>
       <button class="mode-btn" data-mode="larm">Brazo Izq.</button>
@@ -18,19 +18,19 @@
       <button class="mode-btn" data-mode="head">Cabeza</button>
     </section>
 
-    <!-- STAND / SIT -->
+    <!-- ───────────  STAND / SIT  ─────────── -->
     <section class="center">
       <button class="small-btn" id="btn-stand">STAND</button>
       <button class="small-btn" id="btn-sit">SIT</button>
     </section>
 
-    <!-- JOYSTICK -->
+    <!-- ───────────  JOYSTICK  ─────────── -->
     <section class="joy-wrapper">
       <div class="joy-base"><div class="joy-knob"></div></div>
     </section>
   </main>
 
-  <!-- NAVEGACIÓN EXTRA -->
+  <!-- ───────────  NAVEGACIÓN EXTRA (Voz/Cámara/LEDs/Stats) ─────────── -->
   <nav class="extras-nav">
     <button class="extra-btn" data-menu="voice">🎤</button>
     <button class="extra-btn" data-menu="camera">📷</button>
@@ -38,11 +38,21 @@
     <button class="extra-btn" data-menu="stats">📊</button>
   </nav>
 
-  <!-- MENÚS DESPLEGABLES -->
+  <!-- ───────────  MENÚS DESPLEGABLES ─────────── -->
   <div id="voice-menu" class="menu">
     <header><h3>Voz</h3><button class="close-btn">✕</button></header>
     <textarea id="voice-text" placeholder="Texto a hablar"></textarea>
     <button id="voice-send">Hablar</button>
+    <hr>
+    <label for="tts-lang">Idioma:</label>
+    <select id="tts-lang">
+      <option value="English">English</option>
+      <option value="French">French</option>
+      <option value="German">German</option>
+      <option value="Spanish">Spanish</option>
+      <option value="Italian">Italian</option>
+    </select>
+    <button id="lang-send">Cambiar idioma</button>
   </div>
 
   <div id="camera-menu" class="menu">
@@ -55,9 +65,9 @@
     <label for="led-group">Grupo:</label>
     <select id="led-group">
       <option value="ChestLeds">Pecho</option>
-      <option value="EarLedsLeft">Oreja Izq.</option>
-      <option value="EarLedsRight">Oreja Der.</option>
       <option value="FaceLeds">Cara</option>
+      <option value="EarLeds">Orejas</option>
+      <option value="EyeLeds">Ojos</option>
     </select>
     <input type="color" id="led-color" value="#ff0000">
     <button id="btn-led-set">Encender</button>
@@ -68,10 +78,7 @@
     <header><h3>Estadísticas</h3><button class="close-btn">✕</button></header>
     <p>IP: <span id="stat-ip"></span></p>
     <p>Batería: <span id="stat-batt"></span>%</p>
-    <table id="stat-joints">
-      <thead><tr><th>Joint</th><th>Pos</th></tr></thead>
-      <tbody></tbody>
-    </table>
+    <table id="stat-joints"><thead><tr><th>Joint</th><th>Pos</th><th>Temp</th></tr></thead><tbody></tbody></table>
   </div>
 
   <script src="logic.js"></script>

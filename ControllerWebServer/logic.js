@@ -35,8 +35,8 @@
       console.warn("[WS] JSON inválido:", evt.data);
       return;
     }
-    // (sin getInfo para no inundar)
-    console.log("[WS] Message recibido:", msg);
+    console.log("[WS] Msg recibido:", msg);
+    // (quedamos libres de getInfo para no inundar)
   }
 
   // ─── 3. MODOS ────────────────────────────────────────────────────
@@ -136,8 +136,8 @@
     if(ws.readyState!==1) return;
     switch(mode){
       case 'walk':
-        // ↺ (swap) corregido: mover adelante = pujar knob hacia arriba
-        ws.send(JSON.stringify({action:'walk', vx:vy, vy:vx, wz:0}));
+        // ⇧ adelante = vy local; lateral = vx local
+        ws.send(JSON.stringify({action:'walk',vx:vy, vy:vx, wz:0}));
         break;
       case 'larm':
         ws.send(JSON.stringify({action:'move',joint:'LShoulderPitch',value:vy}));
@@ -218,10 +218,8 @@
     active=false; centerKnob(); stopSend();
   });
 
-  // ─── 7. (opcional) Desactivar getInfo automático para no inundar
-  // setInterval(function(){
-  //   if(ws.readyState===1) ws.send(JSON.stringify({action:'getInfo'}));
-  // },1000);
+  // ─── 7. (opcional) Desactivar getInfo automático
+  // setInterval(function(){ if(ws.readyState===1) ws.send(JSON.stringify({action:'getInfo'})); },1000);
 
   // ─── 8. Enfoque para teclado ─────────────────────────────────────
   window.addEventListener('load', function(){ document.body.focus(); });

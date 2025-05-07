@@ -39,8 +39,9 @@ battery = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
 life.setState("disabled")
 motion.setStiffnesses("Body", 1.0)
 # Fijamos idioma por defecto
-tts.setLanguage("English")
-log("NAO", "AutonomousLife disabled; Body stiffness ON; Lang=English")
+tts.setLanguage("Spanish")
+print("Idioma por defecto:", tts.getLanguage())
+log("NAO", "AutonomousLife disabled; Body stiffness ON; Lang=%s" % tts.getLanguage())
 
 last_walk = time.time()
 
@@ -69,8 +70,8 @@ class RobotWS(WebSocket):
                 vy = float(msg.get("vy",0.0))
                 wz = float(msg.get("wz",0.0))
                 norm = math.hypot(vx, vy)
-                if norm>1.0:
-                    vx,vy = vx/norm, vy/norm
+                if norm > 1.0:
+                    vx, vy = vx/norm, vy/norm
                 motion.moveToward(vx, vy, wz)
                 last_walk = time.time()
                 log("SIM", "moveToward(vx=%.2f,vy=%.2f,wz=%.2f)" % (vx,vy,wz))
@@ -116,7 +117,7 @@ class RobotWS(WebSocket):
 # — Watchdog para stopMove —
 def watchdog():
     global last_walk
-    log("Watchdog","Iniciado (%.1fs)"%WATCHDOG)
+    log("Watchdog","Iniciado (%.1fs)" % WATCHDOG)
     while True:
         time.sleep(0.05)
         if time.time() - last_walk > WATCHDOG:
