@@ -3,39 +3,91 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>NAO – Mando NES + Joystick</title>
-
-  <!-- Enlazamos la hoja de estilos -->
+  <title>NAO – Panel de Control Total</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
-
-<!-- tabindex="0" → el body puede tomar foco y el teclado funciona sin clic -->
 <body tabindex="0">
+
   <main class="nes-pad">
 
-    <!-- ───────────  D-PAD  (cruz) ─────────── -->
-    <section class="dpad">
-      <div class="plus-center"></div>
-      <button class="plus up"    data-action="moveUp"    data-key="ArrowUp"></button>
-      <button class="plus down"  data-action="moveDown"  data-key="ArrowDown"></button>
-      <button class="plus left"  data-action="moveLeft"  data-key="ArrowLeft"></button>
-      <button class="plus right" data-action="moveRight" data-key="ArrowRight"></button>
+    <!-- MODOS DE CONTROL -->
+    <section class="mode-panel">
+      <button class="mode-btn active" data-mode="walk">Caminata</button>
+      <button class="mode-btn" data-mode="larm">Brazo Izq.</button>
+      <button class="mode-btn" data-mode="rarm">Brazo Der.</button>
+      <button class="mode-btn" data-mode="head">Cabeza</button>
     </section>
 
-    <!-- ───────────  SELECT  /  START  ─────────── -->
+    <!-- STAND / SIT -->
     <section class="center">
-      <button class="small-btn" data-action="select" data-key="KeyE">SELECT</button>
-      <button class="small-btn" data-action="start"  data-key="KeyD">START</button>
+      <button class="small-btn" id="btn-stand">STAND</button>
+      <button class="small-btn" id="btn-sit">SIT</button>
     </section>
 
-    <!-- ───────────  JOYSTICK  ─────────── -->
+    <!-- JOYSTICK -->
     <section class="joy-wrapper">
-      <div class="joy-base">
-        <div class="joy-knob"></div> <!-- pomo rojo -->
-      </div>
+      <div class="joy-base"><div class="joy-knob"></div></div>
     </section>
   </main>
 
-  <!-- Lógica de interacción -->
+  <!-- NAVEGACIÓN EXTRA -->
+  <nav class="extras-nav">
+    <button class="extra-btn" data-menu="voice">🎤</button>
+    <button class="extra-btn" data-menu="camera">📷</button>
+    <button class="extra-btn" data-menu="leds">💡</button>
+    <button class="extra-btn" data-menu="stats">📊</button>
+    <button class="extra-btn" data-menu="lang">🌐</button>
+  </nav>
+
+  <!-- MENÚ Voz -->
+  <div id="voice-menu" class="menu">
+    <header><h3>Voz</h3><button class="close-btn">✕</button></header>
+    <textarea id="voice-text" placeholder="Texto a hablar"></textarea>
+    <button id="voice-send">Hablar</button>
+  </div>
+
+  <!-- MENÚ Cámara -->
+  <div id="camera-menu" class="menu">
+    <header><h3>Cámara</h3><button class="close-btn">✕</button></header>
+    <img id="camera-feed" src="http://<IP_NAO>:8080/video.mjpeg" alt="Video MJPEG">
+  </div>
+
+  <!-- MENÚ LEDs -->
+  <div id="leds-menu" class="menu">
+    <header><h3>LEDs</h3><button class="close-btn">✕</button></header>
+    <label for="led-group">Grupo:</label>
+    <select id="led-group">
+      <option value="ChestLeds">Pecho</option>
+      <option value="FaceLeds">Cara</option>
+      <option value="EarLeds">Orejas</option>
+      <option value="EyeLeds">Ojos</option>
+    </select>
+    <input type="color" id="led-color" value="#ff0000">
+    <button id="btn-led-set">Encender</button>
+    <button id="btn-led-off">Apagar</button>
+  </div>
+
+  <!-- MENÚ Estadísticas -->
+  <div id="stats-menu" class="menu">
+    <header><h3>Estadísticas</h3><button class="close-btn">✕</button></header>
+    <p>IP: <span id="stat-ip"></span></p>
+    <p>Batería: <span id="stat-batt"></span>%</p>
+    <table id="stat-joints"><thead><tr><th>Joint</th><th>Pos</th><th>Temp</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <!-- MENÚ Idioma -->
+  <div id="lang-menu" class="menu">
+    <header><h3>Idioma TTS</h3><button class="close-btn">✕</button></header>
+    <select id="tts-lang">
+      <option value="English">English</option>
+      <option value="French">French</option>
+      <option value="German">German</option>
+      <option value="Spanish">Spanish</option>
+      <option value="Italian">Italian</option>
+    </select>
+    <button id="lang-send">Cambiar idioma</button>
+  </div>
+
   <script src="logic.js"></script>
 </body>
+</html>
