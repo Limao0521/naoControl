@@ -1,62 +1,127 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-control_server.py – WebSocket → NAOqi dispatcher
+control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launcher
+
 • ws://0.0.0.0:6671
 • JSON actions: walk, move, posture, led, say, language
 • Watchdog detiene la marcha si no recibe walk en WATCHDOG s
+• Pulsar head tactile togglea el servidor HTTP en puerto 8000
 """
 
 from __future__ import print_function
-import sys, os, time, math, threading, json, socket, errno
+import sys, os, time, math, threading, json, socket, errno, subprocess, signal
 from datetime import datetime
 from naoqi import ALProxy
 
-# Incluir SimpleWebSocketServer.py local
+# Añadir carpeta local para SimpleWebSocketServer.py
 sys.path.insert(0, os.path.dirname(__file__))
 from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 
-# — Configuración —
-IP_NAO    = "127.0.0.1"
-PORT_NAO  = 9559
-WS_PORT   = 6671
-WATCHDOG  = 0.6
+# — Configuración general —
+IP_NAO     = "127.0.0.1"
+PORT_NAO   = 9559
+WS_PORT    = 6671
+WATCHDOG   = 0.6
+WEB_DIR    = "/home/nao/controll/ControllerWebServer"
+HTTP_PORT  = "8000"
+
+# Proxies NAOqi
+motion     = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
+posture    = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
+life       = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
+leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
+tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
+battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
+memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
+
+# Estado global del proceso HTTP
+web_proc = None
 
 def log(tag, msg):
     ts = datetime.now().strftime("%H:%M:%S")
     print("{0} [{1}] {2}".format(ts, tag, msg))
 
-# — Proxies NAOqi —
-motion  = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
-posture = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
-life    = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
-leds    = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
-tts     = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
-battery = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
-# NO usamos ALMemory/getInfo para evitar errores
+# Limpieza al matar el servidor
+def cleanup(signum, frame):
+    global web_proc
+    log("Server", "Recibido señal {}, limpiando…".format(signum))
+    if web_proc:
+        web_proc.terminate()
+        web_proc.wait()
+        log("Launcher", "HTTP server detenido (pid {}).".format(web_proc.pid))
+    sys.exit(0)
 
-# — Setup inicial —
+signal.signal(signal.SIGINT,  cleanup)
+signal.signal(signal.SIGTERM, cleanup)
+
+# Setup NAO
 life.setState("disabled")
 motion.setStiffnesses("Body", 1.0)
-# Fijamos idioma por defecto
-tts.setLanguage("Spanish")
-print("Idioma por defecto:", tts.getLanguage())
-log("NAO", "AutonomousLife disabled; Body stiffness ON; Lang=%s" % tts.getLanguage())
+log("NAO", "AutonomousLife disabled; Body stiffness ON")
 
+# Watchdog para detener movimiento
 last_walk = time.time()
+def watchdog():
+    global last_walk
+    log("Watchdog", "Iniciado (%.1fs)" % WATCHDOG)
+    while True:
+        time.sleep(0.05)
+        if time.time() - last_walk > WATCHDOG:
+            motion.stopMove()
+            last_walk = time.time()
+            log("Watchdog", "stopMove() tras timeout")
 
+wd = threading.Thread(target=watchdog)
+wd.setDaemon(True)
+wd.start()
+
+# Observador de tactil de cabeza para toggle HTTP
+def head_touch_watcher():
+    global web_proc
+    prev = 0
+    while True:
+        try:
+            curr = memory.getData("MiddleTactilTouched")
+        except Exception:
+            curr = 0
+        # Flanco 0→1
+        if curr == 1 and prev == 0:
+            # Toggle
+            if web_proc:
+                web_proc.terminate()
+                web_proc.wait()
+                log("Launcher", "HTTP server detenido (pid {}).".format(web_proc.pid))
+                web_proc = None
+                try: tts.say("Servidor web detenido")
+                except: pass
+            else:
+                web_proc = subprocess.Popen(
+                    ["python2", "-m", "SimpleHTTPServer", HTTP_PORT],
+                    cwd=WEB_DIR,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+                log("Launcher", "HTTP server arrancado en puerto {} (pid={}).".format(HTTP_PORT, web_proc.pid))
+                try: tts.say("Servidor web iniciado")
+                except: pass
+        prev = curr
+        time.sleep(0.1)
+
+hw = threading.Thread(target=head_touch_watcher)
+hw.setDaemon(True)
+hw.start()
+
+# WebSocket handler
 class RobotWS(WebSocket):
     def handleConnected(self):
         log("WS", "Conectado %s" % (self.address,))
-
     def handleClose(self):
         log("WS", "Desconectado %s" % (self.address,))
-
     def handleMessage(self):
         global last_walk
         raw = self.data.strip()
         log("WS", "Recibido RAW: %s" % raw)
-
         try:
             msg = json.loads(raw)
         except Exception as e:
@@ -66,9 +131,7 @@ class RobotWS(WebSocket):
         action = msg.get("action")
         try:
             if action == "walk":
-                vx = float(msg.get("vx",0.0))
-                vy = float(msg.get("vy",0.0))
-                wz = float(msg.get("wz",0.0))
+                vx, vy, wz = map(float, (msg.get("vx",0), msg.get("vy",0), msg.get("wz",0)))
                 norm = math.hypot(vx, vy)
                 if norm > 1.0:
                     vx, vy = vx/norm, vy/norm
@@ -78,9 +141,9 @@ class RobotWS(WebSocket):
 
             elif action == "move":
                 joint = msg.get("joint","")
-                val   = float(msg.get("value",0.0))
+                val   = float(msg.get("value",0))
                 motion.setAngles(str(joint), val, 0.1)
-                log("SIM", "setAngles('%s', %.2f)" % (joint,val))
+                log("SIM", "setAngles('%s',%.2f)" % (joint,val))
 
             elif action == "posture":
                 pst = msg.get("value","Stand")
@@ -89,11 +152,8 @@ class RobotWS(WebSocket):
 
             elif action == "led":
                 grp = msg.get("group","ChestLeds")
-                if isinstance(grp, unicode):
-                    grp = grp.encode('utf-8')
-                r = float(msg.get("r",0.0))
-                g = float(msg.get("g",0.0))
-                b = float(msg.get("b",0.0))
+                if isinstance(grp, unicode): grp = grp.encode('utf-8')
+                r, g, b = map(float, (msg.get("r",0), msg.get("g",0), msg.get("b",0)))
                 leds.fadeRGB(grp, r, g, b, 0.0)
                 log("SIM", "fadeRGB('%s',%.2f,%.2f,%.2f)" % (grp,r,g,b))
 
@@ -103,9 +163,12 @@ class RobotWS(WebSocket):
                 log("SIM", "say('%s')" % txt)
 
             elif action == "language":
-                lang = msg.get("value","English")
-                tts.setLanguage(str(lang))
-                log("SIM", "setLanguage('%s')" % lang)
+                lang = msg.get("value","")
+                try:
+                    tts.setLanguage(str(lang))
+                    log("SIM", "setLanguage('%s')" % lang)
+                except Exception as e:
+                    log("WS", "Error setLanguage('%s'): %s" % (lang, e))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
@@ -113,32 +176,16 @@ class RobotWS(WebSocket):
         except Exception as e:
             log("WS", "Excepción en %s: %s" % (action, e))
 
-
-# — Watchdog para stopMove —
-def watchdog():
-    global last_walk
-    log("Watchdog","Iniciado (%.1fs)" % WATCHDOG)
-    while True:
-        time.sleep(0.05)
-        if time.time() - last_walk > WATCHDOG:
-            motion.stopMove()
-            last_walk = time.time()
-            log("Watchdog","stopMove() tras timeout")
-
-wd = threading.Thread(target=watchdog)
-wd.setDaemon(True)
-wd.start()
-
-# — Servidor WS (reintenta si puerto ocupado) —
+# Arranque del servidor WebSocket con reintento si el puerto está ocupado
 if __name__ == "__main__":
-    log("Server","Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
+    log("Server", "Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
     while True:
         try:
             srv = SimpleWebSocketServer("", WS_PORT, RobotWS)
             break
         except socket.error as e:
             if e.errno == errno.EADDRINUSE:
-                log("Server","⚠ Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
+                log("Server", "⚠ Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
                 time.sleep(3)
             else:
                 raise

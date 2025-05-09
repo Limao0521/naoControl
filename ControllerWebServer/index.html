@@ -10,7 +10,7 @@
 
   <main class="nes-pad">
 
-    <!-- ───────────  MODOS DE CONTROL  ─────────── -->
+    <!-- MODOS DE CONTROL -->
     <section class="mode-panel">
       <button class="mode-btn active" data-mode="walk">Caminata</button>
       <button class="mode-btn" data-mode="larm">Brazo Izq.</button>
@@ -18,48 +18,41 @@
       <button class="mode-btn" data-mode="head">Cabeza</button>
     </section>
 
-    <!-- ───────────  STAND / SIT  ─────────── -->
+    <!-- STAND / SIT -->
     <section class="center">
       <button class="small-btn" id="btn-stand">STAND</button>
       <button class="small-btn" id="btn-sit">SIT</button>
     </section>
 
-    <!-- ───────────  JOYSTICK  ─────────── -->
+    <!-- JOYSTICK -->
     <section class="joy-wrapper">
       <div class="joy-base"><div class="joy-knob"></div></div>
     </section>
   </main>
 
-  <!-- ───────────  NAVEGACIÓN EXTRA (Voz/Cámara/LEDs/Stats) ─────────── -->
+  <!-- NAVEGACIÓN EXTRA -->
   <nav class="extras-nav">
     <button class="extra-btn" data-menu="voice">🎤</button>
     <button class="extra-btn" data-menu="camera">📷</button>
     <button class="extra-btn" data-menu="leds">💡</button>
     <button class="extra-btn" data-menu="stats">📊</button>
+    <button class="extra-btn" data-menu="lang">🌐</button>
   </nav>
 
-  <!-- ───────────  MENÚS DESPLEGABLES ─────────── -->
+  <!-- MENÚ Voz -->
   <div id="voice-menu" class="menu">
     <header><h3>Voz</h3><button class="close-btn">✕</button></header>
     <textarea id="voice-text" placeholder="Texto a hablar"></textarea>
     <button id="voice-send">Hablar</button>
-    <hr>
-    <label for="tts-lang">Idioma:</label>
-    <select id="tts-lang">
-      <option value="English">English</option>
-      <option value="French">French</option>
-      <option value="German">German</option>
-      <option value="Spanish">Spanish</option>
-      <option value="Italian">Italian</option>
-    </select>
-    <button id="lang-send">Cambiar idioma</button>
   </div>
 
+  <!-- MENÚ Cámara -->
   <div id="camera-menu" class="menu">
     <header><h3>Cámara</h3><button class="close-btn">✕</button></header>
     <img id="camera-feed" src="http://<IP_NAO>:8080/video.mjpeg" alt="Video MJPEG">
   </div>
 
+  <!-- MENÚ LEDs -->
   <div id="leds-menu" class="menu">
     <header><h3>LEDs</h3><button class="close-btn">✕</button></header>
     <label for="led-group">Grupo:</label>
@@ -74,11 +67,25 @@
     <button id="btn-led-off">Apagar</button>
   </div>
 
+  <!-- MENÚ Estadísticas -->
   <div id="stats-menu" class="menu">
     <header><h3>Estadísticas</h3><button class="close-btn">✕</button></header>
     <p>IP: <span id="stat-ip"></span></p>
     <p>Batería: <span id="stat-batt"></span>%</p>
     <table id="stat-joints"><thead><tr><th>Joint</th><th>Pos</th><th>Temp</th></tr></thead><tbody></tbody></table>
+  </div>
+
+  <!-- MENÚ Idioma -->
+  <div id="lang-menu" class="menu">
+    <header><h3>Idioma TTS</h3><button class="close-btn">✕</button></header>
+    <select id="tts-lang">
+      <option value="English">English</option>
+      <option value="French">French</option>
+      <option value="German">German</option>
+      <option value="Spanish">Spanish</option>
+      <option value="Italian">Italian</option>
+    </select>
+    <button id="lang-send">Cambiar idioma</button>
   </div>
 
   <script src="logic.js"></script>
