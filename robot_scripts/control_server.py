@@ -76,42 +76,6 @@ wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
 
-# Observador de tactil de cabeza para toggle HTTP
-def head_touch_watcher():
-    global web_proc
-    prev = 0
-    while True:
-        try:
-            curr = memory.getData("MiddleTactilTouched")
-        except Exception:
-            curr = 0
-        # Flanco 0→1
-        if curr == 1 and prev == 0:
-            # Toggle
-            if web_proc:
-                web_proc.terminate()
-                web_proc.wait()
-                log("Launcher", "HTTP server detenido (pid {}).".format(web_proc.pid))
-                web_proc = None
-                try: tts.say("Servidor web detenido")
-                except: pass
-            else:
-                web_proc = subprocess.Popen(
-                    ["python2", "-m", "SimpleHTTPServer", HTTP_PORT],
-                    cwd=WEB_DIR,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                log("Launcher", "HTTP server arrancado en puerto {} (pid={}).".format(HTTP_PORT, web_proc.pid))
-                try: tts.say("Servidor web iniciado")
-                except: pass
-        prev = curr
-        time.sleep(0.1)
-
-hw = threading.Thread(target=head_touch_watcher)
-hw.setDaemon(True)
-hw.start()
-
 # WebSocket handler
 class RobotWS(WebSocket):
     def handleConnected(self):

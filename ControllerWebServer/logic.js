@@ -51,18 +51,40 @@
     });
   });
 
-  // ─── 4. STAND / SIT ──────────────────────────────────────────────
+  // ─── 4. STAND / SIT / AUTONOMUS ───────────────────────────────────
+
+  // STAND
   document.getElementById('btn-stand').addEventListener('click', ()=>{
     if(ws.readyState===1){
       ws.send(JSON.stringify({action:'posture',value:'Stand'}));
     }
     console.log('[UI] STAND enviado');
   });
+
+  // SIT
   document.getElementById('btn-sit').addEventListener('click', ()=>{
     if(ws.readyState===1){
       ws.send(JSON.stringify({action:'posture',value:'Sit'}));
     }
     console.log('[UI] SIT enviado');
+  });
+
+  // AUTONOMUS ON/OFF
+  const btnAutonomous       = document.getElementById('btn-autonomous');
+  let   autonomousEnabled  = false;
+
+  btnAutonomous.addEventListener('click', () => {
+    autonomousEnabled = !autonomousEnabled;
+    // Actualiza texto del botón
+    btnAutonomous.textContent = `Autonomous: ${autonomousEnabled ? 'On' : 'Off'}`;
+    // Envía comando WS al servidor
+    if (ws.readyState === 1) {
+      ws.send(JSON.stringify({
+        action: 'autonomous',
+        enable: autonomousEnabled
+      }));
+    }
+    console.log('[UI] autonomous →', autonomousEnabled);
   });
 
   // ─── 5. MENÚS EXTRA ──────────────────────────────────────────────
