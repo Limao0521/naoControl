@@ -19,6 +19,7 @@ PRESS_HOLD = 5.0            # segundos mínimos de pulsación
 # Ajusta estas rutas según dónde tengas los scripts
 CONTROL_PY = "/home/nao/scripts/control_server.py"
 WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
+CAMERA_PY  = "/home/nao/scripts/video_stream.py"
 HTTP_PORT  = "8000"
 
 # Proxies NAOqi
