@@ -34,6 +34,7 @@ leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
 tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
 battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
 memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
+audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)   
 
 # ─── Fall Recovery ────────────────────────────────────────────────────
 # Habilita el manejador de caídas para que el robot se levante solo
@@ -153,6 +154,11 @@ class RobotWS(WebSocket):
                 new_state = "interactive" if enable else "disabled"
                 life.setState(new_state)
                 log("SIM", "AutonomousLife.setState('%s')" % new_state)
+            elif action == "volume":
+                vol = float(msg.get("value", 50))
+                audio.setOutputVolume(vol)
+                
+                log("SIM", "AudioDevice.setOutputVolume(%.1f)" % vol)
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)

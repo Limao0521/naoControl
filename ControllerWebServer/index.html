@@ -38,6 +38,8 @@
     <button class="extra-btn" data-menu="leds">💡</button>
     <button class="extra-btn" data-menu="stats">📊</button>
     <button class="extra-btn" data-menu="lang">🌐</button>
+    <button class="extra-btn" data-menu="volume">🔊</button>
+
   </nav>
 
   <!-- MENÚ Voz -->
@@ -88,6 +90,23 @@
     </select>
     <button id="lang-send">Cambiar idioma</button>
   </div>
+
+  <!-- 2) MENU VOLUMEN -->
+<div id="volume-menu" class="menu">
+  <header>
+    <h3>Volumen</h3>
+    <button class="close-btn">✕</button>
+  </header>
+  <label for="volume-slider">Nivel de volumen:</label>
+  <input
+    type="range"
+    id="volume-slider"
+    min="0"
+    max="100"
+    value="50"
+    step="1"
+  />
+</div>
 
   <script src="logic.js"></script>
 </body>

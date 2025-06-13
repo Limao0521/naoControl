@@ -141,6 +141,25 @@
     console.log('[UI] led-off', group);
   });
 
+  // ─── Volumen ──────────────────────────────────────────────────────
+  const volSlider = document.getElementById('volume-slider');
+  // Envío inicial al cargar la página
+  volSlider.addEventListener('change', sendVolume);
+  // También enviamos en tiempo real al arrastrar
+  volSlider.addEventListener('input', sendVolume);
+
+  function sendVolume(){
+    const vol = parseInt(volSlider.value, 10);
+    if(ws.readyState === 1){
+      ws.send(JSON.stringify({
+        action: 'volume',
+        value: vol
+      }));
+    }
+    console.log('[UI] volume →', vol);
+  }
+
+
   // ─── 6. JOYSTICK ────────────────────────────────────────────────
   const base = document.querySelector('.joy-base'),
         knob = document.querySelector('.joy-knob');
