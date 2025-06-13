@@ -26,6 +26,10 @@ WATCHDOG   = 0.6
 WEB_DIR    = "/home/nao/controll/ControllerWebServer"
 HTTP_PORT  = "8000"
 
+def log(tag, msg):
+    ts = datetime.now().strftime("%H:%M:%S")
+    print("{0} [{1}] {2}".format(ts, tag, msg))
+    
 # Proxies NAOqi
 motion     = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
 posture    = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
@@ -51,10 +55,6 @@ memory.subscribeToEvent("RobotHasFallen", __name__, "onFall")
 
 # Estado global del proceso HTTP
 web_proc = None
-
-def log(tag, msg):
-    ts = datetime.now().strftime("%H:%M:%S")
-    print("{0} [{1}] {2}".format(ts, tag, msg))
 
 # Limpieza al matar el servidor
 def cleanup(signum, frame):
