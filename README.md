@@ -43,7 +43,7 @@ remote_control/
 ├─ styles.css               # Estilos y layout responsive
 ├─ logic.js                 # Lógica de cliente (WebSocket, joystick, menús)
 ├─ SimpleWebSocketServer.py # Biblioteca WS pura Python
-└─ walk_ws_server.py        # Servidor WS → NAOqi (Python 2.7)
+└─ control_server.py        # Servidor WS → NAOqi (Python 2.7)
 ```
 
 ---
@@ -53,47 +53,6 @@ remote_control/
 * **Robot NAO** con NAOqi 2.8 instalado.
 * **Python 2.7** en NAO (incluye `pip2`).
 * Navegador moderno con soporte WebSocket (Chrome, Firefox, Edge, Safari).
-
----
-
-## 📥 Instalación
-
-1. **Clona o descarga** este repositorio en tu máquina local.
-2. **Copia** la carpeta al NAO:
-
-   ```bash
-   scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
-   ```
-3. **Dependencias Python** (en NAO):
-
-   ```bash
-   ssh nao@<IP_NAO>
-   pip2 install websocket-server --user
-   ```
-
-   > *Nota: `SimpleWebSocketServer.py` ya está incluido, esta línea es opcional si prefieres instalar otra implementación WS.*
-
----
-
-## ⚙️ Despliegue
-
-1. **Servir la interfaz web** desde NAO:
-
-   ```bash
-   cd ~/remote_control
-   python2 -m SimpleHTTPServer 8000 &
-   ```
-2. **Iniciar servidor WebSocket**:
-
-   ```bash
-   cd ~/remote_control
-   python2 walk_ws_server.py &
-   ```
-3. **Abrir navegador** y visitar:
-
-   ```
-   http://<IP_NAO>:8000/
-   ```
 
 ---
 
@@ -112,7 +71,7 @@ remote_control/
 
 ## 🛠️ Estructura y Puntos Clave de los Scripts
 
-### walk\_ws\_server.py
+### control_server.py
 
 * **Imports y configuración** de NAOqi (`ALMotion`, `ALLeds`, `ALTextToSpeech`, `ALAutonomousLife`).
 * **Clase `RobotWS`** extiende `WebSocket`:
@@ -141,33 +100,13 @@ remote_control/
 
 ---
 
-## ⚖️ Licencia & Créditos
-
-* **Proyecto Open Source** para investigación y educación.
-* Inspirado en control remoto de NAO de Universidad de La Sabana.
-
----
-
-¡Disfruta pilotar a tu NAO! 🤖🚀
-=======
-# Control‑NAO — Documentación definitiva (mayo 2025)
-
-## Changelog de mejoras
-
-* **V1**: Prototipo inicial con puente UDP (`ws2udp.py`) y servidor UDP (`walk_server.py`).
-* **V2**: Eliminación de puente. Introducción de servidor WebSocket directo en Python 2.7 (`walk_ws_server.py`).
-* **V3**: Añadidos *prints* para trazabilidad: conexiones, peticiones, normalizaciones y watchdog.
-* **V4**: Correcciones de compatibilidad Py2.7: eliminación de f‑strings, uso de `.format()`, hilos demonio con `setDaemon()`.
-
----
-
 ## 1 · Arquitectura general
 
 ```
 [ Navegador ]  index.html + styles.css + logic.js
         │  WebSocket ws://<NAO_IP>:6671
         ▼
-[ walk_ws_server.py ]  WebSocket → ALMotion.moveToward
+[ control_server.py ]  WebSocket → ALMotion.moveToward
         │  (Python 2.7 + NAOqi 2.8, puerto 9559)
         ▼
 [   NAO real   ]  motores y desplazamiento
@@ -177,8 +116,8 @@ remote_control/
 
 | Nº | Emisor (WS)            | Receptor            | Formato         | Descripción                               |
 | -- | ---------------------- | ------------------- | --------------- | ----------------------------------------- |
-| ①  | `logic.js` (browser)   | `walk_ws_server.py` | WebSocket texto | “walk vx vy wz” \~15 Hz                   |
-| ②  | `walk_ws_server.py`    | `ALMotion`          | API NAOqi       | `moveToward(vx, vy, wz)`                  |
+| ①  | `logic.js` (browser)   | `control_server.py` | WebSocket texto | “walk vx vy wz” \~15 Hz                   |
+| ②  | `control_server.py`    | `ALMotion`          | API NAOqi       | `moveToward(vx, vy, wz)`                  |
 | ③  | `watchdog_loop` (hilo) | `ALMotion`          | API NAOqi       | `stopMove()` tras WATCHDOG s sin comandos |
 
 ---
@@ -191,7 +130,7 @@ remote_control/
 | **styles.css**               | CSS        | Responsividad y animaciones de botones/joystick             |
 | **logic.js**                 | JavaScript | Captura toques/teclas, normaliza e invoca WS dinámico       |
 | **SimpleWebSocketServer.py** | Python 2   | Implementación pura Python del protocolo WebSocket          |
-| **walk\_ws\_server.py**      | Python 2.7 | Servidor WS + watchdog → `ALMotion.moveToward`/`stopMove()` |
+| **control_server.py**        | Python 2.7 | Servidor WS + watchdog → `ALMotion.moveToward`/`stopMove()` |
 
 *Coloca `SimpleWebSocketServer.py` y `walk_ws_server.py` en la misma carpeta `/home/nao/remote_control`.*
 
@@ -205,25 +144,31 @@ remote_control/
    # en tu PC:
    scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
    ```
-2. **Instalar dependencias Py2** (si no están presentes)
+2. **Crear carpeta de dependencias** (si no están presentes)
 
    ```bash
    ssh nao@<IP_NAO>
-   pip2 install argparse websocket-client --user
+   mkdir /home/nao/libs/SimpleWebSocketServer-0.1.2
    ```
-3. **Servir la web**
+3. **Instalar dependencias Py2** (si no están presentes)
+
+   ```bash
+   ssh nao@<IP_NAO>
+   pip2 install --user /home/nao/libs/SimpleWebSocketServer-0.1.2
+   ```
+4. **Servir la web**
 
    ```bash
    cd ~/remote_control
    python2 -m SimpleHTTPServer 8000 &   # HTTP en 8000
    ```
-4. **Lanzar servidor WebSocket**
+5. **Lanzar servidor WebSocket**
 
    ```bash
    cd ~/remote_control
    python2 walk_ws_server.py &
    ```
-5. **Conectar y probar**
+6. **Conectar y probar**
 
    * Desde el móvil/PC: `http://<IP_NAO>:8000`.
    * Abrir consola SSH en el NAO para ver logs de conexiones, peticiones y watchdog.
@@ -264,5 +209,23 @@ remote_control/
    * `KeyboardInterrupt` → frena motores y sale.
 
 ---
+## ⚖️ Licencia & Créditos
 
+* **Proyecto Open Source** para investigación y educación.
+* Desarrollado por Semillero de Robotica Aplicada de Universidad de La Sabana.
+* Desarrollador principal: Luis Mario Ramirez Muñoz, estudiante de Ingenieria Informatica.
+---
+
+¡Disfruta pilotar a tu NAO! 🤖🚀
+=======
+# Control‑NAO — Documentación definitiva (junio 2025)
+
+## Changelog de mejoras
+
+* **V1**: Prototipo inicial con puente UDP (`ws2udp.py`) y servidor UDP (`walk_server.py`).
+* **V2**: Eliminación de puente. Introducción de servidor WebSocket directo en Python 2.7 (`walk_ws_server.py`).
+* **V3**: Añadidos *prints* para trazabilidad: conexiones, peticiones, normalizaciones y watchdog.
+* **V4**: Correcciones de compatibilidad Py2.7: eliminación de f‑strings, uso de `.format()`, hilos demonio con `setDaemon()`.
+* **V5**: Mejoras de interfaz y manejo del robot.
+---
 © 2025 Control‑NAO Project — Universidad de La Sabana
