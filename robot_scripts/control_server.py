@@ -35,6 +35,19 @@ tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
 battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
 memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
 
+# ─── Fall Recovery ────────────────────────────────────────────────────
+# Habilita el manejador de caídas para que el robot se levante solo
+motion.setFallManagerEnabled(True)
+log("NAO", "Fall manager ENABLED → auto-recover ON")
+
+def onFall(_key, _value, _msg):
+    log("FallEvt", "detected! Recuperando postura...")
+    posture.goToPosture("Stand", 0.7)
+
+# Registrar callback
+memory.subscribeToEvent("RobotHasFallen", __name__, "onFall")
+# ───────────────────────────────────────────────────
+
 # Estado global del proceso HTTP
 web_proc = None
 
@@ -133,6 +146,13 @@ class RobotWS(WebSocket):
                     log("SIM", "setLanguage('%s')" % lang)
                 except Exception as e:
                     log("WS", "Error setLanguage('%s'): %s" % (lang, e))
+
+            elif action == "autonomous":
+                enable = bool(msg.get("enable", False))
+                # “interactive” habilita Autonomous Life; “disabled” lo apaga
+                new_state = "interactive" if enable else "disabled"
+                life.setState(new_state)
+                log("SIM", "AutonomousLife.setState('%s')" % new_state)
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)

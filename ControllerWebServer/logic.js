@@ -181,12 +181,20 @@
   }
   function stopSend(){
     clearInterval(sendI); sendI = null;
-    if(mode==='walk'){
-      vx=vy=0; sendCmd();
-      console.log('[JOY] walk STOP');
-    } else {
-      console.log('[JOY] hold position (mode=' + mode + ')');
-    }
+      if(mode==='walk'){
+        // 1) Detener movimiento
+        vx = vy = 0;
+        sendCmd();
+        console.log('[JOY] walk STOP');
+
+        // 2) Volver a Stand
+        if(ws.readyState === 1){
+          ws.send(JSON.stringify({ action: 'posture', value: 'Stand' }));
+        }
+        console.log('[JOY] STAND enviado tras parada');
+      } else {
+        console.log('[JOY] hold position (mode=' + mode + ')');
+      }
   }
 
   function setKnob(dx,dy){
