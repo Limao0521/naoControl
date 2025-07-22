@@ -1,0 +1,51 @@
+:root {
+  --dark-gray: #3d3d3d;
+  --light-gray: #bfbfbf;
+  --shadow: rgba(0,0,0,.45);
+  --joy-base: #222;
+  --joy-knob: #cf2626;
+  --menu-bg: rgba(0,0,0,0.8);
+  --btn-size: clamp(2rem,10vw,3rem);
+}
+
+/* Reset & layout */
+*,*::before,*::after{ 
+  box-sizing: border-box; 
+  margin: 0; 
+  padding: 0; 
+}
+
+html {
+  font-size: clamp(14px,3vw,18px);
+}
+
+body {
+  margin: 0;
+  background: #111; 
+  color: #fff; 
+  min-height: 100vh; 
+  display: flex;
+  flex-direction: column; 
+  align-items: center;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  overscroll-behavior-y: contain;
+}
+
+code {
+  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New',
+    monospace;
+}
+
+/* Prevent text selection on buttons and interactive elements */
+button, .mode-btn, .small-btn, .extra-btn {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

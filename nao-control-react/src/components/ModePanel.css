@@ -1,0 +1,28 @@
+/* ─── Panel de modos ─── */
+.mode-panel{ 
+  display: flex; 
+  flex-direction: column; 
+  gap: .5rem; 
+}
+
+.mode-btn{
+  background: var(--light-gray); 
+  color: #222; 
+  border: none; 
+  border-radius: .3rem;
+  padding: .5rem; 
+  font-size: 1rem; 
+  box-shadow: inset 0 -.2rem 0 var(--shadow);
+  transition: transform .05s;
+  cursor: pointer;
+}
+
+.mode-btn.active, 
+.mode-btn:active {
+  transform: translateY(2px); 
+  filter: brightness(.9);
+}
+
+.mode-btn:hover {
+  filter: brightness(1.1);
+}

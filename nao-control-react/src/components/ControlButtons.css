@@ -1,0 +1,26 @@
+/* ─── Control Buttons ─── */
+.center{ 
+  display: flex; 
+  flex-direction: column; 
+  gap: .5rem; 
+}
+
+.small-btn{
+  background: var(--light-gray); 
+  color: #222; 
+  border: none; 
+  border-radius: .3rem;
+  padding: .4rem .8rem; 
+  font-size: .9rem; 
+  box-shadow: inset 0 -.2rem 0 var(--shadow);
+  transition: transform .05s;
+  cursor: pointer;
+}
+
+.small-btn:active{ 
+  transform: translateY(2px); 
+}
+
+.small-btn:hover {
+  filter: brightness(1.1);
+}
