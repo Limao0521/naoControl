@@ -1,0 +1,72 @@
+.nao-controller {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* ─── Contenedor principal ─── */
+.nes-pad{ 
+  display: grid;
+  grid-template-columns: 1fr min-content 1fr;
+  align-items: center; 
+  gap: 1rem;
+  background: var(--dark-gray); 
+  border: 6px solid var(--light-gray);
+  border-radius: .5rem; 
+  padding: 1rem; 
+  max-width: 95vw; 
+  margin-top: 1rem;
+}
+
+/* ─── Estado de conexión ─── */
+.connection-status {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.9rem;
+  font-weight: bold;
+  z-index: 100;
+  backdrop-filter: blur(10px);
+}
+
+.connection-status.connected {
+  background: rgba(76, 175, 80, 0.2);
+  color: #4CAF50;
+  border: 1px solid #4CAF50;
+}
+
+.connection-status.disconnected {
+  background: rgba(244, 67, 54, 0.2);
+  color: #f44336;
+  border: 1px solid #f44336;
+}
+
+/* ─── Responsive Design ─── */
+@media (max-width: 768px) {
+  .nes-pad {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto auto auto;
+    gap: 1.5rem;
+    padding: 1.5rem;
+  }
+  
+  .connection-status {
+    top: 0.5rem;
+    right: 0.5rem;
+    font-size: 0.8rem;
+    padding: 0.4rem 0.8rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .nes-pad {
+    margin-top: 0.5rem;
+    padding: 1rem;
+    max-width: 98vw;
+  }
+}

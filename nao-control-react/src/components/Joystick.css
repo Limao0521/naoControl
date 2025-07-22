@@ -1,0 +1,30 @@
+/* ─── JOYSTICK ─── */
+.joy-wrapper{ 
+  display: flex; 
+  justify-content: center; 
+}
+
+.joy-base{
+  position: relative; 
+  width: clamp(120px,40vw,200px); 
+  height: clamp(120px,40vw,200px);
+  background: var(--joy-base); 
+  border-radius: 50%;
+  box-shadow: inset 0 -.5rem 1rem rgba(0,0,0,.6);
+  touch-action: none;
+  cursor: pointer;
+}
+
+.joy-knob{
+  position: absolute; 
+  left: 50%; 
+  top: 50%;
+  width: clamp(50px,15vw,80px); 
+  height: clamp(50px,15vw,80px);
+  background: var(--joy-knob); 
+  border-radius: 50%;
+  transform: translate(-50%,-50%);
+  transition: transform .1s cubic-bezier(.25,.46,.45,.94);
+  box-shadow: 0 .2rem .5rem rgba(0,0,0,.6), inset 0 -.2rem .2rem rgba(255,255,255,.1);
+  pointer-events: none;
+}
