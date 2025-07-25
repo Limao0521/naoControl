@@ -189,8 +189,11 @@ Para revertir los cambios (manual):
 ## 👨‍💻 Autoría
 
 **Andrés Azcona**
+
 *Estudiante de Ingeniería Informática | Semillero de Robótica Aplicada*
+
 Universidad de La Sabana
+
 ---
 
 *Instalador NAO Control v1.0 - Automatización de Instalación para Robots NAO*
