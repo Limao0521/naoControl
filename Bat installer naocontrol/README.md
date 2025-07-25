@@ -1,111 +1,196 @@
-# Instalador Nao Control
+# Instalador NAO Control
 
-## Requisitos Previos
+Instalador automatizado para el sistema NaoControl en robots NAO. Este script batch facilita la instalación completa del sistema de control remoto en robots NAO de forma automática y segura.
 
-Antes de ejecutar el instalador, asegúrese de tener SSH habilitado en su sistema Windows:
+## 📋 Descripción
 
-1. **Cliente OpenSSH** - Para las conexiones SSH y transferencia de archivos (SCP)
-   - En Windows 10/11 viene incluido por defecto
-   - Si no funciona, habilítelo en:
-     - Configuración → Aplicaciones → Características opcionales
-     - Busque "Cliente OpenSSH" e instálelo
-     - Reinicie el símbolo del sistema
+El `installer_nao_control.bat` es un instalador automatizado que:
 
-2. **Verificar instalación**:
-   - Abra un símbolo del sistema (cmd)
-   - Escriba `ssh -V` y presione Enter
-   - Escriba `scp` y presione Enter
-   - Si ambos comandos responden, está correctamente configurado
+- ✅ Verifica la conectividad con el robot NAO
+- ✅ Transfiere automáticamente todos los archivos necesarios
+- ✅ Configura el sistema para proceder al inicio manual
+- ✅ Reinicia el robot para aplicar los cambios
+- ✅ Proporciona instrucciones para un primer inicio
 
-## Instrucciones de Uso
+## 🚀 Requisitos Previos
 
-1. **Preparación:**
-   - Coloque el instalador (`installer_nao_control.bat`) en la misma carpeta que contiene:
-     - Carpeta `payload/` (con todos los scripts)
-     - Archivo `rc.local`
+### Hardware
+- Robot NAO encendido y funcional
+- Equipo Windows con acceso a red (el script bat es solo compatible con Windows OS)
 
-2. **Configuración del Robot NAO:**
-   - Asegúrese de que el robot NAO esté encendido
-   - Verifique que su computadora y el robot estén en la misma red
-   - Anote la IP del robot NAO
+### Red
+- Robot NAO y equipo Windows en la misma red
+- Conectividad SSH habilitada en el robot (habilitada por defecto)
 
-3. **Ejecución:**
-   - Haga clic derecho en `installer_nao_control.bat`
-   - Seleccione "Ejecutar como administrador"
-   - Siga las instrucciones en pantalla:
-     - Ingrese la IP del robot NAO
-     - Ingrese el nombre de usuario del robot NAO
-     - Ingrese la contraseña del usuario
-     - Ingrese la contraseña del usuario root (para operaciones que requieren permisos elevados)
+### Credenciales
+- Usuario del robot NAO (generalmente `nao`)
+- Contraseña del usuario NAO
+- Contraseña de root del robot NAO (generalmente `root`)
 
-## ¿Qué hace el instalador?
+### Archivos Necesarios
+- `payload/` - Carpeta con archivos del sistema NaoControl
+- `rc.local` - Archivo de configuración de inicio automático
 
-El instalador automáticamente:
-
-1. ✅ Verifica la conectividad con el robot NAO
-2. ✅ Prueba la conexión SSH con las credenciales del usuario proporcionadas
-3. ✅ Crea los directorios necesarios en el robot (`/data/home/nao`) usando permisos de root
-4. ✅ Transfiere todos los archivos de la carpeta `payload/` al robot
-5. ✅ Reemplaza el archivo `rc.local` existente con la nueva versión usando permisos de root
-6. ✅ Establece los permisos correctos para `rc.local`
-7. ✅ Reinicia el robot para aplicar los cambios usando permisos de root
-
-## Estructura de Archivos Requerida
+## 📁 Estructura de Archivos Requerida para la correcta instalacion
 
 ```
-📁 Carpeta del Instalador/
-├── installer_nao_control.bat
-├── rc.local
-└── 📁 payload/
-    ├── 📁 scripts/
-    │   ├── control_server.py
-    │   ├── launcher.py
-    │   └── video_stream.py
-    ├── 📁 SimpleWebSocketServer-0.1.2/
-    │   └── ...
-    └── 📁 Webs/
-        └── 📁 ControllerWebServer/
-            └── ...
+Bat installer naocontrol/
+├── installer_nao_control.bat    # Instalador principal
+├── rc.local                     # Configuración de inicio
+├── README.md                    # Esta documentación
+└── payload/                     # Archivos del sistema
+    ├── scripts/                 # Scripts de control
+    ├── SimpleWebSocketServer-0.1.2/  # libreria del Servidor WebSocket
+    └── Webs/                    # Interfaz web
 ```
 
-## Solución de Problemas
+## 🔧 Uso del Instalador
 
-### Error: "No se puede conectar al robot NAO"
-- Verifique que el robot esté encendido
-- Confirme que la IP sea correcta
-- Asegúrese de estar en la misma red
+### Ejecución
 
-### Error: "No se puede conectar por SSH"
-- Verifique que el nombre de usuario y contraseña sean correctos
-- Asegúrese de que SSH esté habilitado en el robot
+1. Extraer el .zip 
+2. Ejecutar el archivo `installer_nao_control.bat `
+3. Seguir los pasos descritos por el instalador
 
-### Error: "No se pudieron crear directorios o transferir archivos"
-- Verifique que la contraseña del usuario root sea correcta
-- Asegúrese de que el usuario root tenga permisos para realizar las operaciones
+### Proceso Interactivo
 
-### Error: "SSH no está disponible"
-- Habilite Cliente OpenSSH en Windows 10/11:
-  - Configuración → Aplicaciones → Características opcionales
-  - Instale "Cliente OpenSSH"
-- Reinicie el símbolo del sistema
+El instalador solicitará la siguiente información:
 
-### Error: "plink no se reconoce como comando"
-- Ya no es necesario PuTTY, el instalador usa SSH nativo de Windows
-- Si ve este error, use la versión actualizada del instalador
+1. **IP del robot NAO**
+   ```
+   Ingrese la IP del robot NAO: ej. [172.19.32.23]
+   ```
 
-## Notas Importantes
+2. **Nombre de usuario**
+   ```
+   Ingrese el nombre de usuario: ej. [nao]
+   ```
 
-- ⚠️ El instalador requiere tanto las credenciales del usuario como las del usuario root
-- ⚠️ Las operaciones que requieren permisos elevados se ejecutan usando `su` con la contraseña de root
-- ⚠️ El instalador reemplazará completamente el archivo `rc.local` existente
-- ⚠️ El robot se reiniciará automáticamente al final de la instalación
-- ⚠️ Los servicios se iniciarán automáticamente después del reinicio
-- ✅ El proceso es completamente automatizado y no requiere intervención manual
+3. **Contraseñas** (se solicitan durante el proceso de instalacion):
+   - Contraseña del usuario NAO (para conexiones SSH/SCP)
+   - Contraseña de root (para operaciones administrativas)
 
-## Verificación Post-Instalación
+### Fases de Instalación
 
-Después de la instalación y reinicio del robot:
+#### **[1/5] Verificación de Conectividad**
+- Prueba de conectividad de red con el robot NAO
+- Validación de que el robot está encendido y accesible
 
-1. Los archivos estarán ubicados en `/data/home/nao/`
-2. El servicio se iniciará automáticamente mediante `rc.local`
-3. Puede verificar los logs en `/home/nao/launcher.log` y `/home/nao/rc.local.log`
+#### **[2/5] Verificación SSH**
+- Prueba de conexión SSH con credenciales del usuario
+- Validación de acceso remoto al robot
+
+#### **[3/5] Transferencia de Payload**
+- Copia de todos los archivos del directorio `payload/`
+- Destino: `/data/home/nao/` en el robot NAO
+
+#### **[4/5] Configuración del Sistema**
+- Transferencia del archivo `rc.local`
+- Actualización de `/data/rc.local` con permisos de root
+- Configuración de inicio automático
+
+#### **[5/5] Reinicio del Robot**
+- Reinicio automático del robot NAO
+- Aplicación de todos los cambios realizados
+
+## 💡 Mensajes de Autenticación
+
+El instalador proporciona mensajes claros sobre cuándo necesita cada contraseña:
+
+### Contraseña del Usuario NAO
+```
+Por favor ingrese la contraseña del usuario nao:
+```
+*Se solicita para conexiones SSH y transferencias SCP*
+
+### Contraseña de Root
+```
+Por favor ingrese la contraseña del usuario nao, luego cuando aparezca "Password:" ingrese la contraseña de root:
+```
+*Se solicita para operaciones administrativas (su)*
+
+## ⚠️ Solución de Problemas
+
+### Error: No se encuentra la carpeta 'payload'
+**Causa**: Archivos faltantes
+**Solución**: Verificar que existe la carpeta `payload/` en el mismo directorio del instalador
+
+### Error: No se puede conectar al robot NAO
+**Causas posibles**:
+- Robot NAO apagado
+- IP incorrecta
+- Problemas de red
+
+**Soluciones**:
+- Verificar que el robot esté encendido
+- Comprobar la IP correcta del robot
+- Asegurar que ambos dispositivos estén en la misma red
+
+### Error: No se puede conectar por SSH
+**Causas posibles**:
+- Credenciales incorrectas
+- SSH deshabilitado en el robot
+- Problemas de conectividad
+
+**Soluciones**:
+- Verificar usuario y contraseña
+- Comprobar configuración SSH del robot
+- Probar conexión manual con SSH
+
+### Error: No se pudo actualizar rc.local
+**Causas posibles**:
+- Contraseña de root incorrecta
+- Permisos insuficientes
+
+**Soluciones**:
+- Verificar contraseña de root
+- Asegurar acceso administrativo al robot
+
+## 🔄 Proceso de Desinstalación
+
+Para revertir los cambios (manual):
+
+1. **Conectar por SSH** al robot NAO
+2. **Eliminar archivos** instalados:
+   ```bash
+   sudo rm -rf /data/home/nao/scripts
+   sudo rm -rf /data/home/nao/SimpleWebSocketServer-0.1.2
+   sudo rm -rf /data/home/nao/Webs
+   ```
+3. **Restaurar rc.local** original si es necesario
+
+
+
+## 🔧 Características Técnicas
+
+### Comandos Utilizados
+- `ping` - Verificación de conectividad
+- `ssh` - Conexión remota y ejecución de comandos
+- `scp` - Transferencia segura de archivos
+- `su` - Escalación de privilegios
+
+### Configuraciones SSH
+- `ConnectTimeout=10` - Timeout de conexión
+- `StrictHostKeyChecking=no` - Omitir verificación de host keys
+
+### Directorios de Destino
+- **Payload**: `/data/home/nao/`
+- **Configuración**: `/data/rc.local`
+
+## 📝 Notas Importantes
+
+- ⚠️ **Backup**: Se recomienda hacer respaldo del `rc.local` original antes de la instalación
+- 🔄 **Reinicio**: El robot se reinicia automáticamente al finalizar
+- 🔐 **Seguridad**: Las variables de contraseña se limpian al finalizar el script
+- 📂 **Archivos temporales**: Se crean y limpian automáticamente durante la instalación
+
+---
+
+## 👨‍💻 Autoría
+
+**Andrés Azcona**
+*Estudiante de Ingeniería Informática | Semillero de Robótica Aplicada*
+Universidad de La Sabana
+---
+
+*Instalador NAO Control v1.0 - Automatización de Instalación para Robots NAO*
