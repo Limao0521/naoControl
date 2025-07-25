@@ -15,8 +15,15 @@ const NaoController = () => {
     battery: 0,
     joints: []
   });
+  const [hostIP, setHostIP] = useState('');
 
   const { sendMessage, lastMessage } = useWebSocket(6671);
+
+  // Detectar IP del host
+  useEffect(() => {
+    const currentHost = window.location.hostname;
+    setHostIP(currentHost);
+  }, []);
 
   // Manejar mensajes entrantes
   useEffect(() => {
@@ -142,7 +149,7 @@ const NaoController = () => {
           {/* Status Info */}
           <div className="control-status">
             <div className="status-ip">
-              IP: {robotStats.ip || 'N/A'}
+              IP: {hostIP || 'N/A'}
             </div>
             <div className="status-battery">
               🔋 {robotStats.battery || 'N/A'}%

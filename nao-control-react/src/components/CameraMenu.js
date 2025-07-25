@@ -51,10 +51,6 @@ const CameraMenu = ({ isOpen, onClose, cameraUrl, isEmbedded = false }) => {
           </button>
         </div>
       )}
-      
-      <p className="camera-info">
-        URL: {currentCameraUrl}
-      </p>
     </div>
   );
 };
