@@ -161,6 +161,19 @@ class RobotWS(WebSocket):
                 audio.setOutputVolume(vol)
                 
                 log("SIM", "AudioDevice.setOutputVolume(%.1f)" % vol)
+                
+            elif action == "getBattery":
+                # --- NUEVO: envío estado de batería ---
+                level = battery.getBatteryCharge()  # 0–100
+                low   = (level < 20)
+                full  = (level >= 95)
+                payload = json.dumps({
+                    "battery": level,
+                    "low": low,
+                    "full": full
+                })
+                self.sendMessage(payload)
+                log("SIM","getBattery → %d%% low=%s full=%s"%(level,low,full))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
