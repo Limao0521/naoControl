@@ -14,7 +14,7 @@ import cv2, numpy as np, threading, time
 IP_NAO      = "127.0.0.1"
 PORT_NAO    = 9559
 HTTP_PORT   = 8080
-FPS         = 10
+FPS         = 30
 CAMERA_NAME = "camera_stream"
 
 # Inicializar proxy de vídeo

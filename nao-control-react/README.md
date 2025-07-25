@@ -48,10 +48,12 @@ src/
 - **Prevención de Errores**: Validación antes de enviar comandos
 
 ### UX/UI
-- **Responsive**: Se adapta a diferentes tamaños de pantalla
+- **Fullscreen Responsive**: La interfaz ahora ocupa el 100% del ancho y alto de la pantalla
+- **Detección Automática de Cámara**: La IP de la cámara se detecta automáticamente
 - **Feedback Visual**: Estados activos y hover mejorados
 - **Gestos Táctiles**: Soporte completo para touch en el joystick
 - **Accesibilidad**: Mejor navegación con teclado
+- **Manejo de Errores**: Mensaje de error y botón de reintento para la cámara
 
 ## Comandos Disponibles
 
@@ -74,11 +76,14 @@ const { isConnected, sendMessage, lastMessage } = useWebSocket(6671);
 ```
 
 ### Cámara
-La URL de la cámara se puede configurar en `src/components/CameraMenu.js`:
+La URL de la cámara se detecta automáticamente basándose en la IP actual del navegador:
 
 ```javascript
-const defaultCameraUrl = cameraUrl || "http://<IP_NAO>:8080/video.mjpeg";
+// Se genera automáticamente como: http://[IP_ACTUAL]:8080/video.mjpeg
+// Por ejemplo: http://172.19.32.23:8080/video.mjpeg
 ```
+
+Si necesitas cambiar manualmente la URL, puedes hacerlo en `src/components/CameraMenu.js`.
 
 ## Mensajes WebSocket
 

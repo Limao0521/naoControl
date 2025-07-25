@@ -4,10 +4,8 @@
   z-index: 200;
   border: 6px solid var(--light-gray);
   border-radius: .5rem;
-  margin-top: 1rem;
-  margin-right: 1rem;
   background: var(--dark-gray);
-  height: 350px;
+  height: calc(100vh - 1rem);
   flex-shrink: 0;
   box-sizing: border-box;
 }
