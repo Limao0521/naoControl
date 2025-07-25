@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './LanguageMenu.css';
 
-const LanguageMenu = ({ isOpen, onClose, onLanguageChange }) => {
+const LanguageMenu = ({ isOpen, onClose, onLanguageChange, isEmbedded = false }) => {
   const [selectedLanguage, setSelectedLanguage] = useState('English');
 
   const languages = [
@@ -18,11 +18,13 @@ const LanguageMenu = ({ isOpen, onClose, onLanguageChange }) => {
 
   if (!isOpen) return null;
 
+  const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
+
   return (
-    <div className="menu active">
+    <div className={containerClass}>
       <header>
         <h3>Idioma TTS</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       
       <div className="language-controls">

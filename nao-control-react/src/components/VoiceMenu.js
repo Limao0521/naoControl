@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './VoiceMenu.css';
 
-const VoiceMenu = ({ isOpen, onClose, onSendVoice }) => {
+const VoiceMenu = ({ isOpen, onClose, onSendVoice, isEmbedded = false }) => {
   const [voiceText, setVoiceText] = useState('');
 
   const handleSend = () => {
@@ -19,11 +19,13 @@ const VoiceMenu = ({ isOpen, onClose, onSendVoice }) => {
 
   if (!isOpen) return null;
 
+  const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
+
   return (
-    <div className="menu active">
+    <div className={containerClass}>
       <header>
         <h3>Voz</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       <textarea
         className="voice-text"

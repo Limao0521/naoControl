@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import './LedsMenu.css';
 
-const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff }) => {
+const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff, isEmbedded = false }) => {
   const [selectedGroup, setSelectedGroup] = useState('ChestLeds');
   const [selectedColor, setSelectedColor] = useState('#ff0000');
 
@@ -27,11 +27,13 @@ const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff }) => {
 
   if (!isOpen) return null;
 
+  const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
+
   return (
-    <div className="menu active">
+    <div className={containerClass}>
       <header>
         <h3>LEDs</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       
       <div className="led-controls">

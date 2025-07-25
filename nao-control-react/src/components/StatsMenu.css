@@ -80,3 +80,25 @@
   font-style: italic;
   margin-top: 2rem;
 }
+
+/* ─── Modo embebido ─── */
+.menu.embedded {
+  position: static !important;
+  width: 100% !important;
+  height: auto !important;
+  background: transparent !important;
+  padding: 0 !important;
+  z-index: auto !important;
+}
+
+.menu.embedded header {
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.5rem;
+}
+
+.menu.embedded .stat-joints {
+  background: rgba(255, 255, 255, 0.05);
+  max-height: 300px;
+  overflow-y: auto;
+}

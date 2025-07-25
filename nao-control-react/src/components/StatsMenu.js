@@ -1,14 +1,16 @@
 import React from 'react';
 import './StatsMenu.css';
 
-const StatsMenu = ({ isOpen, onClose, stats }) => {
+const StatsMenu = ({ isOpen, onClose, stats, isEmbedded = false }) => {
   if (!isOpen) return null;
 
+  const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
+
   return (
-    <div className="menu active">
+    <div className={containerClass}>
       <header>
         <h3>Estadísticas</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       
       <div className="stats-info">

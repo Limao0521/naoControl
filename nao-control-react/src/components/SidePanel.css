@@ -1,0 +1,102 @@
+/* ─── Side Panel ─── */
+.side-panel {
+  display: flex;
+  z-index: 200;
+  border: 6px solid var(--light-gray);
+  border-radius: .5rem;
+  margin-top: 1rem;
+  margin-right: 1rem;
+  background: var(--dark-gray);
+  height: 350px;
+}
+
+/* ─── Navigation vertical ─── */
+.side-panel-nav {
+  width: 60px;
+  background: transparent;
+  border-right: 3px solid var(--light-gray);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1rem 0;
+  gap: 0.5rem;
+  height: 100%;
+}
+
+.side-nav-btn {
+  width: 44px;
+  height: 44px;
+  background: var(--light-gray);
+  color: #222;
+  font-size: 1.4rem;
+  border: none;
+  border-radius: 0.3rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+  box-shadow: inset 0 -0.2rem 0 var(--shadow);
+}
+
+.side-nav-btn:hover {
+  filter: brightness(1.1);
+  transform: scale(1.05);
+}
+
+.side-nav-btn:active {
+  transform: translateY(2px) scale(1.05);
+}
+
+.side-nav-btn.active {
+  background: #4CAF50;
+  color: white;
+  box-shadow: inset 0 -0.2rem 0 #2E7D32;
+}
+
+/* ─── Content Panel ─── */
+.side-panel-content {
+  width: 300px;
+  background: #1a1a1a;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.3s ease;
+  height: 100%;
+}
+
+.menu-content-container {
+  padding: 1rem;
+  height: 100%;
+  overflow-y: auto;
+}
+
+/* ─── Responsive Design ─── */
+@media (max-width: 768px) {
+  .side-panel {
+    flex-direction: row;
+    height: auto;
+    width: 100%;
+    border-right: none;
+    border-bottom: 3px solid var(--light-gray);
+  }
+  
+  .side-panel-nav {
+    width: 100%;
+    height: 60px;
+    flex-direction: row;
+    justify-content: center;
+    border-right: none;
+    border-bottom: 3px solid var(--light-gray);
+  }
+  
+  .side-panel-content {
+    width: 100%;
+    height: 200px;
+  }
+  
+  .side-nav-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1.2rem;
+  }
+}

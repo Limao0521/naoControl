@@ -3,12 +3,7 @@ import useWebSocket from '../hooks/useWebSocket';
 import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
 import Joystick from './Joystick';
-import ExtrasNav from './ExtrasNav';
-import VoiceMenu from './VoiceMenu';
-import CameraMenu from './CameraMenu';
-import LedsMenu from './LedsMenu';
-import StatsMenu from './StatsMenu';
-import LanguageMenu from './LanguageMenu';
+import SidePanel from './SidePanel';
 import './NaoController.css';
 
 const NaoController = () => {
@@ -20,7 +15,7 @@ const NaoController = () => {
     joints: []
   });
 
-  const { isConnected, sendMessage, lastMessage } = useWebSocket(6671);
+  const { sendMessage, lastMessage } = useWebSocket(6671);
 
   // Manejar mensajes entrantes
   useEffect(() => {
@@ -90,14 +85,9 @@ const NaoController = () => {
   }, [sendMessage]);
 
   // Funciones de los menús
-  const handleMenuOpen = useCallback((menuId) => {
+  const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
-    console.log('[UI] Abrir menú', menuId);
-  }, []);
-
-  const handleMenuClose = useCallback(() => {
-    setActiveMenu(null);
-    console.log('[UI] Cerrar menú');
+    console.log('[UI] Seleccionar menú', menuId);
   }, []);
 
   const handleSendVoice = useCallback((text) => {
@@ -131,60 +121,36 @@ const NaoController = () => {
 
   return (
     <div className="nao-controller">
-      <main className="nes-pad">
-        <ModePanel 
-          currentMode={currentMode} 
-          onModeChange={handleModeChange} 
-        />
-        
-        <ControlButtons 
-          onStand={handleStand} 
-          onSit={handleSit} 
-        />
-        
-        <Joystick 
-          onMove={handleJoystickMove} 
-          mode={currentMode} 
-        />
-      </main>
-
-      <ExtrasNav onMenuOpen={handleMenuOpen} />
-
-      {/* Estado de conexión */}
-      <div className={`connection-status ${isConnected ? 'connected' : 'disconnected'}`}>
-        {isConnected ? '🟢 Conectado' : '🔴 Desconectado'}
-      </div>
-
-      {/* Menús */}
-      <VoiceMenu 
-        isOpen={activeMenu === 'voice'} 
-        onClose={handleMenuClose}
+      {/* Side Panel */}
+      <SidePanel
+        activeMenu={activeMenu}
+        onMenuSelect={handleMenuSelect}
         onSendVoice={handleSendVoice}
-      />
-      
-      <CameraMenu 
-        isOpen={activeMenu === 'camera'} 
-        onClose={handleMenuClose}
-      />
-      
-      <LedsMenu 
-        isOpen={activeMenu === 'leds'} 
-        onClose={handleMenuClose}
         onSetLed={handleSetLed}
         onLedOff={handleLedOff}
-      />
-      
-      <StatsMenu 
-        isOpen={activeMenu === 'stats'} 
-        onClose={handleMenuClose}
         stats={robotStats}
-      />
-      
-      <LanguageMenu 
-        isOpen={activeMenu === 'lang'} 
-        onClose={handleMenuClose}
         onLanguageChange={handleLanguageChange}
       />
+
+      {/* Main Content */}
+      <div className="main-content">
+        <main className="nes-pad">
+          <ModePanel 
+            currentMode={currentMode} 
+            onModeChange={handleModeChange} 
+          />
+          
+          <ControlButtons 
+            onStand={handleStand} 
+            onSit={handleSit} 
+          />
+          
+          <Joystick 
+            onMove={handleJoystickMove} 
+            mode={currentMode} 
+          />
+        </main>
+      </div>
     </div>
   );
 };

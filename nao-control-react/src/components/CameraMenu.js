@@ -1,16 +1,17 @@
 import React from 'react';
 import './CameraMenu.css';
 
-const CameraMenu = ({ isOpen, onClose, cameraUrl }) => {
+const CameraMenu = ({ isOpen, onClose, cameraUrl, isEmbedded = false }) => {
   if (!isOpen) return null;
 
   const defaultCameraUrl = cameraUrl || "http://<IP_NAO>:8080/video.mjpeg";
+  const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
 
   return (
-    <div className="menu active">
+    <div className={containerClass}>
       <header>
         <h3>Cámara</h3>
-        <button className="close-btn" onClick={onClose}>✕</button>
+        {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       <img 
         className="camera-feed" 
