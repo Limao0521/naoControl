@@ -175,6 +175,13 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Comando de volumen
+  const handleVolumeChange = useCallback((volume) => {
+    if (sendMessage({ action: 'volume', value: volume })) {
+      console.log('[UI] setVolume →', volume);
+    }
+  }, [sendMessage]);
+
   // Enfocar en el body para teclado (opcional)
   useEffect(() => {
     document.body.focus();
@@ -203,6 +210,7 @@ const NaoController = () => {
         onLedOff={handleLedOff}
         stats={robotStats}
         onLanguageChange={handleLanguageChange}
+        onVolumeChange={handleVolumeChange}
       />
 
       {/* Main Content */}
