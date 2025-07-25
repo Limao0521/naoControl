@@ -1,0 +1,5 @@
+#!/bin/sh -e
+echo "[rc.local] Iniciando launcher.py..." >> /home/nao/rc.local.log
+su - nao -c "/usr/bin/python2 /home/nao/scripts/launcher.py >> /home/nao/launcher.log 2>&1 &"
+echo "[rc.local] launcher.py lanzado." >> /home/nao/rc.local.log
+exit 0
