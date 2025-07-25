@@ -4,6 +4,7 @@ import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
 import Joystick from './Joystick';
 import SidePanel from './SidePanel';
+import OrientationMessage from './OrientationMessage';
 import './NaoController.css';
 
 const NaoController = () => {
@@ -121,6 +122,9 @@ const NaoController = () => {
 
   return (
     <div className="nao-controller">
+      {/* Orientation Message */}
+      <OrientationMessage />
+      
       {/* Side Panel */}
       <SidePanel
         activeMenu={activeMenu}

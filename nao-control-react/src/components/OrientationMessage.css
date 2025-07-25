@@ -1,0 +1,63 @@
+/* ─── Orientation Message ─── */
+.orientation-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.9);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  backdrop-filter: blur(10px);
+}
+
+.orientation-message {
+  text-align: center;
+  color: white;
+  padding: 2rem;
+  border-radius: 1rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+}
+
+.phone-icon {
+  font-size: 4rem;
+  margin-bottom: 1rem;
+  animation: pulse 2s infinite;
+}
+
+.orientation-message h2 {
+  font-size: 1.5rem;
+  margin: 1rem 0;
+  color: #4CAF50;
+}
+
+.orientation-message p {
+  font-size: 1rem;
+  margin: 1rem 0;
+  opacity: 0.8;
+}
+
+.rotate-icon {
+  font-size: 2rem;
+  animation: rotate 2s infinite linear;
+}
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@keyframes rotate {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ─── Mostrar solo en modo portrait ─── */
+@media (orientation: portrait) and (max-height: 768px) {
+  .orientation-overlay {
+    display: flex;
+  }
+}
