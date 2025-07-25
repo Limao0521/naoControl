@@ -9,14 +9,11 @@ const StatsMenu = ({ isOpen, onClose, stats, isEmbedded = false }) => {
   return (
     <div className={containerClass}>
       <header>
-        <h3>Estadísticas</h3>
+        <h3>Stats</h3>
         {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       
-      <div className="stats-info">
-        <p>IP: <span className="stat-value">{stats?.ip || 'N/A'}</span></p>
-        <p>Batería: <span className="stat-value">{stats?.battery || 'N/A'}%</span></p>
-        
+      <div className="stats-info">        
         {stats?.joints && stats.joints.length > 0 && (
           <table className="stat-joints">
             <thead>

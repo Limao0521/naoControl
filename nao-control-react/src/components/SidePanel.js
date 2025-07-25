@@ -15,7 +15,7 @@ const SidePanel = ({
     { id: 'voice', icon: '🎤', label: 'Voz' },
     { id: 'camera', icon: '📷', label: 'Cámara' },
     { id: 'leds', icon: '💡', label: 'LEDs' },
-    { id: 'stats', icon: '📊', label: 'Estadísticas' },
+    { id: 'stats', icon: '📊', label: 'Stats' },
     { id: 'lang', icon: '🌐', label: 'Idioma' }
   ];
 

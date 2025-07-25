@@ -135,6 +135,16 @@ const NaoController = () => {
       {/* Main Content */}
       <div className="main-content">
         <main className="nes-pad">
+          {/* Status Info */}
+          <div className="control-status">
+            <div className="status-ip">
+              IP: {robotStats.ip || 'N/A'}
+            </div>
+            <div className="status-battery">
+              🔋 {robotStats.battery || 'N/A'}%
+            </div>
+          </div>
+
           <ModePanel 
             currentMode={currentMode} 
             onModeChange={handleModeChange} 
