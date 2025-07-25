@@ -24,3 +24,19 @@
 .small-btn:hover {
   filter: brightness(1.1);
 }
+
+/* ─── Autonomous Button ─── */
+.autonomous-btn {
+  background: #FF6B6B;
+  color: white;
+  font-weight: bold;
+}
+
+.autonomous-btn.active {
+  background: #4CAF50;
+  color: white;
+}
+
+.autonomous-btn:hover {
+  filter: brightness(1.2);
+}

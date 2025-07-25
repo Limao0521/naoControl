@@ -16,6 +16,7 @@ const NaoController = () => {
     joints: []
   });
   const [hostIP, setHostIP] = useState('');
+  const [autonomousEnabled, setAutonomousEnabled] = useState(false);
   const sendIntervalRef = useRef(null);
   const currentValuesRef = useRef({ x: 0, y: 0, mode: 'walk' });
 
@@ -134,6 +135,16 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Comando Autonomous Life
+  const handleAutonomous = useCallback(() => {
+    const newState = !autonomousEnabled;
+    setAutonomousEnabled(newState);
+    
+    if (sendMessage({ action: 'autonomous', enable: newState })) {
+      console.log('[UI] Autonomous Life →', newState ? 'ON' : 'OFF');
+    }
+  }, [sendMessage, autonomousEnabled]);
+
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
@@ -217,7 +228,9 @@ const NaoController = () => {
           
           <ControlButtons 
             onStand={handleStand} 
-            onSit={handleSit} 
+            onSit={handleSit}
+            onAutonomous={handleAutonomous}
+            autonomousEnabled={autonomousEnabled}
           />
           
           <Joystick 
