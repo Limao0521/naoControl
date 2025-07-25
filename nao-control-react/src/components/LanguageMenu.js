@@ -1,10 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import PropTypes from 'prop-types';
 import './LanguageMenu.css';
 
 const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmbedded = false }) => {
-  const [selectedLanguage, setSelectedLanguage] = useState('English');
-  const [volume, setVolume] = useState(50);
+  // Cargar valores guardados desde localStorage
+  const [selectedLanguage, setSelectedLanguage] = useState(() => {
+    return localStorage.getItem('nao-tts-language') || 'English';
+  });
+  const [volume, setVolume] = useState(() => {
+    const savedVolume = localStorage.getItem('nao-volume');
+    return savedVolume ? parseInt(savedVolume) : 50;
+  });
 
   const languages = [
     { value: 'English', label: 'English' },
@@ -14,12 +20,25 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
     { value: 'Italian', label: 'Italian' }
   ];
 
+  // Efecto para aplicar configuraciones guardadas al montar el componente
+  useEffect(() => {
+    // Aplicar volumen guardado automáticamente cuando el componente se monta
+    if (onVolumeChange && volume !== 50) { // Solo si es diferente del valor por defecto
+      onVolumeChange(volume);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Solo una vez al montar
+
   const handleLanguageChange = () => {
+    // Guardar idioma en localStorage
+    localStorage.setItem('nao-tts-language', selectedLanguage);
     onLanguageChange(selectedLanguage);
   };
 
   const handleVolumeChange = (newVolume) => {
     setVolume(newVolume);
+    // Guardar volumen en localStorage
+    localStorage.setItem('nao-volume', newVolume.toString());
     onVolumeChange(newVolume);
   };
 
@@ -42,7 +61,12 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
           <select 
             id="tts-lang"
             value={selectedLanguage}
-            onChange={(e) => setSelectedLanguage(e.target.value)}
+            onChange={(e) => {
+              const newLanguage = e.target.value;
+              setSelectedLanguage(newLanguage);
+              // Guardar automáticamente el idioma seleccionado
+              localStorage.setItem('nao-tts-language', newLanguage);
+            }}
           >
             {languages.map(lang => (
               <option key={lang.value} value={lang.value}>

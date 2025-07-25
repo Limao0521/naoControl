@@ -13,6 +13,8 @@ const NaoController = () => {
   const [robotStats, setRobotStats] = useState({
     ip: '',
     battery: 0,
+    batteryLow: false,
+    batteryFull: false,
     joints: []
   });
   const [hostIP, setHostIP] = useState('');
@@ -31,9 +33,21 @@ const NaoController = () => {
   // Manejar mensajes entrantes
   useEffect(() => {
     if (lastMessage) {
-      // Aquí puedes procesar los mensajes recibidos del robot
+      // Procesar mensajes de batería
+      if (lastMessage.battery !== undefined) {
+        setRobotStats(prev => ({
+          ...prev,
+          battery: lastMessage.battery,
+          batteryLow: lastMessage.low || false,
+          batteryFull: lastMessage.full || false
+        }));
+        console.log('[BATTERY] Actualizado:', lastMessage.battery + '%', 
+                   'Low:', lastMessage.low, 'Full:', lastMessage.full);
+      }
+      
+      // Otros mensajes del robot
       if (lastMessage.type === 'stats') {
-        setRobotStats(lastMessage.data);
+        setRobotStats(prev => ({ ...prev, ...lastMessage.data }));
       }
     }
   }, [lastMessage]);
@@ -182,6 +196,32 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Aplicar configuraciones guardadas cuando se conecte
+  useEffect(() => {
+    if (isConnected) {
+      // Aplicar volumen guardado
+      const savedVolume = localStorage.getItem('nao-volume');
+      if (savedVolume) {
+        const volume = parseInt(savedVolume);
+        handleVolumeChange(volume);
+        console.log('[SETTINGS] Volumen aplicado desde localStorage:', volume);
+      }
+      
+      // Aplicar idioma guardado si es necesario
+      const savedLanguage = localStorage.getItem('nao-tts-language');
+      if (savedLanguage) {
+        console.log('[SETTINGS] Idioma guardado:', savedLanguage);
+      }
+    }
+  }, [isConnected, handleVolumeChange]);
+
+  // Solicitar estado de batería
+  const requestBatteryStatus = useCallback(() => {
+    if (sendMessage({ action: 'getBattery' })) {
+      console.log('[UI] getBattery solicitado');
+    }
+  }, [sendMessage]);
+
   // Enfocar en el body para teclado (opcional)
   useEffect(() => {
     document.body.focus();
@@ -196,6 +236,54 @@ const NaoController = () => {
     };
   }, []);
 
+  // Solicitar estado de batería cada 10 segundos
+  useEffect(() => {
+    const batteryInterval = setInterval(() => {
+      if (isConnected) {
+        requestBatteryStatus();
+      }
+    }, 10000); // Cada 10 segundos
+
+    // Solicitar inmediatamente al conectar
+    if (isConnected) {
+      requestBatteryStatus();
+    }
+
+    return () => clearInterval(batteryInterval);
+  }, [isConnected, requestBatteryStatus]);
+
+  // Función para obtener el icono de batería según el estado
+  const getBatteryIcon = useCallback(() => {
+    const { battery, batteryLow, batteryFull } = robotStats;
+    
+    if (batteryFull) {
+      return '🔋'; // Batería llena (95%+)
+    } else if (batteryLow) {
+      return '🪫'; // Batería baja (<20%)
+    } else if (battery >= 60) {
+      return '🔋'; // Batería alta (60%+)
+    } else if (battery >= 40) {
+      return '🔋'; // Batería media (40-59%)
+    } else if (battery >= 20) {
+      return '🔋'; // Batería media-baja (20-39%)
+    } else {
+      return '🪫'; // Batería muy baja (<20%)
+    }
+  }, [robotStats]);
+
+  // Función para obtener el color de la batería
+  const getBatteryColor = useCallback(() => {
+    const { batteryLow, batteryFull } = robotStats;
+    
+    if (batteryFull) {
+      return '#4CAF50'; // Verde para llena
+    } else if (batteryLow) {
+      return '#FF5722'; // Rojo para baja
+    } else {
+      return '#FFC107'; // Amarillo para normal
+    }
+  }, [robotStats]);
+
   return (
     <div className="nao-controller">
       {/* Orientation Message */}
@@ -208,7 +296,11 @@ const NaoController = () => {
         onSendVoice={handleSendVoice}
         onSetLed={handleSetLed}
         onLedOff={handleLedOff}
-        stats={robotStats}
+        stats={{
+          ...robotStats,
+          batteryIcon: getBatteryIcon(),
+          batteryColor: getBatteryColor()
+        }}
         onLanguageChange={handleLanguageChange}
         onVolumeChange={handleVolumeChange}
       />
@@ -224,8 +316,8 @@ const NaoController = () => {
             <div className="status-connection">
               {isConnected ? '🟢 Conectado' : '🔴 Desconectado'}
             </div>
-            <div className="status-battery">
-              🔋 {robotStats.battery || 'N/A'}%
+            <div className="status-battery" style={{ color: getBatteryColor() }}>
+              {getBatteryIcon()} {robotStats.battery || 'N/A'}%
             </div>
           </div>
 

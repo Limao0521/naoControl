@@ -39,6 +39,39 @@
   gap: 1rem;
 }
 
+.battery-stats, .joints-stats {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1rem;
+  border-radius: 8px;
+}
+
+.battery-stats h4, .joints-stats h4 {
+  margin: 0 0 0.5rem 0;
+  color: #fff;
+  font-size: 1.1rem;
+}
+
+.battery-info {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.battery-icon {
+  font-size: 1.5rem;
+}
+
+.battery-level {
+  font-size: 1.1rem;
+}
+
+.battery-status {
+  font-size: 0.9rem;
+  opacity: 0.8;
+}
+
 .stats-info p {
   font-size: 1.1rem;
   margin: 0.5rem 0;
