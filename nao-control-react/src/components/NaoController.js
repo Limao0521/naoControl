@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import useWebSocket from '../hooks/useWebSocket';
 import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
@@ -16,8 +16,10 @@ const NaoController = () => {
     joints: []
   });
   const [hostIP, setHostIP] = useState('');
+  const lastSentRef = useRef(0);
+  const lastValuesRef = useRef({ x: 0, y: 0 });
 
-  const { sendMessage, lastMessage } = useWebSocket(6671);
+  const { sendMessage, lastMessage, isConnected } = useWebSocket(6671);
 
   // Detectar IP del host
   useEffect(() => {
@@ -41,7 +43,7 @@ const NaoController = () => {
     console.log('[MODE] Cambiado a', mode);
   }, []);
 
-  // Manejar movimientos del joystick
+  // Manejar movimientos del joystick con throttling y detección de cambios
   const handleJoystickMove = useCallback(({ x, y, mode, isStop }) => {
     if (!sendMessage) return;
 
@@ -49,34 +51,50 @@ const NaoController = () => {
     const vy = y;
 
     if (isStop && mode === 'walk') {
-      // Para walk, enviar comando de parada
+      // Para walk, enviar comando de parada inmediatamente
       sendMessage({ action: 'walk', vx: 0, vy: 0, wz: 0 });
       console.log('[JOY] walk STOP');
+      lastValuesRef.current = { x: 0, y: 0 };
       return;
     }
 
-    switch (mode) {
-      case 'walk':
-        // Para walk: adelante = vy local; lateral = vx local
-        sendMessage({ action: 'walk', vx: vy, vy: vx, wz: 0 });
-        break;
-      case 'larm':
-        sendMessage({ action: 'move', joint: 'LShoulderPitch', value: vy });
-        sendMessage({ action: 'move', joint: 'LShoulderRoll', value: vx });
-        break;
-      case 'rarm':
-        sendMessage({ action: 'move', joint: 'RShoulderPitch', value: vy });
-        sendMessage({ action: 'move', joint: 'RShoulderRoll', value: vx });
-        break;
-      case 'head':
-        sendMessage({ action: 'move', joint: 'HeadPitch', value: vy });
-        sendMessage({ action: 'move', joint: 'HeadYaw', value: vx });
-        break;
-      default:
-        break;
-    }
+    // Detectar si hay cambios significativos (más de 0.05 de diferencia)
+    const lastValues = lastValuesRef.current;
+    const deltaX = Math.abs(vx - lastValues.x);
+    const deltaY = Math.abs(vy - lastValues.y);
+    const hasSignificantChange = deltaX > 0.05 || deltaY > 0.05;
 
-    console.log('[JOY]', mode, vx.toFixed(2), vy.toFixed(2));
+    // Throttling: limitar envío a máximo cada 100ms (10 FPS) O si hay cambio significativo
+    const now = Date.now();
+    const shouldSend = hasSignificantChange || (now - lastSentRef.current >= 100);
+
+    if (shouldSend) {
+      lastSentRef.current = now;
+      lastValuesRef.current = { x: vx, y: vy };
+
+      switch (mode) {
+        case 'walk':
+          // Para walk: adelante = vy local; lateral = vx local
+          sendMessage({ action: 'walk', vx: vy, vy: vx, wz: 0 });
+          break;
+        case 'larm':
+          sendMessage({ action: 'move', joint: 'LShoulderPitch', value: vy });
+          sendMessage({ action: 'move', joint: 'LShoulderRoll', value: vx });
+          break;
+        case 'rarm':
+          sendMessage({ action: 'move', joint: 'RShoulderPitch', value: vy });
+          sendMessage({ action: 'move', joint: 'RShoulderRoll', value: vx });
+          break;
+        case 'head':
+          sendMessage({ action: 'move', joint: 'HeadPitch', value: vy });
+          sendMessage({ action: 'move', joint: 'HeadYaw', value: vx });
+          break;
+        default:
+          break;
+      }
+
+      console.log('[JOY]', mode, vx.toFixed(2), vy.toFixed(2));
+    }
   }, [sendMessage]);
 
   // Comandos de postura
@@ -150,6 +168,9 @@ const NaoController = () => {
           <div className="control-status">
             <div className="status-ip">
               IP: {hostIP || 'N/A'}
+            </div>
+            <div className="status-connection">
+              {isConnected ? '🟢 Conectado' : '🔴 Desconectado'}
             </div>
             <div className="status-battery">
               🔋 {robotStats.battery || 'N/A'}%

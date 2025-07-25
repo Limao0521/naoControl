@@ -42,10 +42,18 @@ const useWebSocket = (port = 6671) => {
 
   const sendMessage = useCallback((message) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify(message));
-      return true;
+      try {
+        wsRef.current.send(JSON.stringify(message));
+        console.log("[WS] Enviado:", message);
+        return true;
+      } catch (error) {
+        console.error("[WS] Error enviando mensaje:", error);
+        return false;
+      }
+    } else {
+      console.warn("[WS] No conectado, mensaje no enviado:", message);
+      return false;
     }
-    return false;
   }, []);
 
   const disconnect = useCallback(() => {

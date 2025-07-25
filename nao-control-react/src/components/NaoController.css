@@ -48,12 +48,16 @@
   right: 0.5rem;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   pointer-events: none;
   z-index: 10;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .status-ip,
-.status-battery {
+.status-battery,
+.status-connection {
   background: rgba(0, 0, 0, 0.7);
   color: #4CAF50;
   padding: 0.25rem 0.5rem;
@@ -65,6 +69,10 @@
 
 .status-battery {
   color: #FFC107;
+}
+
+.status-connection {
+  color: #2196F3;
 }
 
 /* ─── Responsive Design ─── */
