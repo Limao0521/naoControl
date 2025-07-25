@@ -86,6 +86,8 @@ def watchdog():
             last_walk = time.time()
             log("Watchdog", "stopMove() tras timeout")
 
+            
+
 wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
