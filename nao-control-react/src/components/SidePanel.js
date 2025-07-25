@@ -9,14 +9,15 @@ const SidePanel = ({
   onSetLed, 
   onLedOff, 
   stats, 
-  onLanguageChange 
+  onLanguageChange,
+  onVolumeChange 
 }) => {
   const menuItems = [
     { id: 'voice', icon: '🎤', label: 'Voz' },
     { id: 'camera', icon: '📷', label: 'Cámara' },
     { id: 'leds', icon: '💡', label: 'LEDs' },
     { id: 'stats', icon: '📊', label: 'Stats' },
-    { id: 'lang', icon: '🌐', label: 'Idioma' }
+    { id: 'lang', icon: '⚙️', label: 'Settings' }
   ];
 
   return (
@@ -43,6 +44,7 @@ const SidePanel = ({
             onLedOff={onLedOff}
             stats={stats}
             onLanguageChange={onLanguageChange}
+            onVolumeChange={onVolumeChange}
           />
         )}
       </div>

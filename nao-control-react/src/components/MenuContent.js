@@ -3,7 +3,7 @@ import VoiceMenu from './VoiceMenu';
 import CameraMenu from './CameraMenu';
 import LedsMenu from './LedsMenu';
 import StatsMenu from './StatsMenu';
-import LanguageMenu from './LanguageMenu';
+import SettingsMenu from './LanguageMenu';
 import './MenuContent.css';
 
 const MenuContent = ({ 
@@ -12,7 +12,8 @@ const MenuContent = ({
   onSetLed, 
   onLedOff, 
   stats, 
-  onLanguageChange 
+  onLanguageChange,
+  onVolumeChange 
 }) => {
   if (!activeMenu) return null;
 
@@ -56,10 +57,11 @@ const MenuContent = ({
         );
       case 'lang':
         return (
-          <LanguageMenu 
+          <SettingsMenu 
             isOpen={true}
             onClose={() => {}}
             onLanguageChange={onLanguageChange}
+            onVolumeChange={onVolumeChange}
             isEmbedded={true}
           />
         );
