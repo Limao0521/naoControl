@@ -7,7 +7,7 @@ const OrientationMessage = () => {
       <div className="orientation-message">
         <div className="phone-icon">📱</div>
         <h2>Gira tu dispositivo</h2>
-        <p>Esta aplicación funciona mejor en modo horizontal</p>
+        <p>Esta aplicación solo funciona en modo horizontal</p>
         <div className="rotate-icon">🔄</div>
       </div>
     </div>
