@@ -44,7 +44,10 @@ const useWebSocket = (port = 6671) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       try {
         wsRef.current.send(JSON.stringify(message));
-        console.log("[WS] Enviado:", message);
+        // Solo log para comandos que no sean de movimiento continuo
+        if (message.action !== 'walk' && message.action !== 'move') {
+          console.log("[WS] Enviado:", message);
+        }
         return true;
       } catch (error) {
         console.error("[WS] Error enviando mensaje:", error);

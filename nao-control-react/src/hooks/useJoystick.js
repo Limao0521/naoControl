@@ -56,6 +56,7 @@ const useJoystick = (onMove, mode = 'walk') => {
     const nx = dx / LIM;
     const ny = -dy / LIM;
     
+    // Usar el mismo umbral que el código original (0.05)
     const vx = Math.abs(nx) > 0.05 ? nx : 0;
     const vy = Math.abs(ny) > 0.05 ? ny : 0;
     

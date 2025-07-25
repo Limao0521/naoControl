@@ -16,8 +16,8 @@ const NaoController = () => {
     joints: []
   });
   const [hostIP, setHostIP] = useState('');
-  const lastSentRef = useRef(0);
-  const lastValuesRef = useRef({ x: 0, y: 0 });
+  const sendIntervalRef = useRef(null);
+  const currentValuesRef = useRef({ x: 0, y: 0, mode: 'walk' });
 
   const { sendMessage, lastMessage, isConnected } = useWebSocket(6671);
 
@@ -43,59 +43,83 @@ const NaoController = () => {
     console.log('[MODE] Cambiado a', mode);
   }, []);
 
-  // Manejar movimientos del joystick con throttling y detección de cambios
-  const handleJoystickMove = useCallback(({ x, y, mode, isStop }) => {
+  // Función para enviar comandos (como en el código original)
+  const sendCmd = useCallback(() => {
     if (!sendMessage) return;
 
-    const vx = x;
-    const vy = y;
+    const { x: vx, y: vy, mode } = currentValuesRef.current;
 
-    if (isStop && mode === 'walk') {
-      // Para walk, enviar comando de parada inmediatamente
-      sendMessage({ action: 'walk', vx: 0, vy: 0, wz: 0 });
-      console.log('[JOY] walk STOP');
-      lastValuesRef.current = { x: 0, y: 0 };
+    switch (mode) {
+      case 'walk':
+        // Para walk: adelante = vy local; lateral = vx local
+        sendMessage({ action: 'walk', vx: vy, vy: vx, wz: 0 });
+        break;
+      case 'larm':
+        sendMessage({ action: 'move', joint: 'LShoulderPitch', value: vy });
+        sendMessage({ action: 'move', joint: 'LShoulderRoll', value: vx });
+        break;
+      case 'rarm':
+        sendMessage({ action: 'move', joint: 'RShoulderPitch', value: vy });
+        sendMessage({ action: 'move', joint: 'RShoulderRoll', value: vx });
+        break;
+      case 'head':
+        sendMessage({ action: 'move', joint: 'HeadPitch', value: vy });
+        sendMessage({ action: 'move', joint: 'HeadYaw', value: vx });
+        break;
+      default:
+        break;
+    }
+
+    console.log('[JOY]', mode, vx.toFixed(2), vy.toFixed(2));
+  }, [sendMessage]);
+
+  // Iniciar envío continuo (15 FPS como en el original)
+  const startSend = useCallback(() => {
+    if (!sendIntervalRef.current) {
+      sendIntervalRef.current = setInterval(sendCmd, 1000 / 15); // 15 FPS
+    }
+  }, [sendCmd]);
+
+  // Detener envío continuo
+  const stopSend = useCallback(() => {
+    if (sendIntervalRef.current) {
+      clearInterval(sendIntervalRef.current);
+      sendIntervalRef.current = null;
+    }
+
+    const { mode } = currentValuesRef.current;
+    
+    if (mode === 'walk') {
+      // 1) Detener movimiento
+      currentValuesRef.current = { x: 0, y: 0, mode };
+      if (sendMessage) {
+        sendMessage({ action: 'walk', vx: 0, vy: 0, wz: 0 });
+        console.log('[JOY] walk STOP');
+        
+        // 2) Volver a Stand
+        sendMessage({ action: 'posture', value: 'Stand' });
+        console.log('[JOY] STAND enviado tras parada');
+      }
+    } else {
+      console.log('[JOY] hold position (mode=' + mode + ')');
+    }
+  }, [sendMessage]);
+
+  // Manejar movimientos del joystick (como en el original)
+  const handleJoystickMove = useCallback(({ x, y, mode, isStop }) => {
+    if (isStop) {
+      stopSend();
       return;
     }
 
-    // Detectar si hay cambios significativos (más de 0.05 de diferencia)
-    const lastValues = lastValuesRef.current;
-    const deltaX = Math.abs(vx - lastValues.x);
-    const deltaY = Math.abs(vy - lastValues.y);
-    const hasSignificantChange = deltaX > 0.05 || deltaY > 0.05;
+    // Actualizar valores actuales
+    currentValuesRef.current = { x, y, mode };
 
-    // Throttling: limitar envío a máximo cada 100ms (10 FPS) O si hay cambio significativo
-    const now = Date.now();
-    const shouldSend = hasSignificantChange || (now - lastSentRef.current >= 100);
-
-    if (shouldSend) {
-      lastSentRef.current = now;
-      lastValuesRef.current = { x: vx, y: vy };
-
-      switch (mode) {
-        case 'walk':
-          // Para walk: adelante = vy local; lateral = vx local
-          sendMessage({ action: 'walk', vx: vy, vy: vx, wz: 0 });
-          break;
-        case 'larm':
-          sendMessage({ action: 'move', joint: 'LShoulderPitch', value: vy });
-          sendMessage({ action: 'move', joint: 'LShoulderRoll', value: vx });
-          break;
-        case 'rarm':
-          sendMessage({ action: 'move', joint: 'RShoulderPitch', value: vy });
-          sendMessage({ action: 'move', joint: 'RShoulderRoll', value: vx });
-          break;
-        case 'head':
-          sendMessage({ action: 'move', joint: 'HeadPitch', value: vy });
-          sendMessage({ action: 'move', joint: 'HeadYaw', value: vx });
-          break;
-        default:
-          break;
-      }
-
-      console.log('[JOY]', mode, vx.toFixed(2), vy.toFixed(2));
+    // Si no estaba enviando, iniciar envío continuo
+    if (!sendIntervalRef.current) {
+      startSend();
     }
-  }, [sendMessage]);
+  }, [startSend, stopSend]);
 
   // Comandos de postura
   const handleStand = useCallback(() => {
@@ -143,6 +167,15 @@ const NaoController = () => {
   // Enfocar en el body para teclado (opcional)
   useEffect(() => {
     document.body.focus();
+  }, []);
+
+  // Cleanup del intervalo al desmontar
+  useEffect(() => {
+    return () => {
+      if (sendIntervalRef.current) {
+        clearInterval(sendIntervalRef.current);
+      }
+    };
   }, []);
 
   return (
