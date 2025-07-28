@@ -35,6 +35,7 @@ def start_services():
     global server_proc, http_proc
     if not server_proc:
         server_proc = subprocess.Popen(["python2", CONTROL_PY])
+        server_proc = subprocess.Popen(["python2", CAMERA_PY])
     if not http_proc:
         http_proc = subprocess.Popen(
             ["python2", "-m", "SimpleHTTPServer", HTTP_PORT],
@@ -94,9 +95,10 @@ def main():
                 # Toggle: si ya hay procesos, los para; si no, los arranca
                 if server_proc or http_proc:
                     stop_services()
+                    tts.say("Modo de control detenido")
                 else:
                     start_services()
-
+                    tts.say("Modo de control iniciado")
         time.sleep(0.1)
 
 if __name__ == "__main__":
