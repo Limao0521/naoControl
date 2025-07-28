@@ -43,7 +43,7 @@ const StatsMenu = ({ isOpen, onClose, stats, onRequestStats, isEmbedded = false 
   return (
     <div className={containerClass}>
       <header>
-        <h3>Stats</h3>
+        <h3>Telemetria</h3>
         {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       

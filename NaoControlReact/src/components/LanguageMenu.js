@@ -49,7 +49,7 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
   return (
     <div className={containerClass}>
       <header>
-        <h3>⚙️ Settings</h3>
+        <h3>Configuracion</h3>
         {!isEmbedded && <button className="close-btn" onClick={onClose}>✕</button>}
       </header>
       
