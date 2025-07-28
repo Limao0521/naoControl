@@ -131,11 +131,23 @@ class RobotWS(WebSocket):
                 log("SIM", "goToPosture('%s')" % pst)
 
             elif action == "led":
-                grp = msg.get("group","ChestLeds")
+                # 1. Obtener parámetros
+                grp = msg.get("group", "ChestLeds")
                 if isinstance(grp, unicode): grp = grp.encode('utf-8')
                 r, g, b = map(float, (msg.get("r",0), msg.get("g",0), msg.get("b",0)))
-                leds.fadeRGB(grp, r, g, b, 0.0)
-                log("SIM", "fadeRGB('%s',%.2f,%.2f,%.2f)" % (grp,r,g,b))
+                duration = float(msg.get("duration", 0.0))
+                # 2. Calcular valor RGB entero
+                rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
+                # 3. Llamar al método apropiado
+                if grp in ("LeftEarLeds", "RightEarLeds"):
+                    # Sólo azul, control de intensidad
+                    intensity = (rgb_int & 0xFF) / 255.0
+                    leds.fade(grp, intensity, duration)
+                    log("SIM", "fade('%s',%.2f,%.2f)" % (grp, intensity, duration))
+                else:
+                    # LEDs RGB full-color
+                    leds.fadeRGB(grp, rgb_int, duration)
+                    log("SIM", "fadeRGB('%s',0x%06X,%.2f)" % (grp, rgb_int, duration))
 
             elif action == "say":
                 txt = msg.get("text","")
