@@ -39,13 +39,13 @@
   gap: 1rem;
 }
 
-.battery-stats, .joints-stats {
+.battery-stats, .joints-stats, .temperature-summary {
   background: rgba(255, 255, 255, 0.1);
   padding: 1rem;
   border-radius: 8px;
 }
 
-.battery-stats h4, .joints-stats h4 {
+.battery-stats h4, .joints-stats h4, .temperature-summary h4 {
   margin: 0 0 0.5rem 0;
   color: #fff;
   font-size: 1.1rem;
@@ -96,6 +96,84 @@
   border: 1px solid #444; 
   padding: .5rem; 
   text-align: center;
+  font-size: 0.9rem;
+}
+
+.joint-name {
+  text-align: left !important;
+  font-weight: bold;
+}
+
+.joint-angle, .joint-temp {
+  font-family: 'Courier New', monospace;
+  font-weight: bold;
+}
+
+.joint-status {
+  font-size: 1.2rem;
+}
+
+/* Nuevos estilos para resumen térmico */
+.temperature-summary {
+  margin-top: 1rem;
+}
+
+.temp-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.temp-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  text-align: center;
+}
+
+.temp-stat.warning {
+  background: rgba(255, 152, 0, 0.2);
+  border: 1px solid rgba(255, 152, 0, 0.5);
+}
+
+.temp-stat .label {
+  font-size: 0.8rem;
+  opacity: 0.8;
+  margin-bottom: 0.25rem;
+}
+
+.temp-stat .value {
+  font-size: 1rem;
+  font-weight: bold;
+}
+
+.joints-container {
+  max-height: 400px;
+  overflow-y: auto;
+  border-radius: 0.5rem;
+}
+
+/* Scrollbar personalizado */
+.joints-container::-webkit-scrollbar {
+  width: 8px;
+}
+
+.joints-container::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+}
+
+.joints-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.joints-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
 }
 
 .stat-joints th {
@@ -112,6 +190,42 @@
   color: #888;
   font-style: italic;
   margin-top: 2rem;
+  padding: 2rem;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 0.5rem;
+  border: 2px dashed #444;
+}
+
+.no-data p {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.1rem;
+}
+
+.no-data small {
+  opacity: 0.7;
+  font-size: 0.9rem;
+}
+
+.stats-request-btn {
+  background: linear-gradient(135deg, #4CAF50, #45a049);
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 0.5rem;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  margin-top: 1rem;
+  transition: all 0.2s ease;
+}
+
+.stats-request-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+}
+
+.stats-request-btn:active {
+  transform: translateY(0);
 }
 
 /* ─── Modo embebido ─── */

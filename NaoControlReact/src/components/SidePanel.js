@@ -10,7 +10,8 @@ const SidePanel = ({
   onLedOff, 
   stats, 
   onLanguageChange,
-  onVolumeChange 
+  onVolumeChange,
+  onRequestStats 
 }) => {
   const menuItems = [
     { id: 'voice', icon: '🎤', label: 'Voz' },
@@ -45,6 +46,7 @@ const SidePanel = ({
             stats={stats}
             onLanguageChange={onLanguageChange}
             onVolumeChange={onVolumeChange}
+            onRequestStats={onRequestStats}
           />
         )}
       </div>

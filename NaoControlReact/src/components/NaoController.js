@@ -49,6 +49,18 @@ const NaoController = () => {
       if (lastMessage.type === 'stats') {
         setRobotStats(prev => ({ ...prev, ...lastMessage.data }));
       }
+      
+      // Procesar datos de estadísticas directas (temperatures, angles)
+      if (lastMessage.temperatures && lastMessage.angles) {
+        setRobotStats(prev => ({
+          ...prev,
+          temperatures: lastMessage.temperatures,
+          angles: lastMessage.angles
+        }));
+        console.log('[STATS] Recibidas temperaturas y ángulos:', 
+                   Object.keys(lastMessage.temperatures).length, 'sensores,',
+                   Object.keys(lastMessage.angles).length, 'articulaciones');
+      }
     }
   }, [lastMessage]);
 
@@ -196,6 +208,13 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Solicitar estadísticas del robot
+  const handleRequestStats = useCallback(() => {
+    if (sendMessage({ action: 'stats' })) {
+      console.log('[UI] stats solicitadas');
+    }
+  }, [sendMessage]);
+
   // Aplicar configuraciones guardadas cuando se conecte
   useEffect(() => {
     if (isConnected) {
@@ -303,6 +322,7 @@ const NaoController = () => {
         }}
         onLanguageChange={handleLanguageChange}
         onVolumeChange={handleVolumeChange}
+        onRequestStats={handleRequestStats}
       />
 
       {/* Main Content */}

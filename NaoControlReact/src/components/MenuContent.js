@@ -13,7 +13,8 @@ const MenuContent = ({
   onLedOff, 
   stats, 
   onLanguageChange,
-  onVolumeChange 
+  onVolumeChange,
+  onRequestStats 
 }) => {
   if (!activeMenu) return null;
 
@@ -52,6 +53,7 @@ const MenuContent = ({
             isOpen={true}
             onClose={() => {}}
             stats={stats}
+            onRequestStats={onRequestStats}
             isEmbedded={true}
           />
         );
