@@ -56,7 +56,7 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
       <div className="settings-controls">
         {/* Idioma TTS */}
         <div className="setting-group">
-          <h4>🗣️ Idioma TTS</h4>
+          <h4>Idioma TTS</h4>
           <label htmlFor="tts-lang">Idioma:</label>
           <select 
             id="tts-lang"
@@ -82,7 +82,7 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
 
         {/* Control de Volumen */}
         <div className="setting-group">
-          <h4>🔊 Volumen</h4>
+          <h4>Volumen</h4>
           
           <div className="volume-input-group">
             <label htmlFor="volume-number">Volumen:</label>
@@ -119,21 +119,21 @@ const SettingsMenu = ({ isOpen, onClose, onLanguageChange, onVolumeChange, isEmb
               onClick={() => handleVolumeChange(0)}
               title="Silencio"
             >
-              🔇
+              0%
             </button>
             <button 
               className="volume-btn" 
               onClick={() => handleVolumeChange(50)}
               title="Volumen medio"
             >
-              🔉
+              50%
             </button>
             <button 
               className="volume-btn" 
               onClick={() => handleVolumeChange(100)}
               title="Volumen máximo"
             >
-              🔊
+              100%
             </button>
           </div>
         </div>

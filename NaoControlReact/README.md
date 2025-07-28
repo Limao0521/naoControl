@@ -20,6 +20,29 @@
 
 **NAO Control React** es una aplicación web moderna construida con React 19 que proporciona una interfaz de control completa para robots NAO de SoftBank Robotics. Esta aplicación permite controlar remotamente el robot a través de una conexión WebSocket, ofreciendo una experiencia de usuario intuitiva y responsiva tanto en dispositivos móviles como de escritorio.
 
+## 🆕 Novedades Recientes
+
+### ✨ Actualización v2.1.0 - Sistema de LEDs y Estadísticas Mejorado
+
+#### 🎨 **LEDs Completamente Renovado**
+- **12 grupos de LEDs** ahora soportados (vs 4 anteriores)
+- **Paleta de colores predefinidos** con 8 colores de acceso rápido
+- **Interfaz visual mejorada** con emojis descriptivos y organización clara
+- **Soporte completo** para orejas, ojos, pecho y pies del robot
+
+#### 📊 **Sistema de Estadísticas Avanzado**
+- **Nuevo protocolo** de estadísticas: `{"temperatures": {...}, "angles": {...}}`
+- **Tabla interactiva** con todas las articulaciones del robot
+- **Indicadores térmicos** en tiempo real con alertas de sobrecalentamiento
+- **Resumen térmico automático** (promedio, máxima, mínima, alertas)
+- **Botón de solicitud** para obtener datos actualizados del robot
+
+#### 🔧 **Mejoras Técnicas**
+- **Compatibilidad dual**: Funciona con formato nuevo y legacy
+- **Procesamiento inteligente**: Combina automáticamente temperaturas y ángulos
+- **UX mejorada**: Interfaces más claras y accesibles
+- **Documentación actualizada**: Protocolos y ejemplos de uso
+
 ### 🎯 Propósito
 
 La aplicación está diseñada para:
@@ -52,11 +75,17 @@ La aplicación está diseñada para:
 - ✅ **Control de Volumen**: Ajuste del volumen del TTS (0-100%)
 - ✅ **Configuración Persistente**: Guarda preferencias en localStorage
 
-### 💡 Control de LEDs
-- ✅ **4 Grupos de LEDs**: Pecho, Cara, Orejas, Ojos
-- ✅ **Selector de Color RGB**: Paleta completa de colores
+### 💡 Control de LEDs Avanzado
+- ✅ **12 Grupos de LEDs**: Soporte completo para todos los LEDs del robot NAO
+  - 🌟 **AllLeds**: Control simultáneo de todos los LEDs
+  - 👂 **Orejas**: EarLeds, LeftEarLeds, RightEarLeds
+  - 👁️ **Ojos/Cara**: FaceLeds, LeftFaceLeds, RightFaceLeds
+  - 💎 **Pecho**: ChestLeds (botón del pecho)
+  - 👣 **Pies**: FeetLeds, LeftFootLeds, RightFootLeds
+- ✅ **Selector de Color RGB**: Paleta completa de colores con selector personalizado
+- ✅ **8 Colores Predefinidos**: Acceso rápido a colores comunes con vista previa
+- ✅ **Interfaz Intuitiva**: Organización visual clara con emojis descriptivos
 - ✅ **Control Individual**: Encender/apagar grupos independientemente
-- ✅ **Vista Previa en Tiempo Real**: Visualización inmediata de cambios
 
 ### 📷 Sistema de Cámara
 - ✅ **Stream en Vivo**: Visualización del feed MJPEG de la cámara del robot
@@ -64,11 +93,14 @@ La aplicación está diseñada para:
 - ✅ **Manejo de Errores**: Detección y recuperación de fallos de conexión
 - ✅ **Interfaz Responsiva**: Adaptable a diferentes tamaños de pantalla
 
-### 📊 Monitoreo del Robot
-- ✅ **Estado de Batería**: Indicador visual con códigos de color
-- ✅ **Estado de Conexión**: Monitoreo en tiempo real del WebSocket
-- ✅ **Información del Sistema**: IP, estadísticas de articulaciones
-- ✅ **Alertas Automáticas**: Notificaciones de batería baja/llena
+### 📊 Monitoreo Avanzado del Robot
+- ✅ **Estadísticas Completas**: Temperaturas y ángulos de todas las articulaciones
+- ✅ **Tabla Interactiva**: Visualización organizada con scroll automático
+- ✅ **Indicadores Térmicos**: Alertas visuales por sobrecalentamiento (🔥 >70°C, ⚠️ >50°C, ✅ Normal)
+- ✅ **Resumen Térmico**: Estadísticas globales (promedio, máxima, mínima, alertas)
+- ✅ **Solicitud Manual**: Botón para solicitar estadísticas del robot
+- ✅ **Estado de Batería**: Indicador visual con códigos de color y estado detallado
+- ✅ **Compatibilidad Dual**: Soporte para formato nuevo y legacy
 
 ### 🌐 Conectividad
 - ✅ **WebSocket con Reconexión**: Reconexión automática cada 3 segundos
@@ -361,18 +393,46 @@ const CameraMenu = ({ cameraUrl, isEmbedded = false }) => {
 
 ### 💡 LedsMenu.js
 
-Control de LEDs del robot:
+Control avanzado de LEDs del robot con soporte completo para todos los grupos disponibles:
 
 ```javascript
 const LedsMenu = ({ onSetLed, onLedOff, isEmbedded = false }) => {
   const [selectedGroup, setSelectedGroup] = useState('ChestLeds');
   const [selectedColor, setSelectedColor] = useState('#ff0000');
 
+  // Colores predefinidos para acceso rápido
+  const presetColors = [
+    { color: '#ff0000', label: '🔴 Rojo' },
+    { color: '#00ff00', label: '🟢 Verde' },
+    { color: '#0000ff', label: '🔵 Azul' },
+    { color: '#ffff00', label: '🟡 Amarillo' },
+    { color: '#ff00ff', label: '🟣 Magenta' },
+    { color: '#00ffff', label: '🔵 Cian' },
+    { color: '#ffffff', label: '⚪ Blanco' },
+    { color: '#ffa500', label: '🟠 Naranja' }
+  ];
+
   const ledGroups = [
-    { value: 'ChestLeds', label: 'Pecho' },
-    { value: 'FaceLeds', label: 'Cara' },
-    { value: 'EarLeds', label: 'Orejas' },
-    { value: 'EyeLeds', label: 'Ojos' }
+    // Todos los LEDs
+    { value: 'AllLeds', label: '🌟 Todos los LEDs' },
+    
+    // Orejas
+    { value: 'EarLeds', label: '👂 Ambas Orejas' },
+    { value: 'LeftEarLeds', label: '👂 Oreja Izq.' },
+    { value: 'RightEarLeds', label: '👂 Oreja Der.' },
+
+    // Ojos/Cara
+    { value: 'FaceLeds', label: '👁️ Ambos Ojos' },
+    { value: 'LeftFaceLeds', label: '👁️ Ojo Izq.' },
+    { value: 'RightFaceLeds', label: '👁️ Ojo Der.' },
+
+    // Pecho
+    { value: 'ChestLeds', label: '💎 Botón del Pecho' },
+    
+    // Pies
+    { value: 'FeetLeds', label: '👣 Ambos Pies' },
+    { value: 'LeftFootLeds', label: '👣 Pie Izq.' },
+    { value: 'RightFootLeds', label: '👣 Pie Der.' }
   ];
 
   const handleSetLed = () => {
@@ -382,42 +442,199 @@ const LedsMenu = ({ onSetLed, onLedOff, isEmbedded = false }) => {
     const b = parseInt(hex.slice(5, 7), 16) / 255;
     onSetLed(selectedGroup, { r, g, b });
   };
-  // ...selector de grupo, color y botones
+
+  return (
+    <div className="led-controls">
+      <div className="control-section">
+        <label>🎯 Grupo de LEDs:</label>
+        <select value={selectedGroup} onChange={e => setSelectedGroup(e.target.value)}>
+          {ledGroups.map(group => (
+            <option key={group.value} value={group.value}>
+              {group.label}
+            </option>
+          ))}
+        </select>
+      </div>
+      
+      <div className="control-section">
+        <label>🎨 Color personalizado:</label>
+        <input 
+          type="color" 
+          value={selectedColor}
+          onChange={e => setSelectedColor(e.target.value)}
+        />
+      </div>
+      
+      <div className="control-section">
+        <label>🎨 Colores rápidos:</label>
+        <div className="preset-colors">
+          {presetColors.map((preset, index) => (
+            <button
+              key={index}
+              className={`color-preset ${selectedColor === preset.color ? 'active' : ''}`}
+              style={{ backgroundColor: preset.color }}
+              onClick={() => setSelectedColor(preset.color)}
+              title={preset.label}
+            >
+              {preset.color === selectedColor ? '✓' : ''}
+            </button>
+          ))}
+        </div>
+      </div>
+      
+      <div className="led-buttons">
+        <button className="menu-btn led-on-btn" onClick={handleSetLed}>
+          ✨ Encender
+        </button>
+        <button className="menu-btn led-off-btn" onClick={() => onLedOff(selectedGroup)}>
+          🔌 Apagar
+        </button>
+      </div>
+    </div>
+  );
 };
 ```
 
 ### 📊 StatsMenu.js
 
-Visualización de estadísticas del robot:
+Visualización avanzada de estadísticas del robot con soporte completo para temperaturas y ángulos:
 
 ```javascript
-const StatsMenu = ({ stats, isEmbedded = false }) => {
+const StatsMenu = ({ stats, onRequestStats, isEmbedded = false }) => {
+  // Procesar datos de temperaturas y ángulos para crear lista de articulaciones
+  const processJointData = () => {
+    if (!stats?.temperatures || !stats?.angles) return [];
+    
+    const jointData = [];
+    const tempNames = Object.keys(stats.temperatures);
+    const angleNames = Object.keys(stats.angles);
+    const allJointNames = [...new Set([...tempNames, ...angleNames])];
+    
+    allJointNames.forEach(jointName => {
+      jointData.push({
+        name: jointName,
+        temperature: stats.temperatures[jointName] || null,
+        angle: stats.angles[jointName] || null
+      });
+    });
+    
+    return jointData.sort((a, b) => a.name.localeCompare(b.name));
+  };
+
+  const jointData = processJointData();
+
   return (
     <div className={isEmbedded ? 'menu embedded' : 'menu active'}>
       <header>
-        <h3>📊 Estadísticas</h3>
+        <h3>📊 Stats</h3>
       </header>
       
-      <div className="stats-content">
-        <div className="stat-item">
-          <span className="stat-label">🌐 IP:</span>
-          <span className="stat-value">{stats.ip || 'N/A'}</span>
+      <div className="stats-info">
+        {/* Información de batería */}
+        <div className="battery-stats">
+          <h4>🔋 Batería</h4>
+          <div className="battery-info" style={{ color: stats?.batteryColor || '#FFC107' }}>
+            <span className="battery-icon">{stats?.batteryIcon || '🔋'}</span>
+            <span className="battery-level">{stats?.battery || 'N/A'}%</span>
+            <span className="battery-status">
+              {stats?.batteryFull ? '(Llena)' : stats?.batteryLow ? '(Baja)' : '(Normal)'}
+            </span>
+          </div>
         </div>
+
+        {/* Información de articulaciones */}        
+        {jointData && jointData.length > 0 && (
+          <div className="joints-stats">
+            <h4>🤖 Articulaciones ({jointData.length})</h4>
+            <div className="joints-container">
+              <table className="stat-joints">
+                <thead>
+                  <tr>
+                    <th>Articulación</th>
+                    <th>Ángulo (rad)</th>
+                    <th>Temp (°C)</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {jointData.map((joint, index) => {
+                    const temp = joint.temperature;
+                    
+                    // Determinar estado de temperatura
+                    let tempStatus = '✅';
+                    let tempColor = '#4caf50';
+                    
+                    if (temp > 70) {
+                      tempStatus = '�';
+                      tempColor = '#ff5722';
+                    } else if (temp > 50) {
+                      tempStatus = '⚠️';
+                      tempColor = '#ff9800';
+                    }
+                    
+                    return (
+                      <tr key={joint.name || index}>
+                        <td className="joint-name">{joint.name}</td>
+                        <td className="joint-angle">
+                          {joint.angle !== null ? joint.angle.toFixed(3) : 'N/A'}
+                        </td>
+                        <td className="joint-temp" style={{ color: tempColor }}>
+                          {joint.temperature !== null ? joint.temperature.toFixed(1) : 'N/A'}
+                        </td>
+                        <td className="joint-status">{tempStatus}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
         
-        <div className="stat-item">
-          <span className="stat-label">🔋 Batería:</span>
-          <span 
-            className="stat-value" 
-            style={{ color: stats.batteryColor }}
-          >
-            {stats.batteryIcon} {stats.battery || 'N/A'}%
-          </span>
-        </div>
+        {/* Resumen de temperaturas */}
+        {stats?.temperatures && (
+          <div className="temperature-summary">
+            <h4>🌡️ Resumen Térmico</h4>
+            <div className="temp-overview">
+              <div className="temp-stat">
+                <span className="label">Promedio:</span>
+                <span className="value">{avgTemp.toFixed(1)}°C</span>
+              </div>
+              <div className="temp-stat">
+                <span className="label">Máxima:</span>
+                <span className="value" style={{ color: maxTemp > 70 ? '#ff5722' : '#4caf50' }}>
+                  {maxTemp.toFixed(1)}°C
+                </span>
+              </div>
+              <div className="temp-stat">
+                <span className="label">Mínima:</span>
+                <span className="value">{minTemp.toFixed(1)}°C</span>
+              </div>
+              {hotJoints > 0 && (
+                <div className="temp-stat warning">
+                  <span className="label">⚠️ Calientes:</span>
+                  <span className="value">{hotJoints} articulaciones</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         
-        {stats.joints && stats.joints.length > 0 && (
-          <div className="joints-section">
-            <h4>🦾 Articulaciones</h4>
-            {stats.joints.map((joint, index) => (
+        {/* Botón de solicitud si no hay datos */}
+        {(!jointData || jointData.length === 0) && (
+          <div className="no-data">
+            <p>📊 No hay datos de articulaciones disponibles</p>
+            {onRequestStats && (
+              <button className="stats-request-btn" onClick={onRequestStats}>
+                🔄 Solicitar Stats
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
               <div key={index} className="joint-item">
                 <span>{joint.name}</span>
                 <span>{joint.position?.toFixed(2) || 'N/A'}</span>
@@ -2217,14 +2434,21 @@ ws://192.168.1.100:6671
 }
 ```
 
-**Grupos de LEDs**:
-- `ChestLeds`: LEDs del pecho
-- `FaceLeds`: LEDs de la cara
-- `EarLeds`: LEDs de las orejas
-- `EyeLeds`: LEDs de los ojos
-- `HeadLeds`: LEDs de la cabeza
-- `LeftFootLeds`: LEDs del pie izquierdo
-- `RightFootLeds`: LEDs del pie derecho
+**Grupos de LEDs Completos**:
+- **🌟 Todos**: `AllLeds` - Controla todos los LEDs simultáneamente
+- **👂 Orejas**: 
+  - `EarLeds` - Ambas orejas
+  - `LeftEarLeds` - Oreja izquierda
+  - `RightEarLeds` - Oreja derecha
+- **👁️ Ojos/Cara**:
+  - `FaceLeds` - Toda la cara
+  - `LeftFaceLeds` - Cara izquierda
+  - `RightFaceLeds` - Cara derecha
+- **💎 Pecho**: `ChestLeds` - Botón del pecho
+- **👣 Pies**:
+  - `FeetLeds` - Ambos pies
+  - `LeftFootLeds` - Pie izquierdo
+  - `RightFootLeds` - Pie derecho
 
 #### 📊 Solicitud de Estado
 ```json
@@ -2233,11 +2457,11 @@ ws://192.168.1.100:6671
 }
 
 {
-  "action": "getStatus"   // Solicitar estado general
+  "action": "stats"       // Solicitar estadísticas completas (temperaturas + ángulos)
 }
 
 {
-  "action": "getJoints"   // Solicitar estado de articulaciones
+  "action": "getStatus"   // Solicitar estado general
 }
 ```
 
@@ -2255,7 +2479,66 @@ ws://192.168.1.100:6671
 }
 ```
 
-#### 📊 Estadísticas Generales
+#### 📊 Estadísticas Avanzadas (Nuevo Formato)
+```json
+{
+  "temperatures": {
+    "HeadYaw": 35.2,
+    "HeadPitch": 42.1,
+    "LShoulderPitch": 38.5,
+    "LShoulderRoll": 41.8,
+    "LElbowYaw": 39.3,
+    "LElbowRoll": 36.7,
+    "RShoulderPitch": 40.2,
+    "RShoulderRoll": 37.9,
+    "RElbowYaw": 38.1,
+    "RElbowRoll": 35.4,
+    "LHipYawPitch": 45.6,
+    "LHipRoll": 43.2,
+    "LHipPitch": 44.8,
+    "LKneePitch": 41.5,
+    "LAnklePitch": 38.9,
+    "LAnkleRoll": 36.1,
+    "RHipRoll": 42.7,
+    "RHipPitch": 43.9,
+    "RKneePitch": 40.8,
+    "RAnklePitch": 37.6,
+    "RAnkleRoll": 35.8
+  },
+  "angles": {
+    "HeadYaw": 0.123,
+    "HeadPitch": -0.456,
+    "LShoulderPitch": 1.234,
+    "LShoulderRoll": 0.567,
+    "LElbowYaw": -0.789,
+    "LElbowRoll": -1.012,
+    "RShoulderPitch": 1.345,
+    "RShoulderRoll": -0.678,
+    "RElbowYaw": 0.901,
+    "RElbowRoll": 1.234,
+    "LHipYawPitch": 0.0,
+    "LHipRoll": 0.045,
+    "LHipPitch": -0.523,
+    "LKneePitch": 1.047,
+    "LAnklePitch": -0.524,
+    "LAnkleRoll": -0.045,
+    "RHipRoll": -0.045,
+    "RHipPitch": -0.523,
+    "RKneePitch": 1.047,
+    "RAnklePitch": -0.524,
+    "RAnkleRoll": 0.045
+  }
+}
+```
+
+**Características del Nuevo Formato**:
+- ✅ **Separación clara**: Temperaturas y ángulos en objetos distintos
+- ✅ **Cobertura completa**: Todas las articulaciones del robot
+- ✅ **Formato directo**: Objeto plano key-value para fácil procesamiento
+- ✅ **Unidades consistentes**: Temperaturas en °C, ángulos en radianes
+- ✅ **Automatización**: El frontend combina automáticamente los datos
+
+#### 📊 Estadísticas Legacy (Compatibilidad)
 ```json
 {
   "type": "stats",
