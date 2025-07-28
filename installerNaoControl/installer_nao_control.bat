@@ -8,7 +8,7 @@ echo ========================================
 echo Asegurese de que el robot NAO este encendido y 
 echo conectado a la misma red que esta maquina.
 echo ----------------------------------------
-echo NaoControl V.1.0
+echo NaoControl V.1.1 - 28/07/2025
 echo GITHUB: https://github.com/Limao0521/naoControl
 echo ----------------------------------------
 echo.
