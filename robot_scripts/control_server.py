@@ -38,7 +38,8 @@ leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
 tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
 battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
 memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
-audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)   
+audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)  
+temperature = ALProxy("ALTemperature",    IP_NAO, PORT_NAO) 
 
 # ─── Fall Recovery ────────────────────────────────────────────────────
 # Habilita el manejador de caídas para que el robot se levante solo
@@ -186,6 +187,19 @@ class RobotWS(WebSocket):
                 })
                 self.sendMessage(payload)
                 log("SIM","getBattery → %d%% low=%s full=%s"%(level,low,full))
+            
+            elif action == "stats":
+                # Envío de estadísticas: temperaturas y ángulos
+                # Obtener temperaturas de cada motor
+                sensor_names = temperature.getSensorNames()
+                temps = {name: temperature.getTemperature(name) for name in sensor_names}
+                # Obtener ángulos de cada articulación
+                joint_names = motion.getBodyNames("Joint")
+                angles = {name: motion.getAngles(name, True)[0] for name in joint_names}
+                # Enviar payload
+                payload = json.dumps({"temperatures": temps, "angles": angles})
+                self.sendMessage(payload)
+                log("SIM", "stats sent")
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
