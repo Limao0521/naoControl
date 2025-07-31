@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import './LedsMenu.css';
 
 const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff, isEmbedded = false }) => {
-  const [selectedGroup, setSelectedGroup] = useState('ChestLeds');
+  const [selectedGroup, setSelectedGroup] = useState('FaceLeds');
   const [selectedColor, setSelectedColor] = useState('#ff0000');
 
   // Colores predefinidos para acceso rápido
@@ -30,9 +30,6 @@ const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff, isEmbedded = false }) =
     { value: 'FaceLeds', label: 'Ambos Ojos' },
     { value: 'LeftFaceLeds', label: 'Ojo Izq.' },
     { value: 'RightFaceLeds', label: 'Ojo Der.' },
-
-    // Pecho
-    { value: 'ChestLeds', label: 'Botón del Pecho' },
     
     // Pies
     { value: 'FeetLeds', label: 'Ambos Pies' },
