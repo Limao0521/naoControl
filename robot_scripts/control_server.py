@@ -188,6 +188,23 @@ class RobotWS(WebSocket):
                 self.sendMessage(payload)
                 log("SIM","getBattery → %d%% low=%s full=%s"%(level,low,full))
 
+            elif action == "getAutonomousLife":
+                # --- NUEVO: consultar estado de Autonomous Life ---
+                try:
+                    current_state = life.getState()  # "disabled", "interactive", "solitary", etc.
+                    is_enabled = current_state != "disabled"
+                    payload = json.dumps({
+                        "autonomousLifeEnabled": is_enabled
+                    })
+                    self.sendMessage(payload)
+                    log("SIM","getAutonomousLife → enabled=%s"%(is_enabled))
+                except Exception as e:
+                    log("WS", "Error obteniendo estado Autonomous Life: %s" % e)
+                    payload = json.dumps({
+                        "autonomousLifeEnabled": False
+                    })
+                    self.sendMessage(payload)
+
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
 

@@ -68,6 +68,10 @@ La aplicación está diseñada para:
 - ✅ **Control de Velocidad Variable**: Precisión en el control de movimientos
 - ✅ **Auto-Stop Inteligente**: Detiene automáticamente el movimiento al soltar el joystick
 - ✅ **Comandos de Postura**: Botones dedicados para Stand, Sit y Autonomous Life
+- ✅ **Estado Autonomous Life**: Monitoreo automático y control del sistema autónomo del robot
+  - 🔄 **Actualización Automática**: Consulta el estado cada 30 segundos
+  - 🎯 **Sincronización**: El botón refleja el estado real del robot automáticamente
+  - 🤖 **Control Inteligente**: Permite alternar entre modo manual y autónomo
 
 ### 🗣️ Sistema de Voz
 - ✅ **Text-to-Speech**: Envío de texto para síntesis de voz
@@ -2463,6 +2467,10 @@ ws://192.168.1.100:6671
 {
   "action": "getStatus"   // Solicitar estado general
 }
+
+{
+  "action": "getAutonomousLife"  // Solicitar estado de Autonomous Life
+}
 ```
 
 ### 📥 Mensajes Entrantes (NAO → React)
@@ -2478,6 +2486,19 @@ ws://192.168.1.100:6671
   "timestamp": 1640995200
 }
 ```
+
+#### 🤖 Estado de Autonomous Life
+```json
+{
+  "autonomousLifeEnabled": true    // true si está activo, false si está deshabilitado
+}
+```
+
+**Estados Posibles**:
+- `true`: Autonomous Life activo (robot puede moverse autónomamente)
+- `false`: Autonomous Life deshabilitado (control manual completo)
+
+**Consulta**: Se solicita con `{"action": "getAutonomousLife"}` y se actualiza automáticamente cada 30 segundos.
 
 #### 📊 Estadísticas Avanzadas (Nuevo Formato)
 ```json

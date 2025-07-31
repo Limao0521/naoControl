@@ -61,8 +61,36 @@ const NaoController = () => {
                    Object.keys(lastMessage.temperatures).length, 'sensores,',
                    Object.keys(lastMessage.angles).length, 'articulaciones');
       }
+      
+      // Procesar estado de Autonomous Life
+      if (lastMessage.autonomousLifeEnabled !== undefined) {
+        setAutonomousEnabled(lastMessage.autonomousLifeEnabled);
+        console.log('[AUTONOMOUS] Estado actualizado:', lastMessage.autonomousLifeEnabled ? 'ON' : 'OFF');
+      }
     }
   }, [lastMessage]);
+
+  // Solicitar estado de Autonomous Life
+  const handleRequestAutonomousState = useCallback(() => {
+    if (sendMessage({ action: 'getAutonomousLife' })) {
+      console.log('[UI] Estado Autonomous Life solicitado');
+    }
+  }, [sendMessage]);
+
+  // Solicitar estado inicial de Autonomous Life al conectarse
+  useEffect(() => {
+    if (isConnected && sendMessage) {
+      // Solicitar estado inicial inmediatamente
+      handleRequestAutonomousState();
+      
+      // Configurar consulta periódica cada 30 segundos
+      const autonomousInterval = setInterval(() => {
+        handleRequestAutonomousState();
+      }, 30000);
+
+      return () => clearInterval(autonomousInterval);
+    }
+  }, [isConnected, sendMessage, handleRequestAutonomousState]);
 
   // Manejar cambio de modo
   const handleModeChange = useCallback((mode) => {
@@ -164,12 +192,15 @@ const NaoController = () => {
   // Comando Autonomous Life
   const handleAutonomous = useCallback(() => {
     const newState = !autonomousEnabled;
-    setAutonomousEnabled(newState);
     
     if (sendMessage({ action: 'autonomous', enable: newState })) {
-      console.log('[UI] Autonomous Life →', newState ? 'ON' : 'OFF');
+      console.log('[UI] Autonomous Life solicitado →', newState ? 'ON' : 'OFF');
+      // Solicitar el estado actualizado después de un breve delay
+      setTimeout(() => {
+        handleRequestAutonomousState();
+      }, 500);
     }
-  }, [sendMessage, autonomousEnabled]);
+  }, [sendMessage, autonomousEnabled, handleRequestAutonomousState]);
 
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
