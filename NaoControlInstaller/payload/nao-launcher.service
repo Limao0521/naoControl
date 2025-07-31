@@ -1,0 +1,19 @@
+[Unit]
+Description=Launcher para control mid-head-touch
+After=network.target
+
+[Service]
+Type=simple
+User=nao
+Environment=PYTHONUNBUFFERED=1
+# Apunta al directorio que contiene naoqi.py
+Environment=PYTHONPATH=/opt/aldebaran/lib/python2.7/site-packages
+ExecStart=/usr/bin/env python2 /home/nao/scripts/launcher.py
+WorkingDirectory=/home/nao/scripts
+StandardOutput=journal
+StandardError=journal
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
