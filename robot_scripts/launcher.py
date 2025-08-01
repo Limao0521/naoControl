@@ -16,7 +16,7 @@ from naoqi import ALProxy
 # — Configuración —
 IP_NAO     = "127.0.0.1"
 PORT_NAO   = 9559
-PRESS_HOLD = 5.0            # segundos mínimos de pulsación
+PRESS_HOLD = 3.0            # segundos mínimos de pulsación
 # Ajusta estas rutas según dónde tengas los scripts
 CONTROL_PY = "/home/nao/scripts/control_server.py"
 WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
@@ -174,7 +174,7 @@ signal.signal(signal.SIGTERM, cleanup)
 def main():
     # Mensaje de verificación al iniciarse el launcher
     try:
-        tts.say("Oprime mi cabeza cinco segundos para iniciar el modo de control")
+        tts.say("Oprime mi cabeza tres segundos para iniciar el modo de control")
     except Exception:
         pass
 
@@ -182,19 +182,26 @@ def main():
     press_start = 0.0
 
     while True:
-        # Lee el tactil medio de la cabeza
+        # Lee los sensores táctiles de la cabeza
         try:
-            curr = memory.getData("MiddleTactilTouched")
+            middle_touch = memory.getData("MiddleTactilTouched")
+            front_touch = memory.getData("FrontTactilTouched")
+            rear_touch = memory.getData("RearTactilTouched")
         except Exception:
-            curr = 0
+            middle_touch = 0
+            front_touch = 0
+            rear_touch = 0
 
-        # Detecta el flanco 0→1 (comienzo de pulsación)
-        if curr == 1 and not pressed:
+        # Verificar que SOLO el sensor medio esté presionado
+        only_middle_pressed = (middle_touch == 1 and front_touch == 0 and rear_touch == 0)
+
+        # Detecta el flanco 0→1 (comienzo de pulsación) SOLO si es el sensor medio
+        if only_middle_pressed and not pressed:
             pressed     = True
             press_start = time.time()
 
         # Detecta fin de pulsación tras un hold largo
-        elif curr == 0 and pressed:
+        elif middle_touch == 0 and pressed:
             elapsed = time.time() - press_start
             pressed = False
             if elapsed >= PRESS_HOLD:
@@ -205,6 +212,11 @@ def main():
                 else:
                     tts.say("Iniciando modo de control")
                     start_services()
+        
+        # Si se presiona otro sensor mientras está en proceso de detección, cancelar
+        elif pressed and (front_touch == 1 or rear_touch == 1):
+            pressed = False
+            
         time.sleep(0.1)
 
 if __name__ == "__main__":
