@@ -164,12 +164,35 @@ class RobustLauncher:
         
         # Mensaje inicial
         try:
-            self.tts.say("Launcher iniciado. Pulsa mi cabeza tres segundos para alternar modos")
+            self.tts.say("Control iniciado. Presiona mi cabeza tres segundos para apagar control")
             log("SUCCESS", "Mensaje inicial enviado", "LAUNCHER")
         except Exception as e:
             log("WARN", "No se pudo enviar mensaje inicial: " + str(e), "LAUNCHER")
         
         return True
+    
+    def verify_naoqi_cleanup(self):
+        """Verifica que las suscripciones NAOqi se hayan limpiado correctamente."""
+        try:
+            log("DEBUG", "Verificando limpieza de suscripciones NAOqi...", "SERVICES")
+            
+            # Intentar obtener lista de suscriptores para verificar limpieza
+            try:
+                # Verificar que no hay suscripciones colgadas del control_server
+                subscribers = self.memory.getSubscribers("RobotHasFallen")
+                if "control_server" in str(subscribers) or "__main__" in str(subscribers):
+                    log("WARN", "Suscripciones NAOqi no limpiadas correctamente", "SERVICES")
+                    return False
+                else:
+                    log("SUCCESS", "Suscripciones NAOqi limpiadas correctamente", "SERVICES")
+                    return True
+            except Exception as e:
+                log("DEBUG", "No se pudo verificar suscripciones: " + str(e), "SERVICES")
+                return True  # Asumir que está bien si no se puede verificar
+                
+        except Exception as e:
+            log("WARN", "Error verificando limpieza NAOqi: " + str(e), "SERVICES")
+            return True  # No bloquear por errores de verificación
     
     def test_touch_sensors(self):
         """Prueba inicial de los sensores táctiles."""
@@ -303,9 +326,9 @@ class RobustLauncher:
             if success_steps >= 3:  # Al menos 3 de 4 pasos exitosos
                 if self.tts:
                     if errors:
-                        self.tts.say("Robot preparado para Choregraphe con algunas advertencias")
+                        self.tts.say("Control apagado con advertencias")
                     else:
-                        self.tts.say("Robot preparado para Choregraphe")
+                        self.tts.say("Control apagado")
                 
                 log("SUCCESS", "Robot preparado para Choregraphe ({}/{} pasos exitosos)".format(success_steps, total_steps), "CHOREOGRAPHE")
                 if errors:
@@ -317,7 +340,7 @@ class RobustLauncher:
             else:
                 # Fallo crítico
                 if self.tts:
-                    self.tts.say("Error preparando para Choregraphe")
+                    self.tts.say("Error apagando control")
                 
                 log("ERROR", "Error crítico preparando para Choregraphe ({}/{} pasos fallaron)".format(total_steps - success_steps, total_steps), "CHOREOGRAPHE")
                 for error in errors:
@@ -330,7 +353,7 @@ class RobustLauncher:
             log("ERROR", error_msg, "CHOREOGRAPHE")
             
             if self.tts:
-                self.tts.say("Error fatal preparando para Choregraphe")
+                self.tts.say("Error fatal apagando control")
             
             return False
     
@@ -404,9 +427,9 @@ class RobustLauncher:
             if success_steps >= 2:  # Al menos 2 de 3 pasos exitosos
                 if self.tts:
                     if errors:
-                        self.tts.say("Modo de control restaurado con algunas advertencias")
+                        self.tts.say("Control iniciado con advertencias")
                     else:
-                        self.tts.say("Modo de control restaurado")
+                        self.tts.say("Control iniciado")
                 
                 log("SUCCESS", "Modo control restaurado ({}/{} pasos exitosos)".format(success_steps, total_steps), "CONTROL")
                 if errors:
@@ -418,7 +441,7 @@ class RobustLauncher:
             else:
                 # Fallo crítico
                 if self.tts:
-                    self.tts.say("Error restaurando modo de control")
+                    self.tts.say("Error iniciando control")
                 
                 log("ERROR", "Error crítico restaurando modo control ({}/{} pasos fallaron)".format(total_steps - success_steps, total_steps), "CONTROL")
                 for error in errors:
@@ -431,7 +454,7 @@ class RobustLauncher:
             log("ERROR", error_msg, "CONTROL")
             
             if self.tts:
-                self.tts.say("Error fatal restaurando modo control")
+                self.tts.say("Error fatal iniciando control")
             
             return False
     
@@ -442,7 +465,7 @@ class RobustLauncher:
         if self.services_running:
             log("INFO", "Cambiando a modo Choregraphe...", "LAUNCHER")
             if self.tts:
-                self.tts.say("Cambiando a modo Choregraphe")
+                self.tts.say("Apagando control")
             success = self.prepare_for_choreographe()
             if success:
                 log("SUCCESS", "Cambio a modo Choregraphe completado", "LAUNCHER")
@@ -451,7 +474,7 @@ class RobustLauncher:
         else:
             log("INFO", "Cambiando a modo control...", "LAUNCHER")
             if self.tts:
-                self.tts.say("Iniciando modo control")
+                self.tts.say("Iniciando control")
             success = self.restore_control_mode()
             if success:
                 log("SUCCESS", "Cambio a modo control completado", "LAUNCHER")
@@ -561,8 +584,14 @@ class RobustLauncher:
         self.camera_proc = None
         self.server_proc = None
         
-        time.sleep(2)
-        print("Todos los servicios detenidos")
+        # Pausa adicional para asegurar limpieza completa de NAOqi
+        log("INFO", "Liberando recursos NAOqi...", "SERVICES")
+        time.sleep(3)  # Pausa más larga para limpieza completa
+        
+        # Verificar que la limpieza fue exitosa
+        self.verify_naoqi_cleanup()
+        
+        log("SUCCESS", "Todos los servicios detenidos y recursos liberados", "SERVICES")
     
     def run_polling_mode(self):
         """Ejecuta el launcher en modo polling."""
@@ -826,9 +855,9 @@ def main():
         # Mensaje inicial de TTS indicando estado
         try:
             if launcher.services_running:
-                launcher.tts.say("Sistema iniciado en modo control. Presiona mi cabeza tres segundos para cambiar a Choregraphe")
+                launcher.tts.say("Control iniciado. Presiona mi cabeza tres segundos para apagar control")
             else:
-                launcher.tts.say("Sistema iniciado. Presiona mi cabeza tres segundos para activar modo control")
+                launcher.tts.say("Presiona mi cabeza tres segundos para iniciar control")
         except Exception as e:
             print("Aviso: No se pudo enviar mensaje inicial de TTS: " + str(e))
         

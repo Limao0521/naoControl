@@ -52,7 +52,35 @@ def onFall(_key, _value, _msg):
 
 # Registrar callback
 memory.subscribeToEvent("RobotHasFallen", __name__, "onFall")
+log("NAO", "Suscrito a evento RobotHasFallen")
 # ───────────────────────────────────────────────────
+
+def cleanup_all_subscriptions():
+    """Limpia TODAS las suscripciones NAOqi de este proceso."""
+    try:
+        log("Cleanup", "Iniciando limpieza completa de suscripciones...")
+        
+        # Lista de eventos que podrían estar suscritos
+        events_to_cleanup = [
+            "RobotHasFallen",
+            "TouchChanged",
+            "FaceDetected", 
+            "WordRecognized",
+            "SpeechDetected"
+        ]
+        
+        for event in events_to_cleanup:
+            try:
+                memory.unsubscribeToEvent(event, __name__)
+                log("Cleanup", "Desuscrito de evento: {}".format(event))
+            except Exception:
+                # Es normal que falle si no estaba suscrito
+                pass
+        
+        log("Cleanup", "Limpieza de suscripciones completada")
+        
+    except Exception as e:
+        log("Cleanup", "Error en limpieza de suscripciones: {}".format(e))
 
 # Estado global del proceso HTTP
 web_proc = None
@@ -61,10 +89,34 @@ web_proc = None
 def cleanup(signum, frame):
     global web_proc
     log("Server", "Recibido señal {}, limpiando…".format(signum))
+    
+    # 1. Limpiar suscripciones a eventos NAOqi
+    try:
+        cleanup_all_subscriptions()
+    except Exception as e:
+        log("Cleanup", "Error en limpieza completa: {}".format(e))
+    
+    # 2. Detener procesos HTTP
     if web_proc:
-        web_proc.terminate()
-        web_proc.wait()
-        log("Launcher", "HTTP server detenido (pid {}).".format(web_proc.pid))
+        try:
+            web_proc.terminate()
+            web_proc.wait()
+            log("Cleanup", "HTTP server detenido (pid {}).".format(web_proc.pid))
+        except Exception as e:
+            log("Cleanup", "Error deteniendo HTTP server: {}".format(e))
+    
+    # 3. Limpiar recursos NAOqi
+    try:
+        log("Cleanup", "Liberando recursos NAOqi...")
+        # Detener cualquier movimiento activo
+        motion.stopMove()
+        # Asegurar que no haya comandos pendientes
+        motion.waitUntilMoveIsFinished()
+        log("Cleanup", "Recursos NAOqi liberados")
+    except Exception as e:
+        log("Cleanup", "Error liberando recursos NAOqi: {}".format(e))
+    
+    log("Cleanup", "Limpieza completada, cerrando servidor...")
     sys.exit(0)
 
 signal.signal(signal.SIGINT,  cleanup)
@@ -214,14 +266,31 @@ class RobotWS(WebSocket):
 # Arranque del servidor WebSocket con reintento si el puerto está ocupado
 if __name__ == "__main__":
     log("Server", "Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
-    while True:
-        try:
-            srv = SimpleWebSocketServer("", WS_PORT, RobotWS)
-            break
-        except socket.error as e:
-            if e.errno == errno.EADDRINUSE:
-                log("Server", "⚠ Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
-                time.sleep(3)
-            else:
-                raise
-    srv.serveforever()
+    srv = None
+    try:
+        while True:
+            try:
+                srv = SimpleWebSocketServer("", WS_PORT, RobotWS)
+                break
+            except socket.error as e:
+                if e.errno == errno.EADDRINUSE:
+                    log("Server", "Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
+                    time.sleep(3)
+                else:
+                    raise
+        
+        log("Server", "Servidor WebSocket iniciado exitosamente")
+        srv.serveforever()
+        
+    except KeyboardInterrupt:
+        log("Server", "Interrupción de teclado detectada")
+        cleanup(signal.SIGINT, None)
+    except Exception as e:
+        log("Server", "Error fatal: {}".format(e))
+        cleanup(signal.SIGTERM, None)
+    finally:
+        if srv:
+            try:
+                srv.close()
+            except Exception:
+                pass
