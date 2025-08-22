@@ -2,7 +2,8 @@
 .mode-panel{ 
   display: flex; 
   flex-direction: column; 
-  gap: .5rem; 
+  gap: .5rem;
+  width: 100%;
 }
 
 .mode-btn{
@@ -15,6 +16,7 @@
   box-shadow: inset 0 -.2rem 0 var(--shadow);
   transition: transform .05s;
   cursor: pointer;
+  width: 100%;
 }
 
 .mode-btn.active, 
