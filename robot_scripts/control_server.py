@@ -5,7 +5,41 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
 
 • ws://0.0.0.0:6671
 • JSON actions: walk, move, posture, led, say, language
-• Watchdog detiene la marcha si no recibe walk en WATCHDOG s
+• Watchd            elif action == "autonomous":
+                enable = bool(msg.get("enable", False))
+                # "interactive" habilita Autonomous Life; "disabled" lo apaga
+                new_state = "interactive" if enable else "disabled"
+                life.setState(new_state)
+                log("SIM", "AutonomousLife.setState('%s')" % new_state)
+                
+            elif action == "kick":
+                # Ejecutar el behavior de kick
+                try:
+                    # Nombre del behavior basado en la estructura de carpetas
+                    behavior_name = "kicknao-f6eb94/behavior_1" 
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        # Detener cualquier behavior que esté corriendo
+                        running_behaviors = behavior.getRunningBehaviors()
+                        for bhv in running_behaviors:
+                            behavior.stopBehavior(bhv)
+                        
+                        # Ejecutar el kick behavior
+                        behavior.runBehavior(behavior_name)
+                        log("SIM", "Ejecutando kick behavior: '%s'" % behavior_name)
+                    else:
+                        log("WS", "⚠ Behavior de kick no instalado: '%s'" % behavior_name)
+                        # Intentar con nombres alternativos
+                        installed_behaviors = behavior.getInstalledBehaviors()
+                        kick_behaviors = [b for b in installed_behaviors if "kick" in b.lower()]
+                        if kick_behaviors:
+                            behavior.runBehavior(kick_behaviors[0])
+                            log("SIM", "Ejecutando kick behavior alternativo: '%s'" % kick_behaviors[0])
+                        else:
+                            log("WS", "⚠ No se encontró ningún behavior de kick instalado")
+                except Exception as e:
+                    log("WS", "Error ejecutando kick behavior: %s" % e)
+                    
+            elif action == "volume":ene la marcha si no recibe walk en WATCHDOG s
 • Pulsar head tactile togglea el servidor HTTP en puerto 8000
 """
 
@@ -39,7 +73,8 @@ leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
 tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
 battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
 memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
-audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)   
+audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)
+behavior   = ALProxy("ALBehaviorManager", IP_NAO, PORT_NAO)   
 
 # ─── Fall Recovery ────────────────────────────────────────────────────
 # Habilita el manejador de caídas para que el robot se levante solo
