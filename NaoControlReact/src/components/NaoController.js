@@ -202,6 +202,13 @@ const NaoController = () => {
     }
   }, [sendMessage, autonomousEnabled, handleRequestAutonomousState]);
 
+  // Comando Kick
+  const handleKick = useCallback(() => {
+    if (sendMessage({ action: 'kick' })) {
+      console.log('[UI] Kick enviado');
+    }
+  }, [sendMessage]);
+
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
@@ -372,22 +379,38 @@ const NaoController = () => {
             </div>
           </div>
 
-          <ModePanel 
-            currentMode={currentMode} 
-            onModeChange={handleModeChange} 
-          />
+          {/* Left Kick Button */}
+          <div className="kick-section">
+            <button className="kick-btn" onClick={handleKick} title="Kick">
+              KICK
+            </button>
+          </div>
+
+          {/* Selectors Section */}
+          <div className="selectors-section">
+            <ModePanel 
+              currentMode={currentMode} 
+              onModeChange={handleModeChange} 
+            />
+          </div>
+
+          {/* Center Controls */}
+          <div className="center-controls">
+            <ControlButtons 
+              onStand={handleStand} 
+              onSit={handleSit}
+              onAutonomous={handleAutonomous}
+              autonomousEnabled={autonomousEnabled}
+            />
+          </div>
           
-          <ControlButtons 
-            onStand={handleStand} 
-            onSit={handleSit}
-            onAutonomous={handleAutonomous}
-            autonomousEnabled={autonomousEnabled}
-          />
-          
-          <Joystick 
-            onMove={handleJoystickMove} 
-            mode={currentMode} 
-          />
+          {/* Right Joystick */}
+          <div className="joystick-section">
+            <Joystick 
+              onMove={handleJoystickMove} 
+              mode={currentMode} 
+            />
+          </div>
         </main>
       </div>
     </div>

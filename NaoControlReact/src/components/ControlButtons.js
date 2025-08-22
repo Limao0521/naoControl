@@ -2,6 +2,7 @@ import React from 'react';
 import PropTypes from 'prop-types';
 import './ControlButtons.css';
 
+
 const ControlButtons = ({ onStand, onSit, onAutonomous, autonomousEnabled }) => {
   return (
     <section className="center">
@@ -20,6 +21,7 @@ const ControlButtons = ({ onStand, onSit, onAutonomous, autonomousEnabled }) => 
     </section>
   );
 };
+
 
 ControlButtons.propTypes = {
   onStand: PropTypes.func.isRequired,
