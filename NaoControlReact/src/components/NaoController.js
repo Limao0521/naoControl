@@ -207,45 +207,25 @@ const NaoController = () => {
 
   // Comando Kick
   const handleKick = useCallback(() => {
-    console.log('[DEBUG] handleKick llamado, cooldown actual:', kickCooldown);
-    
-    if (kickCooldown > 0) {
-      console.log('[DEBUG] Botón en cooldown, ignorando click');
-      return; // Si está en cooldown, no hacer nada
-    }
-    
-    console.log('[DEBUG] Enviando comando kick...');
-    if (sendMessage({ action: 'kick' })) {
-      console.log('[UI] Kick enviado - iniciando cooldown de 20 segundos');
-      
-      // Limpiar cualquier intervalo previo
-      if (kickCooldownRef.current) {
+  if (kickCooldown > 0) {
+    return;
+  }
+  setKickCooldown(20);
+  sendMessage({ action: 'kick' });
+  if (kickCooldownRef.current) {
+    clearInterval(kickCooldownRef.current);
+  }
+  kickCooldownRef.current = setInterval(() => {
+    setKickCooldown(prev => {
+      if (prev <= 1) {
         clearInterval(kickCooldownRef.current);
+        kickCooldownRef.current = null;
+        return 0;
       }
-      
-      // Iniciar cooldown de 20 segundos
-      setKickCooldown(20);
-      
-      // Actualizar el cooldown cada segundo
-      kickCooldownRef.current = setInterval(() => {
-        setKickCooldown(prev => {
-          console.log('[DEBUG] Cooldown countdown:', prev - 1);
-          const newValue = prev - 1;
-          
-          if (newValue <= 0) {
-            console.log('[DEBUG] Cooldown terminado');
-            clearInterval(kickCooldownRef.current);
-            kickCooldownRef.current = null;
-            return 0;
-          }
-          return newValue;
-        });
-      }, 1000);
-    } else {
-      console.log('[DEBUG] Error enviando comando kick');
-    }
-  }, [sendMessage, kickCooldown]);
-
+      return prev - 1;
+    });
+  }, 1000);
+}, [sendMessage, kickCooldown]);
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
@@ -472,12 +452,13 @@ const NaoController = () => {
               {/* Left Kick Button */}
               <div className="kick-section">
                 <button 
-                  className={`kick-btn ${kickCooldown > 0 ? 'disabled' : ''}`} 
-                  onClick={handleKick} 
+                  className={`kick-btn${kickCooldown > 0 ? ' disabled' : ''}`} 
+                  onClick={kickCooldown > 0 ? undefined : handleKick} 
                   disabled={kickCooldown > 0}
+                  style={{ background: kickCooldown > 0 ? '#bbb' : '#FFC5D3', color: 'white', cursor: kickCooldown > 0 ? 'not-allowed' : 'pointer' }}
                   title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
                 >
-                  {kickCooldown > 0 ? `${kickCooldown}s` : 'KICK'}
+                  {kickCooldown > 0 ? kickCooldown : 'KICK'}
                 </button>
               </div>
 
