@@ -4,6 +4,7 @@ import CameraMenu from './CameraMenu';
 import LedsMenu from './LedsMenu';
 import StatsMenu from './StatsMenu';
 import SettingsMenu from './LanguageMenu';
+import UIMenu from './UIMenu';
 import './MenuContent.css';
 
 const MenuContent = ({ 
@@ -14,7 +15,9 @@ const MenuContent = ({
   stats, 
   onLanguageChange,
   onVolumeChange,
-  onRequestStats 
+  onRequestStats,
+  onUIChange,
+  currentUI 
 }) => {
   if (!activeMenu) return null;
 
@@ -55,6 +58,13 @@ const MenuContent = ({
             stats={stats}
             onRequestStats={onRequestStats}
             isEmbedded={true}
+          />
+        );
+      case 'ui':
+        return (
+          <UIMenu 
+            onUIChange={onUIChange}
+            currentUI={currentUI}
           />
         );
       case 'lang':

@@ -19,8 +19,11 @@ const NaoController = () => {
   });
   const [hostIP, setHostIP] = useState('');
   const [autonomousEnabled, setAutonomousEnabled] = useState(false);
+  const [kickCooldown, setKickCooldown] = useState(0);
+  const [currentUI, setCurrentUI] = useState('normal'); // 'normal' o 'futbol'
   const sendIntervalRef = useRef(null);
   const currentValuesRef = useRef({ x: 0, y: 0, mode: 'walk' });
+  const kickCooldownRef = useRef(null);
 
   const { sendMessage, lastMessage, isConnected } = useWebSocket(6671);
 
@@ -204,10 +207,44 @@ const NaoController = () => {
 
   // Comando Kick
   const handleKick = useCallback(() => {
-    if (sendMessage({ action: 'kick' })) {
-      console.log('[UI] Kick enviado');
+    console.log('[DEBUG] handleKick llamado, cooldown actual:', kickCooldown);
+    
+    if (kickCooldown > 0) {
+      console.log('[DEBUG] Botón en cooldown, ignorando click');
+      return; // Si está en cooldown, no hacer nada
     }
-  }, [sendMessage]);
+    
+    console.log('[DEBUG] Enviando comando kick...');
+    if (sendMessage({ action: 'kick' })) {
+      console.log('[UI] Kick enviado - iniciando cooldown de 20 segundos');
+      
+      // Limpiar cualquier intervalo previo
+      if (kickCooldownRef.current) {
+        clearInterval(kickCooldownRef.current);
+      }
+      
+      // Iniciar cooldown de 20 segundos
+      setKickCooldown(20);
+      
+      // Actualizar el cooldown cada segundo
+      kickCooldownRef.current = setInterval(() => {
+        setKickCooldown(prev => {
+          console.log('[DEBUG] Cooldown countdown:', prev - 1);
+          const newValue = prev - 1;
+          
+          if (newValue <= 0) {
+            console.log('[DEBUG] Cooldown terminado');
+            clearInterval(kickCooldownRef.current);
+            kickCooldownRef.current = null;
+            return 0;
+          }
+          return newValue;
+        });
+      }, 1000);
+    } else {
+      console.log('[DEBUG] Error enviando comando kick');
+    }
+  }, [sendMessage, kickCooldown]);
 
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
@@ -245,6 +282,12 @@ const NaoController = () => {
       console.log('[UI] setVolume →', volume);
     }
   }, [sendMessage]);
+
+  // Manejar cambio de UI
+  const handleUIChange = useCallback((uiMode) => {
+    setCurrentUI(uiMode);
+    console.log('[UI] Cambiado a modo:', uiMode);
+  }, []);
 
   // Solicitar estadísticas del robot
   const handleRequestStats = useCallback(() => {
@@ -290,6 +333,9 @@ const NaoController = () => {
       if (sendIntervalRef.current) {
         clearInterval(sendIntervalRef.current);
       }
+      if (kickCooldownRef.current) {
+        clearInterval(kickCooldownRef.current);
+      }
     };
   }, []);
 
@@ -308,6 +354,15 @@ const NaoController = () => {
 
     return () => clearInterval(batteryInterval);
   }, [isConnected, requestBatteryStatus]);
+
+  // Limpieza del intervalo de cooldown
+  useEffect(() => {
+    return () => {
+      if (kickCooldownRef.current) {
+        clearInterval(kickCooldownRef.current);
+      }
+    };
+  }, []);
 
   // Función para obtener el icono de batería según el estado
   const getBatteryIcon = useCallback(() => {
@@ -361,11 +416,13 @@ const NaoController = () => {
         onLanguageChange={handleLanguageChange}
         onVolumeChange={handleVolumeChange}
         onRequestStats={handleRequestStats}
+        onUIChange={handleUIChange}
+        currentUI={currentUI}
       />
 
       {/* Main Content */}
       <div className="main-content">
-        <main className="nes-pad">
+        <main className={`nes-pad ${currentUI === 'normal' ? 'ui-normal' : 'ui-futbol'}`}>
           {/* Status Info */}
           <div className="control-status">
             <div className="status-ip">
@@ -379,38 +436,70 @@ const NaoController = () => {
             </div>
           </div>
 
-          {/* Left Kick Button */}
-          <div className="kick-section">
-            <button className="kick-btn" onClick={handleKick} title="Kick">
-              KICK
-            </button>
-          </div>
+          {/* UI Condicional según el modo */}
+          {currentUI === 'normal' ? (
+            // UI NORMAL - Sin botón kick, con selectores completos
+            <>
+              {/* Selectors Section */}
+              <div className="selectors-section-full">
+                <ModePanel 
+                  currentMode={currentMode} 
+                  onModeChange={handleModeChange} 
+                />
+              </div>
 
-          {/* Selectors Section */}
-          <div className="selectors-section">
-            <ModePanel 
-              currentMode={currentMode} 
-              onModeChange={handleModeChange} 
-            />
-          </div>
+              {/* Center Controls */}
+              <div className="center-controls-full">
+                <ControlButtons 
+                  onStand={handleStand} 
+                  onSit={handleSit}
+                  onAutonomous={handleAutonomous}
+                  autonomousEnabled={autonomousEnabled}
+                />
+              </div>
+              
+              {/* Right Joystick */}
+              <div className="joystick-section-full">
+                <Joystick 
+                  onMove={handleJoystickMove} 
+                  mode={currentMode} 
+                />
+              </div>
+            </>
+          ) : (
+            // UI FÚTBOL - 3 columnas: KICK | BOTONES CENTRALES | JOYSTICK
+            <>
+              {/* Left Kick Button */}
+              <div className="kick-section">
+                <button 
+                  className={`kick-btn ${kickCooldown > 0 ? 'disabled' : ''}`} 
+                  onClick={handleKick} 
+                  disabled={kickCooldown > 0}
+                  title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
+                >
+                  {kickCooldown > 0 ? `${kickCooldown}s` : 'KICK'}
+                </button>
+              </div>
 
-          {/* Center Controls */}
-          <div className="center-controls">
-            <ControlButtons 
-              onStand={handleStand} 
-              onSit={handleSit}
-              onAutonomous={handleAutonomous}
-              autonomousEnabled={autonomousEnabled}
-            />
-          </div>
-          
-          {/* Right Joystick */}
-          <div className="joystick-section">
-            <Joystick 
-              onMove={handleJoystickMove} 
-              mode={currentMode} 
-            />
-          </div>
+              {/* Center Controls - Solo botones básicos */}
+              <div className="center-controls">
+                <ControlButtons 
+                  onStand={handleStand} 
+                  onSit={handleSit}
+                  onAutonomous={handleAutonomous}
+                  autonomousEnabled={autonomousEnabled}
+                />
+              </div>
+              
+              {/* Right Joystick - Solo modo walk */}
+              <div className="joystick-section">
+                <Joystick 
+                  onMove={handleJoystickMove} 
+                  mode="walk"
+                />
+              </div>
+            </>
+          )}
         </main>
       </div>
     </div>

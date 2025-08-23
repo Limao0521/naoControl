@@ -1,0 +1,86 @@
+/* UI Menu Styles */
+.ui-menu {
+  padding: 20px;
+  color: white;
+}
+
+.ui-menu h3 {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  color: #FFC5D3;
+  text-align: center;
+}
+
+.ui-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  margin-bottom: 25px;
+}
+
+.ui-mode-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 197, 211, 0.3);
+  border-radius: 12px;
+  padding: 15px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: left;
+}
+
+.ui-mode-btn:hover {
+  background: rgba(255, 197, 211, 0.2);
+  border-color: rgba(255, 197, 211, 0.6);
+  transform: translateY(-2px);
+}
+
+.ui-mode-btn.active {
+  background: rgba(255, 197, 211, 0.3);
+  border-color: #FFC5D3;
+  box-shadow: 0 0 15px rgba(255, 197, 211, 0.5);
+}
+
+.ui-mode-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.ui-mode-name {
+  font-size: 16px;
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #FFC5D3;
+}
+
+.ui-mode-desc {
+  font-size: 12px;
+  opacity: 0.8;
+  line-height: 1.3;
+}
+
+.ui-info {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 8px;
+  padding: 15px;
+  border: 1px solid rgba(255, 197, 211, 0.2);
+}
+
+.ui-info p {
+  margin: 0 0 10px 0;
+  color: #FFC5D3;
+  font-weight: bold;
+}
+
+.ui-details ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ui-details li {
+  font-size: 13px;
+  margin-bottom: 5px;
+  opacity: 0.9;
+  line-height: 1.4;
+}
