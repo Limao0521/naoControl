@@ -226,6 +226,14 @@ const NaoController = () => {
     });
   }, 1000);
 }, [sendMessage, kickCooldown]);
+
+  // Comando SIU
+  const handleSiu = useCallback(() => {
+    if (sendMessage({ action: 'siu' })) {
+      console.log('[UI] SIU enviado');
+    }
+  }, [sendMessage]);
+
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
@@ -451,14 +459,22 @@ const NaoController = () => {
             <>
               {/* Left Kick Button */}
               <div className="kick-section">
-                <button 
-                  className={`kick-btn${kickCooldown > 0 ? ' disabled' : ''}`} 
-                  onClick={kickCooldown > 0 ? undefined : handleKick} 
+                <button
+                  className={`kick-btn${kickCooldown > 0 ? ' disabled' : ''}`}
+                  onClick={kickCooldown > 0 ? undefined : handleKick}
                   disabled={kickCooldown > 0}
-                  style={{ background: kickCooldown > 0 ? '#bbb' : '#FFC5D3', color: 'white', cursor: kickCooldown > 0 ? 'not-allowed' : 'pointer' }}
                   title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
                 >
                   {kickCooldown > 0 ? kickCooldown : 'KICK'}
+                </button>
+
+                {/* SIU Button (circular, bottom-right of kick) */}
+                <button
+                  className="siu-btn"
+                  onClick={handleSiu}
+                  title="SIU"
+                >
+                  SIU
                 </button>
               </div>
 

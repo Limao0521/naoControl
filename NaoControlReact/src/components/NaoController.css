@@ -78,8 +78,10 @@
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: 200px;
+  max-width: 260px;
   padding: 1rem;
+  gap: 12px;
+  box-sizing: border-box;
 }
 
 .selectors-section {
@@ -169,8 +171,9 @@
   color: #333;
   border: none;
   border-radius: 50%;
-  width: 120px;
-  height: 120px;
+  /* usar proporciones: ancho relativo y mantener aspecto 1:1 para círculo perfecto */
+  width: min(60%, 140px);
+  aspect-ratio: 1 / 1;
   font-size: 16px;
   font-weight: bold;
   box-shadow: 0 0.2rem 0.5rem rgba(0,0,0,0.2);
@@ -194,6 +197,30 @@
   color: #666;
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* SIU button: small circular in bottom-right of kick */
+.siu-btn {
+  width: min(40%, 100px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: #1e3a8a;
+  color: white;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 16px;
+  cursor: pointer;
+  box-shadow: 0 6px 12px rgba(0,0,0,0.22);
+  transition: transform .12s ease, background .12s ease;
+}
+
+.siu-btn:hover { background: #1e40af; transform: translateY(-3px); }
+
+.kick-section .kick-btn { /* ensure kick text is black when enabled */
+  color: black;
 }
 
 .kick-btn:active:not(.disabled) {
