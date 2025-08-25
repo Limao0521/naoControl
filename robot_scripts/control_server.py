@@ -1,19 +1,19 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launcher
+control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launcher (single-config)
 
 • ws://0.0.0.0:6671
-• JSON actions: walk, walkTo, move, gait, setTerrain, footProtection, posture, led, say, language, autonomous, kick, volume, getBattery, getAutonomousLife
+• JSON actions:
+    walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
+    footProtection, posture, led, say, language, autonomous, kick,
+    volume, getBattery, getAutonomousLife
 • Watchdog detiene la marcha si no recibe walk en WATCHDOG s
-• Pulsar head tactile togglea el servidor HTTP en puerto 8000
 
-Cambios clave (versión “terrain-gait”):
-- Añadidos presets de terreno (default/carpet/turf/slippery) y acción setTerrain
-- Acción gait para configurar parámetros de marcha personalizados (StepHeight, MaxStepX/Y/Theta, Frequency/MaxStepFrequency, TorsoWx/TorsoWy)
-- walk aplica el gait/preset actual; clampa vx, vy, wz según presets
-- walkTo con mismo gait
-- Protecciones por defecto: FootContactProtection ON; brazos de balanceo ON
+Cambios clave (versión “single-config”):
+- Se elimina setTerrain y todos los presets.
+- Queda un ÚNICO conjunto de parámetros de marcha (gait) que puedes cambiar por WS.
+- Quedan CAPs (vx,vy,wz) editables por WS para limitar velocidades.
 """
 
 from __future__ import print_function
@@ -73,7 +73,7 @@ try:
 except Exception as e:
     log("NAO", "Warn FootContactProtection: %s" % e)
 
-# ─── Callback de caída: incorporamos Stand al detectar evento ──────────────────
+# ─── Callback de caída ─────────────────────────────────────────────────────────
 def onFall(_key, _value, _msg):
     log("FallEvt", "detected! Recuperando postura...")
     try:
@@ -87,52 +87,11 @@ try:
 except Exception as e:
     log("NAO", "Warn subscribe RobotHasFallen: %s" % e)
 
-# ─── Presets de terreno y gait config ──────────────────────────────────────────
-# Valores dentro de rangos oficiales:
-#  - StepHeight: default ≈ 0.020 m; máximo ≈ 0.040 m
-#  - MaxStepX/Y/Theta ajustan recortes de paso/giros
-#  - Frequency (0..1) reduce la cadencia de paso
-# Ver doc Aldebaran “Locomotion control API”.
-TERRAIN_PRESETS = {
-    # Caps limitan fracciones de velocidad pedidas por el front (vx,vy,wz) para suavizar
-    "default": {
-        "moveConfig": [],  # usa config de NAOqi por defecto
-        "caps": {"vx":1.0, "vy":1.0, "wz":1.0}
-    },
-    "carpet": {
-        "moveConfig": [
-            ["StepHeight", 0.025],
-            ["MaxStepX", 0.030],
-            ["MaxStepY", 0.12],
-            ["MaxStepTheta", 0.30],
-            ["Frequency", 0.6]  # para NAOqi 2.1.x; ver compat más abajo
-        ],
-        "caps": {"vx":0.7, "vy":0.5, "wz":0.6}
-    },
-    "turf": {
-        "moveConfig": [
-            ["StepHeight", 0.030],   # mayor despeje del pie
-            ["MaxStepX", 0.028],     # pasos más cortos
-            ["MaxStepY", 0.10],
-            ["MaxStepTheta", 0.25],
-            ["Frequency", 0.5]       # cadencia más baja
-        ],
-        "caps": {"vx":0.6, "vy":0.4, "wz":0.5}
-    },
-    "slippery": {
-        "moveConfig": [
-            ["StepHeight", 0.020],   # normal, evita levantar de más
-            ["MaxStepX", 0.020],
-            ["MaxStepY", 0.08],
-            ["MaxStepTheta", 0.20],
-            ["Frequency", 0.4]
-        ],
-        "caps": {"vx":0.5, "vy":0.3, "wz":0.4}
-    }
-}
-
-_current_terrain = "default"
-_current_move_config = TERRAIN_PRESETS[_current_terrain]["moveConfig"][:]
+# ─── Único Gait + CAPs ─────────────────────────────────────────────────────────
+# Por defecto: vacío -> NAOqi usa sus valores internos. Puedes sobrescribir por WS con action="gait".
+CURRENT_GAIT = []  # e.g.: [["StepHeight",0.03],["MaxStepX",0.028],["MaxStepY",0.10],["MaxStepTheta",0.22],["Frequency",0.50]]
+# CAPs de velocidad (1.0 = sin límite). Editables vía acción "caps".
+CAP_LIMITS  = {"vx": 1.0, "vy": 1.0, "wz": 1.0}
 
 def _config_to_move_list(config_dict_or_list):
     """
@@ -166,7 +125,7 @@ def _apply_moveToward(vx, vy, wz, move_cfg_pairs):
         log("Walk", "moveToward with config failed: %s → retry no-config" % e)
         motion.moveToward(vx, vy, wz)
 
-# ─── Watchdog para detener la marcha si el front deja de enviar walk ───────────
+# ─── Watchdog ──────────────────────────────────────────────────────────────────
 _last_walk = time.time()
 def watchdog():
     global _last_walk
@@ -185,7 +144,7 @@ wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
 
-# ─── Limpieza de suscripciones y procesos ──────────────────────────────────────
+# ─── Limpieza de suscripciones y procesos ─────────────────────────────────────
 web_proc = None
 
 def cleanup_all_subscriptions():
@@ -232,9 +191,9 @@ signal.signal(signal.SIGTERM, cleanup)
 class RobotWS(WebSocket):
     def handleConnected(self):
         log("WS", "Conectado %s" % (self.address,))
-        # Reportar preset actual al conectar
+        # Al conectar, reporta config actual
         try:
-            self.sendMessage(json.dumps({"terrain": _current_terrain}))
+            self.sendMessage(json.dumps({"gait": CURRENT_GAIT, "caps": CAP_LIMITS}))
         except Exception:
             pass
 
@@ -242,7 +201,7 @@ class RobotWS(WebSocket):
         log("WS", "Desconectado %s" % (self.address,))
 
     def handleMessage(self):
-        global _last_walk, _current_terrain, _current_move_config
+        global _last_walk, CURRENT_GAIT, CAP_LIMITS
         raw = self.data.strip()
         log("WS", "Recibido RAW: %s" % raw)
         try:
@@ -253,33 +212,30 @@ class RobotWS(WebSocket):
 
         action = msg.get("action")
         try:
-            # ── Caminar reactivo con preset/gait ────────────────────────────────
+            # ── Caminar reactivo con gait actual + caps ────────────────────────
             if action == "walk":
                 vx, vy, wz = map(float, (msg.get("vx",0), msg.get("vy",0), msg.get("wz",0)))
-                # Limitar magnitud del vector plano (x,y)
+                # Normaliza magnitud del vector (x,y) si excede 1.0
                 norm = math.hypot(vx, vy)
                 if norm > 1.0:
                     vx, vy = vx/norm, vy/norm
+                # Aplica CAPs
+                vx = max(-CAP_LIMITS["vx"], min(CAP_LIMITS["vx"], vx))
+                vy = max(-CAP_LIMITS["vy"], min(CAP_LIMITS["vy"], vy))
+                wz = max(-CAP_LIMITS["wz"], min(CAP_LIMITS["wz"], wz))
 
-                # Caps por terreno para reducir agresividad en césped/turf
-                caps = TERRAIN_PRESETS.get(_current_terrain, TERRAIN_PRESETS["default"])["caps"]
-                vx = max(-caps["vx"], min(caps["vx"], vx))
-                vy = max(-caps["vy"], min(caps["vy"], vy))
-                wz = max(-caps["wz"], min(caps["wz"], wz))
-
-                # Aplicar movimiento con gait actual
-                move_cfg = _config_to_move_list(_current_move_config)
+                move_cfg = _config_to_move_list(CURRENT_GAIT)
                 _apply_moveToward(vx, vy, wz, move_cfg)
                 _last_walk = time.time()
-                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s" %
-                    (vx, vy, wz, move_cfg))
+                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s" %
+                    (vx, vy, wz, move_cfg, CAP_LIMITS))
 
-            # ── Caminar a un objetivo (bloqueante) con mismo gait ───────────────
+            # ── Caminar a un objetivo (bloqueante) con mismo gait ─────────────
             elif action == "walkTo":
                 x = float(msg.get("x", 0.0))
                 y = float(msg.get("y", 0.0))
                 theta = float(msg.get("theta", 0.0))
-                move_cfg = _config_to_move_list(_current_move_config)
+                move_cfg = _config_to_move_list(CURRENT_GAIT)
                 try:
                     motion.moveTo(x, y, theta, move_cfg)
                 except Exception as e:
@@ -287,48 +243,73 @@ class RobotWS(WebSocket):
                     motion.moveTo(x, y, theta)
                 log("SIM", "moveTo(x=%.2f,y=%.2f,th=%.2f)" % (x,y,theta))
 
-            # ── Seteo de Gait custom (directo) ──────────────────────────────────
+            # ── Seteo de Gait (único mecanismo de cambio de marcha) ───────────
             elif action == "gait":
-                # Permite dict con claves válidas (StepHeight, MaxStepX/Y/Theta, Frequency, TorsoWx/Wy…)
                 user_cfg = msg.get("config", {})
-                if not isinstance(user_cfg, dict):
-                    raise ValueError("config debe ser dict")
-                _current_move_config = _config_to_move_list(user_cfg)
-                self.sendMessage(json.dumps({"gaitApplied": _current_move_config}))
-                log("Gait", "Nuevo gait config = %s" % _current_move_config)
+                # admite dict {"StepHeight":0.03,...} o lista [["StepHeight",0.03],...]
+                if not isinstance(user_cfg, (dict, list)):
+                    raise ValueError("config debe ser dict o lista de pares")
+                CURRENT_GAIT = _config_to_move_list(user_cfg)
+                self.sendMessage(json.dumps({"gaitApplied": CURRENT_GAIT}))
+                log("Gait", "Nuevo gait config = %s" % CURRENT_GAIT)
 
-            # ── Selección de terreno (presets) ─────────────────────────────────
-            elif action == "setTerrain":
-                mode = str(msg.get("mode","default")).lower()
-                if mode not in TERRAIN_PRESETS:
-                    raise ValueError("Terreno inválido: %s" % mode)
-                _current_terrain = mode
-                _current_move_config = TERRAIN_PRESETS[mode]["moveConfig"][:]
-                payload = {"terrain": _current_terrain, "gait": _current_move_config}
-                self.sendMessage(json.dumps(payload))
-                log("Terrain", "Preset '%s' aplicado: %s" % (mode, _current_move_config))
+            elif action == "getGait":
+                self.sendMessage(json.dumps({"gait": CURRENT_GAIT}))
+                log("Gait", "getGait → %s" % CURRENT_GAIT)
 
-            # ── Protecciones de pie (usar con cuidado) ─────────────────────────
+            # ── Seteo/consulta de CAPs de velocidad ───────────────────────────
+            elif action == "caps":
+                vx = msg.get("vx", None)
+                vy = msg.get("vy", None)
+                wz = msg.get("wz", None)
+                def clamp01(v):
+                    try:
+                        v = float(v)
+                        if v < 0: v = 0.0
+                        if v > 1: v = 1.0
+                        return v
+                    except Exception:
+                        return None
+                updated = {}
+                if vx is not None:
+                    CAP_LIMITS["vx"] = clamp01(vx); updated["vx"] = CAP_LIMITS["vx"]
+                if vy is not None:
+                    CAP_LIMITS["vy"] = clamp01(vy); updated["vy"] = CAP_LIMITS["vy"]
+                if wz is not None:
+                    CAP_LIMITS["wz"] = clamp01(wz); updated["wz"] = CAP_LIMITS["wz"]
+                self.sendMessage(json.dumps({"caps": CAP_LIMITS, "updated": updated}))
+                log("Caps", "CAP_LIMITS = %s (updated %s)" % (CAP_LIMITS, updated))
+
+            elif action == "getCaps":
+                self.sendMessage(json.dumps({"caps": CAP_LIMITS}))
+                log("Caps", "getCaps → %s" % CAP_LIMITS)
+
+            # ── Atajo para leer todo de una ───────────────────────────────────
+            elif action == "getConfig":
+                self.sendMessage(json.dumps({"gait": CURRENT_GAIT, "caps": CAP_LIMITS}))
+                log("Config", "getConfig → gait=%s caps=%s" % (CURRENT_GAIT, CAP_LIMITS))
+
+            # ── Protecciones de pie ───────────────────────────────────────────
             elif action == "footProtection":
                 enable = bool(msg.get("enable", True))
                 motion.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", enable]])
                 self.sendMessage(json.dumps({"footProtection": enable}))
                 log("SIM", "FootContactProtection set to %s" % enable)
 
-            # ── Movimiento articular directo ───────────────────────────────────
+            # ── Movimiento articular directo ──────────────────────────────────
             elif action == "move":
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0))
                 motion.setAngles(str(joint), val, 0.1)
                 log("SIM", "setAngles('%s',%.2f)" % (joint,val))
 
-            # ── Postura ────────────────────────────────────────────────────────
+            # ── Postura ───────────────────────────────────────────────────────
             elif action == "posture":
                 pst = msg.get("value","Stand")
                 posture.goToPosture(str(pst), 0.7)
                 log("SIM", "goToPosture('%s')" % pst)
 
-            # ── LEDs ───────────────────────────────────────────────────────────
+            # ── LEDs ──────────────────────────────────────────────────────────
             elif action == "led":
                 grp = msg.get("group", "ChestLeds")
                 if isinstance(grp, unicode): grp = grp.encode('utf-8')
@@ -343,13 +324,13 @@ class RobotWS(WebSocket):
                     leds.fadeRGB(grp, rgb_int, duration)
                     log("SIM", "fadeRGB('%s',0x%06X,%.2f)" % (grp, rgb_int, duration))
 
-            # ── Hablar ─────────────────────────────────────────────────────────
+            # ── Hablar ────────────────────────────────────────────────────────
             elif action == "say":
                 txt = msg.get("text","")
                 tts.say(str(txt))
                 log("SIM", "say('%s')" % txt)
 
-            # ── Idioma TTS ─────────────────────────────────────────────────────
+            # ── Idioma TTS ────────────────────────────────────────────────────
             elif action == "language":
                 lang = msg.get("value","")
                 try:
@@ -358,14 +339,14 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     log("WS", "Error setLanguage('%s'): %s" % (lang, e))
 
-            # ── Autonomous Life ────────────────────────────────────────────────
+            # ── Autonomous Life ───────────────────────────────────────────────
             elif action == "autonomous":
                 enable = bool(msg.get("enable", False))
                 new_state = "interactive" if enable else "disabled"
                 life.setState(new_state)
                 log("SIM", "AutonomousLife.setState('%s')" % new_state)
 
-            # ── Kick (ejecuta behavior si existe) ──────────────────────────────
+            # ── Kick (ejecuta behavior si existe) ─────────────────────────────
             elif action == "kick":
                 try:
                     behavior_name = "kicknao-f6eb94/behavior_1"
@@ -386,13 +367,96 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     log("WS", "Error ejecutando kick: %s" % e)
 
-            # ── Volumen ────────────────────────────────────────────────────────
+            # ── Nuevo: ejecutar behavior "siu" (o buscar por substring "siu") ───
+            elif action == "siu":
+                try:
+                    # nombre preferido del behavior (ajusta si conoces el path exacto)
+                    behavior_name = "siu-17777b/behavior_1"
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        # detener otros behaviors en ejecución
+                        for bhv in behavior.getRunningBehaviors():
+                            try:
+                                behavior.stopBehavior(bhv)
+                            except Exception:
+                                pass
+                        behavior.runBehavior(behavior_name)
+                        log("SIM", "Ejecutando behavior 'siu' -> '%s'" % behavior_name)
+                        try:
+                            self.sendMessage(json.dumps({"siu": "started", "behavior": behavior_name}))
+                        except Exception:
+                            pass
+                    else:
+                        # buscar cualquier behavior que contenga "siu" en el nombre
+                        installed = behavior.getInstalledBehaviors()
+                        matches = [b for b in installed if "siu" in b.lower()]
+                        if matches:
+                            target = matches[0]
+                            for bhv in behavior.getRunningBehaviors():
+                                try:
+                                    behavior.stopBehavior(bhv)
+                                except Exception:
+                                    pass
+                            behavior.runBehavior(target)
+                            log("SIM", "Ejecutando behavior 'siu' alternativo: '%s'" % target)
+                            try:
+                                self.sendMessage(json.dumps({"siu": "started", "behavior": target}))
+                            except Exception:
+                                pass
+                        else:
+                            log("WS", "⚠ Behavior 'siu' no encontrado entre instalados")
+                            try:
+                                self.sendMessage(json.dumps({"siu": "not_found"}))
+                            except Exception:
+                                pass
+                except Exception as e:
+                    log("WS", "Error ejecutando siu: %s" % e)
+                    try:
+                        self.sendMessage(json.dumps({"siu": "error", "reason": str(e)}))
+                    except Exception:
+                        pass
+
+            # ── Nuevo: ejecutar behavior arbitrario por nombre (runBehavior) ───
+            elif action == "runBehavior":
+                try:
+                    bname = msg.get("behavior", "")
+                    if not bname:
+                        raise ValueError("Se esperaba 'behavior' en el mensaje")
+                    # si el cliente pasa un nombre parcial, intentar match por substring
+                    if behavior.isBehaviorInstalled(bname):
+                        target = bname
+                    else:
+                        installed = behavior.getInstalledBehaviors()
+                        matches = [b for b in installed if bname.lower() in b.lower()]
+                        if matches:
+                            target = matches[0]
+                        else:
+                            log("WS", "runBehavior: no se encontró behavior para '%s'" % bname)
+                            self.sendMessage(json.dumps({"runBehavior": "not_found", "query": bname}))
+                            target = None
+                    if target:
+                        # detener behaviors activos
+                        for bhv in behavior.getRunningBehaviors():
+                            try:
+                                behavior.stopBehavior(bhv)
+                            except Exception:
+                                pass
+                        behavior.runBehavior(target)
+                        log("WS", "runBehavior -> Ejecutando '%s'" % target)
+                        self.sendMessage(json.dumps({"runBehavior": "started", "behavior": target}))
+                except Exception as e:
+                    log("WS", "Error runBehavior: %s" % e)
+                    try:
+                        self.sendMessage(json.dumps({"runBehavior": "error", "reason": str(e)}))
+                    except Exception:
+                        pass
+
+            # ── Volumen ─────────────────────────────────────────────────────
             elif action == "volume":
                 vol = float(msg.get("value", 50))
                 audio.setOutputVolume(vol)
                 log("SIM", "AudioDevice.setOutputVolume(%.1f)" % vol)
 
-            # ── Estado de batería ──────────────────────────────────────────────
+            # ── Estado de batería ─────────────────────────────────────────────
             elif action == "getBattery":
                 level = battery.getBatteryCharge()
                 low   = (level < 20)
@@ -401,7 +465,7 @@ class RobotWS(WebSocket):
                 self.sendMessage(payload)
                 log("SIM","getBattery → %d%% low=%s full=%s"%(level,low,full))
 
-            # ── Estado Autonomous Life ─────────────────────────────────────────
+            # ── Estado Autonomous Life ────────────────────────────────────────
             elif action == "getAutonomousLife":
                 try:
                     current_state = life.getState()
