@@ -26,6 +26,20 @@ sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, "/home/nao/SimpleWebSocketServer-0.1.2")
 from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 
+# Importar sistema de logging
+try:
+    from logger import create_logger
+    logger = create_logger("CONTROL")
+except ImportError:
+    # Fallback si no está disponible
+    class FallbackLogger:
+        def debug(self, msg): print("DEBUG [CONTROL] {}".format(msg))
+        def info(self, msg): print("INFO [CONTROL] {}".format(msg))
+        def warning(self, msg): print("WARNING [CONTROL] {}".format(msg))
+        def error(self, msg): print("ERROR [CONTROL] {}".format(msg))
+        def critical(self, msg): print("CRITICAL [CONTROL] {}".format(msg))
+    logger = FallbackLogger()
+
 # — Configuración general —
 IP_NAO     = "127.0.0.1"
 PORT_NAO   = 9559
@@ -35,19 +49,37 @@ WEB_DIR    = "/home/nao/Websx/ControllerWebServer"
 HTTP_PORT  = "8000"
 
 def log(tag, msg):
+    """Función de logging mejorada que usa el sistema centralizado"""
     ts = datetime.now().strftime("%H:%M:%S")
-    print("{0} [{1}] {2}".format(ts, tag, msg))
+    formatted_msg = "{} [{}] {}".format(ts, tag, msg)
+    print(formatted_msg)
+    
+    # Enviar al sistema de logging centralizado
+    if tag == "NAO" or tag == "FallEvt":
+        logger.info("[{}] {}".format(tag, msg))
+    elif "error" in msg.lower() or "fail" in msg.lower():
+        logger.error("[{}] {}".format(tag, msg))
+    elif "warn" in msg.lower():
+        logger.warning("[{}] {}".format(tag, msg))
+    else:
+        logger.info("[{}] {}".format(tag, msg))
 
 # ───── Proxies NAOqi ───────────────────────────────────────────────────────────
-motion     = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
-posture    = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
-life       = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
-leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
-tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
-battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
-memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
-audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)
-behavior   = ALProxy("ALBehaviorManager", IP_NAO, PORT_NAO)
+logger.info("Inicializando proxies NAOqi...")
+try:
+    motion     = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
+    posture    = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
+    life       = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
+    leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
+    tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
+    battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
+    memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
+    audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)
+    behavior   = ALProxy("ALBehaviorManager", IP_NAO, PORT_NAO)
+    logger.info("Todos los proxies NAOqi inicializados correctamente")
+except Exception as e:
+    logger.critical("Error inicializando proxies NAOqi: {}".format(e))
+    sys.exit(1)
 
 # ─── Setup inicial seguro ──────────────────────────────────────────────────────
 # Fall manager ON → auto-recover

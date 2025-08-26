@@ -57,8 +57,22 @@ try:
 except ImportError:
     NAOQI_ADVANCED = False
 
+# Importar sistema de logging
+try:
+    from logger import create_logger
+    logger = create_logger("LAUNCHER")
+except ImportError:
+    # Fallback si no está disponible
+    class FallbackLogger:
+        def debug(self, msg): print("DEBUG [LAUNCHER] {}".format(msg))
+        def info(self, msg): print("INFO [LAUNCHER] {}".format(msg))
+        def warning(self, msg): print("WARNING [LAUNCHER] {}".format(msg))
+        def error(self, msg): print("ERROR [LAUNCHER] {}".format(msg))
+        def critical(self, msg): print("CRITICAL [LAUNCHER] {}".format(msg))
+    logger = FallbackLogger()
+
 def log(level, message, module="LAUNCHER"):
-    """Sistema de logging profesional."""
+    """Sistema de logging profesional integrado con logger centralizado."""
     timestamp = datetime.now().strftime("%H:%M:%S.%f")[:-3]  # Milisegundos
     level_colors = {
         "INFO": "",
@@ -70,7 +84,20 @@ def log(level, message, module="LAUNCHER"):
         "SYSTEM": ""
     }
     color = level_colors.get(level, "")
-    print("[{}] [{}] [{}] {}{}".format(timestamp, level, module, color, message))
+    formatted_msg = "[{}] [{}] [{}] {}{}".format(timestamp, level, module, color, message)
+    print(formatted_msg)
+    
+    # Enviar al sistema de logging centralizado
+    if level in ["ERROR"]:
+        logger.error(message)
+    elif level in ["WARN"]:
+        logger.warning(message)
+    elif level in ["SUCCESS", "TOUCH", "SYSTEM"]:
+        logger.info(message)
+    elif level in ["DEBUG"]:
+        logger.debug(message)
+    else:
+        logger.info(message)
 
 # — Configuración —
 IP_NAO     = "127.0.0.1"
@@ -78,6 +105,7 @@ PORT_NAO   = 9559
 PRESS_HOLD = 3.0            # segundos mínimos de pulsación (3 o más)
 # Ajusta estas rutas según dónde tengas los scripts
 CONTROL_PY = "/home/nao/scripts/control_server.py"
+LOGGER_PY  = "/home/nao/scripts/logger.py"        # Nuevo: ruta del logger
 WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
 CAMERA_PY  = "/home/nao/scripts/video_stream.py"
 HTTP_PORT  = "8000"
@@ -120,6 +148,7 @@ class RobustLauncher:
         self.server_proc = None
         self.http_proc = None
         self.camera_proc = None
+        self.logger_proc = None  # Agregar proceso del logger
         
         # Proxies NAOqi
         self.memory = None
@@ -485,7 +514,24 @@ class RobustLauncher:
         """Inicia todos los servicios de control."""
         log("INFO", "Iniciando servicios...", "SERVICES")
         services_started = 0
-        total_services = 3
+        total_services = 4  # Incrementado para incluir el logger
+        
+        # Logger (debe iniciarse primero)
+        if not hasattr(self, 'logger_proc') or not self.logger_proc:
+            try:
+                log("INFO", "Iniciando logger centralizado...", "SERVICES")
+                self.logger_proc = subprocess.Popen(["python2", LOGGER_PY])
+                time.sleep(2)  # Dar tiempo al logger para inicializar
+                
+                if self.logger_proc.poll() is None:
+                    services_started += 1
+                    log("SUCCESS", "Logger iniciado en ws://localhost:6672", "SERVICES")
+                else:
+                    self.logger_proc = None
+                    log("ERROR", "Logger falló al iniciar", "SERVICES")
+            except Exception as e:
+                log("ERROR", "Error iniciando logger: {}".format(e), "SERVICES")
+                self.logger_proc = None
         
         # Control server
         if not self.server_proc:
@@ -564,7 +610,8 @@ class RobustLauncher:
         processes = [
             ("HTTP server", self.http_proc),
             ("Cámara", self.camera_proc),
-            ("Control server", self.server_proc)
+            ("Control server", self.server_proc),
+            ("Logger", getattr(self, 'logger_proc', None))  # Agregar logger a la lista
         ]
         
         for name, proc in processes:
@@ -583,6 +630,7 @@ class RobustLauncher:
         self.http_proc = None
         self.camera_proc = None
         self.server_proc = None
+        self.logger_proc = None  # Resetear también el logger
         
         # Pausa adicional para asegurar limpieza completa de NAOqi
         log("INFO", "Liberando recursos NAOqi...", "SERVICES")
