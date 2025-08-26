@@ -195,6 +195,14 @@ def cleanup_all_subscriptions():
 def cleanup(signum, frame):
     global web_proc
     log("Server", "Señal {}, limpiando…".format(signum))
+    
+    # Mensaje TTS de cierre
+    try:
+        tts.say("nao control apagado")
+        logger.info("Mensaje TTS de cierre enviado")
+    except Exception as e:
+        logger.warning("No se pudo enviar mensaje TTS de cierre: {}".format(e))
+    
     try:
         cleanup_all_subscriptions()
     except Exception as e:
@@ -530,6 +538,15 @@ if __name__ == "__main__":
                 else:
                     raise
         log("Server", "Servidor WebSocket iniciado")
+        logger.info("Control server WebSocket activo en puerto {}".format(WS_PORT))
+        
+        # Mensaje TTS de confirmación
+        try:
+            tts.say("nao control iniciado")
+            logger.info("Mensaje TTS de inicio enviado")
+        except Exception as e:
+            logger.warning("No se pudo enviar mensaje TTS: {}".format(e))
+        
         srv.serveforever()
     except KeyboardInterrupt:
         log("Server", "Interrupción de teclado detectada")
