@@ -51,6 +51,19 @@ WATCHDOG   = 0.6
 WEB_DIR    = "/home/nao/Websx/ControllerWebServer"
 HTTP_PORT  = "8000"
 
+# Importar CNN de caminata adaptativa
+try:
+    from adaptive_walk_cnn import create_adaptive_walker
+    adaptive_walker = create_adaptive_walker(IP_NAO, PORT_NAO)
+    logger.info("CNN de caminata adaptativa inicializada")
+    ADAPTIVE_WALK_ENABLED = True
+except ImportError as e:
+    logger.warning("CNN adaptativa no disponible: {}".format(e))
+    adaptive_walker = None
+    ADAPTIVE_WALK_ENABLED = False
+WEB_DIR    = "/home/nao/Websx/ControllerWebServer"
+HTTP_PORT  = "8000"
+
 def log(tag, msg):
     """Función de logging mejorada que usa el sistema centralizado"""
     ts = datetime.now().strftime("%H:%M:%S")
@@ -502,11 +515,27 @@ class RobotWS(WebSocket):
                 vy = max(-CAPS_APPLIED["vy"], min(CAPS_APPLIED["vy"], vy))
                 wz = max(-CAPS_APPLIED["wz"], min(CAPS_APPLIED["wz"], wz))
 
-                move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                # CNN Adaptativa: Predecir parámetros de marcha óptimos
+                adaptive_cfg = None
+                if ADAPTIVE_WALK_ENABLED and adaptive_walker:
+                    try:
+                        adaptive_params = adaptive_walker.adapt_gait(vx, vy, wz)
+                        if adaptive_params:
+                            adaptive_cfg = _config_to_move_list(adaptive_params)
+                            logger.debug("CNN adaptativa: {}".format(adaptive_params))
+                            # Aplicar parámetros CNN al motion
+                            adaptive_walker.apply_gait_params(adaptive_params)
+                    except Exception as e:
+                        logger.warning("Error en CNN adaptativa: {}".format(e))
+
+                # Usar configuración adaptativa si está disponible, sino la configuración actual
+                move_cfg = adaptive_cfg if adaptive_cfg else _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                 _apply_moveToward(vx, vy, wz, move_cfg)
                 _last_walk = time.time()
-                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s" %
-                    (vx, vy, wz, move_cfg, CAPS_APPLIED))
+                
+                cfg_source = "CNN" if adaptive_cfg else "Manual"
+                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s [%s]" %
+                    (vx, vy, wz, move_cfg, CAPS_APPLIED, cfg_source))
 
             # ── Caminar a un objetivo (bloqueante) con mismo gait ─────────────
             elif action == "walkTo":
@@ -774,6 +803,48 @@ class RobotWS(WebSocket):
                 ADAPTIVE["last_event"] = 0.0  # reset suave
                 self.sendMessage(json.dumps({"adaptiveGait": {"enabled": ADAPTIVE["enabled"], "mode": ADAPTIVE["mode"]}}))
                 log("Adapt", "adaptiveGait → enabled=%s mode=%s" % (ADAPTIVE["enabled"], ADAPTIVE["mode"]))
+
+            # ── Control CNN Adaptativa ────────────────────────────────────────
+            elif action == "adaptiveCNN":
+                try:
+                    enable = msg.get("enabled", True)
+                    if adaptive_walker:
+                        adaptive_walker.adaptation_enabled = enable
+                        stats = adaptive_walker.get_stats()
+                        self.sendMessage(json.dumps({
+                            "adaptiveCNN": {
+                                "enabled": enable,
+                                "available": ADAPTIVE_WALK_ENABLED,
+                                "stats": stats
+                            }
+                        }))
+                        logger.info("CNN adaptativa {} - Stats: {}".format(
+                            "habilitada" if enable else "deshabilitada", stats))
+                    else:
+                        self.sendMessage(json.dumps({
+                            "adaptiveCNN": {
+                                "enabled": False,
+                                "available": False,
+                                "error": "CNN no disponible"
+                            }
+                        }))
+                        logger.warning("CNN adaptativa no disponible")
+                except Exception as e:
+                    logger.error("Error controlando CNN: {}".format(e))
+                    self.sendMessage(json.dumps({"adaptiveCNN": {"error": str(e)}}))
+
+            # ── Estadísticas CNN Adaptativa ───────────────────────────────────
+            elif action == "getCNNStats":
+                try:
+                    if adaptive_walker:
+                        stats = adaptive_walker.get_stats()
+                        self.sendMessage(json.dumps({"cnnStats": stats}))
+                        logger.debug("Estadísticas CNN enviadas: {}".format(stats))
+                    else:
+                        self.sendMessage(json.dumps({"cnnStats": {"available": False}}))
+                except Exception as e:
+                    logger.error("Error obteniendo estadísticas CNN: {}".format(e))
+                    self.sendMessage(json.dumps({"cnnStats": {"error": str(e)}}))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
