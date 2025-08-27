@@ -1,341 +1,296 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-adaptive_walk_cnn.py - CNN pequeña para caminata adaptativa en NAO
+adaptive_walk_cnn.py - CNN ligera para caminata adaptativa en NAO (NAOqi puro)
 
-Esta CNN ligera procesa datos de sensores en tiempo real para optimizar
-los parámetros de marcha del robot NAO, mejorando estabilidad y eficiencia.
+• Predice 5 parámetros de marcha (StepHeight, MaxStepX, MaxStepY, MaxStepTheta, Frequency)
+  a partir de 20 features (IMU, ángulos, FSR, vx/vy/wz/vtotal).
+• Aplica la configuración vía ALMotion.setMotionConfig (NO envía comandos de caminar).
+• Suaviza cambios.
+• Persiste el último gait aplicado en:
+    /home/nao/.local/share/adaptive_gait/last_params.json
+  para que `data_logger_cnn.py` lo registre junto con sensores.
+• NUEVO: Carga automática de pesos entrenados desde:
+    /home/nao/.local/share/adaptive_gait/weights.npz
+  (si no existe, usa pesos aleatorios → modo demo).
 
-Compatible con Python 2.7 y recursos limitados del NAO.
+Requisitos:
+  - Python 2.7
+  - NAOqi (ALProxy)
+  - NumPy
 """
 
-import numpy as np
-import time
-import json
+from __future__ import print_function
+import os, time, json
 from collections import deque
-from naoqi import ALProxy
 
-# Intentar importar bibliotecas de ML (con fallbacks para NAO)
 try:
-    # Preferir numpy para operaciones básicas (siempre disponible)
     import numpy as np
     ML_AVAILABLE = True
 except ImportError:
-    print("Warning: NumPy no disponible - CNN deshabilitada")
+    print("Warning: NumPy no disponible - CNN deshabilitada (usando parámetros fijos).")
     ML_AVAILABLE = False
 
-class LightweightCNN:
-    """CNN ultra-ligera para caminata adaptativa"""
-    
+try:
+    from naoqi import ALProxy
+except Exception as e:
+    ALProxy = None
+    print("Warning: NAOqi ALProxy no disponible: %s" % e)
+
+# Rutas de persistencia (gait aplicado y pesos entrenados)
+ADAPTIVE_DIR     = "/home/nao/.local/share/adaptive_gait"
+GAIT_JSON_PATH   = os.path.join(ADAPTIVE_DIR, "last_params.json")
+WEIGHTS_NPZ_PATH = os.path.join(ADAPTIVE_DIR, "weights.npz")
+
+
+class LightweightCNN(object):
+    """
+    MLP compacto: 20 → 32 → 16 → 5 (ReLU, ReLU, Sigmoid).
+    Carga pesos desde .npz si está disponible; si no, usa inicialización aleatoria.
+    """
     def __init__(self):
-        self.input_size = 20
+        self.input_size   = 20
         self.hidden1_size = 32
         self.hidden2_size = 16
-        self.output_size = 5
-        
-        # Inicializar pesos con valores pequeños (Xavier initialization)
-        self.W1 = np.random.randn(self.input_size, self.hidden1_size) * 0.1
-        self.b1 = np.zeros((1, self.hidden1_size))
-        
-        self.W2 = np.random.randn(self.hidden1_size, self.hidden2_size) * 0.1
-        self.b2 = np.zeros((1, self.hidden2_size))
-        
-        self.W3 = np.random.randn(self.hidden2_size, self.output_size) * 0.1
-        self.b3 = np.zeros((1, self.output_size))
-        
-        # Parámetros base de marcha
+        self.output_size  = 5
+
+        # Parámetros base (fallback)
         self.base_params = {
-            'StepHeight': 0.025,
-            'MaxStepX': 0.04,
-            'MaxStepY': 0.14,
+            'StepHeight':   0.025,
+            'MaxStepX':     0.04,
+            'MaxStepY':     0.14,
             'MaxStepTheta': 0.3,
-            'Frequency': 0.8
+            'Frequency':    0.8
         }
-        
-        # Rangos permitidos para cada parámetro (para normalización)
+
         self.param_ranges = {
-            'StepHeight': (0.01, 0.05),
-            'MaxStepX': (0.02, 0.08),
-            'MaxStepY': (0.08, 0.20),
-            'MaxStepTheta': (0.1, 0.5),
-            'Frequency': (0.5, 1.2)
+            'StepHeight':   (0.01, 0.05),
+            'MaxStepX':     (0.02, 0.08),
+            'MaxStepY':     (0.08, 0.20),
+            'MaxStepTheta': (0.10, 0.50),
+            'Frequency':    (0.50, 1.20)
         }
-        
-    def relu(self, x):
-        """Función de activación ReLU"""
-        return np.maximum(0, x)
-    
-    def sigmoid(self, x):
-        """Función de activación Sigmoid (para output)"""
-        return 1.0 / (1.0 + np.exp(-np.clip(x, -500, 500)))
-    
-    def forward(self, input_vector):
-        """Forward pass de la CNN"""
-        # Normalizar input
-        x = np.array(input_vector).reshape(1, -1)
+
+        if ML_AVAILABLE:
+            # Inicialización
+            self.W1 = np.random.randn(self.input_size,  self.hidden1_size) * 0.1
+            self.b1 = np.zeros((1, self.hidden1_size))
+            self.W2 = np.random.randn(self.hidden1_size, self.hidden2_size) * 0.1
+            self.b2 = np.zeros((1, self.hidden2_size))
+            self.W3 = np.random.randn(self.hidden2_size, self.output_size) * 0.1
+            self.b3 = np.zeros((1, self.output_size))
+
+            # Intentar cargar pesos entrenados
+            self._try_load_weights(WEIGHTS_NPZ_PATH)
+
+    # ---------- utilidades ----------
+    def _relu(self, x):
+        return np.maximum(0.0, x)
+
+    def _sigmoid(self, x):
+        return 1.0 / (1.0 + np.exp(-np.clip(x, -500.0, 500.0)))
+
+    def _forward(self, input_vector):
+        x = np.array(input_vector, dtype='float32').reshape(1, -1)
         x = (x - np.mean(x)) / (np.std(x) + 1e-8)
-        
-        # Layer 1
         z1 = np.dot(x, self.W1) + self.b1
-        a1 = self.relu(z1)
-        
-        # Layer 2  
+        a1 = self._relu(z1)
         z2 = np.dot(a1, self.W2) + self.b2
-        a2 = self.relu(z2)
-        
-        # Output layer
+        a2 = self._relu(z2)
         z3 = np.dot(a2, self.W3) + self.b3
-        output = self.sigmoid(z3)
-        
-        return output.flatten()
-    
-    def predict_gait_params(self, sensor_data):
-        """Predecir parámetros de marcha basados en sensores"""
+        y  = self._sigmoid(z3)
+        return y.flatten()
+
+    def _try_load_weights(self, path_npz):
         try:
-            # Forward pass
-            normalized_output = self.forward(sensor_data)
-            
-            # Desnormalizar a rangos reales
-            params = {}
-            param_names = ['StepHeight', 'MaxStepX', 'MaxStepY', 'MaxStepTheta', 'Frequency']
-            
-            for i, param_name in enumerate(param_names):
-                min_val, max_val = self.param_ranges[param_name]
-                # Convertir de [0,1] a rango real
-                params[param_name] = min_val + normalized_output[i] * (max_val - min_val)
-            
-            return params
-            
+            if os.path.isfile(path_npz):
+                data = np.load(path_npz)
+                # Se esperan claves: W1,b1,W2,b2,W3,b3
+                self.W1 = np.array(data['W1']); self.b1 = np.array(data['b1'])
+                self.W2 = np.array(data['W2']); self.b2 = np.array(data['b2'])
+                self.W3 = np.array(data['W3']); self.b3 = np.array(data['b3'])
+                print("[CNN] Pesos cargados desde %s" % path_npz)
+            else:
+                print("[CNN] No se encontró %s; usando pesos aleatorios." % path_npz)
         except Exception as e:
-            print("Error en predicción CNN: {}".format(e))
+            print("[CNN] Error cargando pesos (%s). Se usan pesos aleatorios." % e)
+
+    def predict_gait_params(self, sensor_data):
+        if not ML_AVAILABLE:
+            return self.base_params.copy()
+        try:
+            y = self._forward(sensor_data)
+            names = ['StepHeight','MaxStepX','MaxStepY','MaxStepTheta','Frequency']
+            out = {}
+            for i, name in enumerate(names):
+                lo, hi = self.param_ranges[name]
+                out[name] = lo + float(y[i]) * (hi - lo)
+            return out
+        except Exception as e:
+            print("Error en predicción CNN: %s" % e)
             return self.base_params.copy()
 
-class AdaptiveWalkController:
-    """Controlador de caminata adaptativa con CNN"""
-    
+
+class AdaptiveWalkController(object):
+    """
+    Controlador adaptativo:
+      - Lee sensores por ALMemory (IMU, ángulos, FSR)
+      - Inserta (vx,vy,wz,vtotal)
+      - Predice gait con la CNN y lo suaviza
+      - Aplica por ALMotion.setMotionConfig (NO manda caminar)
+      - Persiste last_params.json para `data_logger_cnn`
+    """
     def __init__(self, nao_ip="127.0.0.1", nao_port=9559):
-        self.nao_ip = nao_ip
-        self.nao_port = nao_port
-        
-        # Inicializar proxies NAOqi
-        try:
-            self.motion = ALProxy("ALMotion", nao_ip, nao_port)
-            self.memory = ALProxy("ALMemory", nao_ip, nao_port)
-            self.inertial = ALProxy("ALInertialSensor", nao_ip, nao_port)
-            print("Proxies NAOqi inicializados correctamente")
-        except Exception as e:
-            print("Error inicializando NAOqi: {}".format(e))
-            self.motion = None
-            self.memory = None
-            self.inertial = None
-        
-        # Inicializar CNN
-        if ML_AVAILABLE:
-            self.cnn = LightweightCNN()
-            print("CNN ligera inicializada")
-        else:
-            self.cnn = None
-            print("CNN no disponible - usando parámetros fijos")
-        
-        # Historial de sensores para estabilidad
+        self.nao_ip, self.nao_port = nao_ip, nao_port
+        self.motion = self.memory = self.inertial = None
+        if ALProxy:
+            try:
+                self.motion   = ALProxy("ALMotion", nao_ip, nao_port)
+                self.memory   = ALProxy("ALMemory", nao_ip, nao_port)
+                self.inertial = ALProxy("ALInertialSensor", nao_ip, nao_port)
+                print("Proxies NAOqi inicializados.")
+            except Exception as e:
+                print("Error inicializando NAOqi: %s" % e)
+
+        self.cnn = LightweightCNN() if ML_AVAILABLE else None
+        print("CNN ligera inicializada." if self.cnn else "CNN deshabilitada (sin NumPy).")
+
         self.sensor_history = deque(maxlen=10)
         self.last_params = None
         self.adaptation_enabled = True
-        
-        # Contadores de rendimiento
+
         self.prediction_count = 0
         self.total_prediction_time = 0.0
-        
+
+    # --- lectura sensores ---
+    def _get(self, key):
+        try:
+            v = self.memory.getData(key)
+            return float(v) if v is not None else 0.0
+        except Exception:
+            return 0.0
+
     def get_sensor_data(self):
-        """Recopilar datos de sensores del NAO"""
-        sensor_vector = []
-        
+        v = [0.0]*20
         try:
             if self.memory:
-                # IMU data (acelerómetro y giroscopio)
-                accel_x = self.memory.getData("Device/SubDeviceList/InertialSensor/AccelerometerX/Sensor/Value")
-                accel_y = self.memory.getData("Device/SubDeviceList/InertialSensor/AccelerometerY/Sensor/Value")
-                accel_z = self.memory.getData("Device/SubDeviceList/InertialSensor/AccelerometerZ/Sensor/Value")
-                
-                gyro_x = self.memory.getData("Device/SubDeviceList/InertialSensor/GyroscopeX/Sensor/Value")
-                gyro_y = self.memory.getData("Device/SubDeviceList/InertialSensor/GyroscopeY/Sensor/Value")
-                gyro_z = self.memory.getData("Device/SubDeviceList/InertialSensor/GyroscopeZ/Sensor/Value")
-                
-                # Ángulos de inclinación
-                angle_x = self.memory.getData("Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value")
-                angle_y = self.memory.getData("Device/SubDeviceList/InertialSensor/AngleY/Sensor/Value")
-                
-                # Sensores de presión en los pies
-                lfoot_fl = self.memory.getData("Device/SubDeviceList/LFoot/FSR/FrontLeft/Sensor/Value")
-                lfoot_fr = self.memory.getData("Device/SubDeviceList/LFoot/FSR/FrontRight/Sensor/Value")
-                lfoot_rl = self.memory.getData("Device/SubDeviceList/LFoot/FSR/RearLeft/Sensor/Value")
-                lfoot_rr = self.memory.getData("Device/SubDeviceList/LFoot/FSR/RearRight/Sensor/Value")
-                
-                rfoot_fl = self.memory.getData("Device/SubDeviceList/RFoot/FSR/FrontLeft/Sensor/Value")
-                rfoot_fr = self.memory.getData("Device/SubDeviceList/RFoot/FSR/FrontRight/Sensor/Value")
-                rfoot_rl = self.memory.getData("Device/SubDeviceList/RFoot/FSR/RearLeft/Sensor/Value")
-                rfoot_rr = self.memory.getData("Device/SubDeviceList/RFoot/FSR/RearRight/Sensor/Value")
-                
-                sensor_vector = [
-                    accel_x or 0, accel_y or 0, accel_z or 0,
-                    gyro_x or 0, gyro_y or 0, gyro_z or 0,
-                    angle_x or 0, angle_y or 0,
-                    lfoot_fl or 0, lfoot_fr or 0, lfoot_rl or 0, lfoot_rr or 0,
-                    rfoot_fl or 0, rfoot_fr or 0, rfoot_rl or 0, rfoot_rr or 0,
-                    0, 0, 0, 0  # Placeholders para velocidades comandadas
-                ]
-                
+                v[0] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerX/Sensor/Value")
+                v[1] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerY/Sensor/Value")
+                v[2] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerZ/Sensor/Value")
+                v[3] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeX/Sensor/Value")
+                v[4] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeY/Sensor/Value")
+                v[5] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeZ/Sensor/Value")
+                v[6] = self._get("Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value")
+                v[7] = self._get("Device/SubDeviceList/InertialSensor/AngleY/Sensor/Value")
+                v[8]  = self._get("Device/SubDeviceList/LFoot/FSR/FrontLeft/Sensor/Value")
+                v[9]  = self._get("Device/SubDeviceList/LFoot/FSR/FrontRight/Sensor/Value")
+                v[10] = self._get("Device/SubDeviceList/LFoot/FSR/RearLeft/Sensor/Value")
+                v[11] = self._get("Device/SubDeviceList/LFoot/FSR/RearRight/Sensor/Value")
+                v[12] = self._get("Device/SubDeviceList/RFoot/FSR/FrontLeft/Sensor/Value")
+                v[13] = self._get("Device/SubDeviceList/RFoot/FSR/FrontRight/Sensor/Value")
+                v[14] = self._get("Device/SubDeviceList/RFoot/FSR/RearLeft/Sensor/Value")
+                v[15] = self._get("Device/SubDeviceList/RFoot/FSR/RearRight/Sensor/Value")
         except Exception as e:
-            print("Error leyendo sensores: {}".format(e))
-            # Vector de sensores por defecto (neutro)
-            sensor_vector = [0.0] * 20
-        
-        # Asegurar que tenemos exactamente 20 elementos
-        while len(sensor_vector) < 20:
-            sensor_vector.append(0.0)
-        
-        return sensor_vector[:20]
-    
-    def add_command_velocities(self, sensor_vector, vx, vy, wz):
-        """Agregar velocidades comandadas al vector de sensores"""
-        if len(sensor_vector) >= 20:
-            sensor_vector[-4] = vx
-            sensor_vector[-3] = vy  
-            sensor_vector[-2] = wz
-            sensor_vector[-1] = np.sqrt(vx*vx + vy*vy + wz*wz)  # Velocidad total
-        return sensor_vector
-    
-    def smooth_parameters(self, new_params):
-        """Suavizar cambios de parámetros para evitar movimientos bruscos"""
-        if self.last_params is None:
-            self.last_params = new_params.copy()
-            return new_params
-        
-        # Factor de suavizado (0.3 = cambio gradual)
-        alpha = 0.3
-        smoothed_params = {}
-        
-        for param_name in new_params:
-            old_val = self.last_params.get(param_name, new_params[param_name])
-            new_val = new_params[param_name]
-            smoothed_params[param_name] = old_val * (1 - alpha) + new_val * alpha
-        
-        self.last_params = smoothed_params.copy()
-        return smoothed_params
-    
-    def adapt_gait(self, vx, vy, wz):
-        """Adaptar parámetros de marcha basados en condiciones actuales"""
-        if not self.adaptation_enabled or not self.cnn:
-            return None
-        
-        start_time = time.time()
-        
-        try:
-            # Obtener datos de sensores
-            sensor_data = self.get_sensor_data()
-            sensor_data = self.add_command_velocities(sensor_data, vx, vy, wz)
-            
-            # Agregar al historial para estabilidad
-            self.sensor_history.append(sensor_data)
-            
-            # Usar promedio de las últimas lecturas para estabilidad
-            if len(self.sensor_history) >= 3:
-                averaged_sensors = np.mean(list(self.sensor_history)[-3:], axis=0)
-            else:
-                averaged_sensors = sensor_data
-            
-            # Predecir parámetros con CNN
-            predicted_params = self.cnn.predict_gait_params(averaged_sensors)
-            
-            # Suavizar cambios
-            smooth_params = self.smooth_parameters(predicted_params)
-            
-            # Estadísticas de rendimiento
-            prediction_time = time.time() - start_time
-            self.prediction_count += 1
-            self.total_prediction_time += prediction_time
-            
-            if self.prediction_count % 50 == 0:
-                avg_time = self.total_prediction_time / self.prediction_count
-                print("CNN: {} predicciones, tiempo promedio: {:.3f}ms".format(
-                    self.prediction_count, avg_time * 1000))
-            
-            return smooth_params
-            
-        except Exception as e:
-            print("Error en adaptación de marcha: {}".format(e))
-            return None
-    
-    def apply_gait_params(self, params):
-        """Aplicar parámetros de marcha al NAO"""
-        if not self.motion or not params:
-            return False
-        
-        try:
-            # Convertir a formato NAOqi
-            gait_config = []
-            for param_name, value in params.items():
-                gait_config.append([param_name, float(value)])
-            
-            # Aplicar configuración
-            self.motion.setMotionConfig(gait_config)
-            return True
-            
-        except Exception as e:
-            print("Error aplicando parámetros de marcha: {}".format(e))
-            return False
-    
-    def get_stats(self):
-        """Obtener estadísticas de rendimiento"""
-        if self.prediction_count > 0:
-            avg_time = self.total_prediction_time / self.prediction_count
-            return {
-                'predictions': self.prediction_count,
-                'avg_time_ms': avg_time * 1000,
-                'adaptations_enabled': self.adaptation_enabled,
-                'cnn_available': self.cnn is not None
-            }
-        return {'predictions': 0, 'cnn_available': self.cnn is not None}
+            print("Error leyendo sensores: %s" % e)
+        return v
 
-# Función para integrar con el control server existente
+    def add_command_velocities(self, vec, vx, vy, wz):
+        if vec is None or len(vec) < 20:
+            vec = (vec or []) + [0.0]*(20 - len(vec or []))
+        try:
+            vtot = (vx*vx + vy*vy + wz*wz) ** 0.5
+            vec[16], vec[17], vec[18], vec[19] = float(vx), float(vy), float(wz), float(vtot)
+        except Exception:
+            pass
+        return vec[:20]
+
+    # --- suavizado ---
+    def _smooth(self, new_p, alpha=0.3):
+        if self.last_params is None:
+            self.last_params = dict(new_p)
+            return dict(new_p)
+        out = {}
+        for k, nv in new_p.items():
+            ov = self.last_params.get(k, nv)
+            out[k] = float(ov)*(1.0-alpha) + float(nv)*alpha
+        self.last_params = dict(out)
+        return out
+
+    # --- persistencia gait aplicado ---
+    def _persist_gait_json(self, params):
+        try:
+            if not os.path.isdir(ADAPTIVE_DIR):
+                os.makedirs(ADAPTIVE_DIR)
+            with open(GAIT_JSON_PATH, 'wb') as f:
+                json.dump(params, f)
+        except Exception as e:
+            print("Warn persistencia gait: %s" % e)
+
+    # --- adaptación / aplicación ---
+    def adapt_gait(self, vx, vy, wz):
+        if not self.adaptation_enabled or self.cnn is None:
+            return None
+        t0 = time.time()
+        try:
+            s = self.add_command_velocities(self.get_sensor_data(), vx, vy, wz)
+            self.sensor_history.append(s)
+            if len(self.sensor_history) >= 3:
+                s_in = np.mean(list(self.sensor_history)[-3:], axis=0)
+            else:
+                s_in = s
+            pred = self.cnn.predict_gait_params(s_in)
+            smooth = self._smooth(pred)
+            self.prediction_count += 1
+            self.total_prediction_time += (time.time() - t0)
+            if (self.prediction_count % 50) == 0:
+                avg_ms = (self.total_prediction_time / self.prediction_count) * 1000.0
+                print("CNN: {} preds, t_prom={:.3f} ms".format(self.prediction_count, avg_ms))
+            return smooth
+        except Exception as e:
+            print("Error adaptación: %s" % e)
+            return None
+
+    def apply_gait_params(self, params):
+        """
+        Aplica los parámetros (setMotionConfig). NO envía comandos de caminar.
+        """
+        if not params or self.motion is None:
+            return False
+        try:
+            cfg = [[k, float(v)] for k, v in params.items()]
+            self.motion.setMotionConfig(cfg)
+            self._persist_gait_json(params)
+            return True
+        except Exception as e:
+            print("Error setMotionConfig: %s" % e)
+            return False
+
+    # --- stats ---
+    def get_stats(self):
+        if self.prediction_count:
+            avg_ms = (self.total_prediction_time / float(self.prediction_count)) * 1000.0
+            return {'predictions': self.prediction_count, 'avg_time_ms': avg_ms,
+                    'adaptations_enabled': bool(self.adaptation_enabled),
+                    'cnn_available': self.cnn is not None}
+        return {'predictions': 0, 'cnn_available': self.cnn is not None,
+                'adaptations_enabled': bool(self.adaptation_enabled)}
+
+
 def create_adaptive_walker(nao_ip="127.0.0.1", nao_port=9559):
-    """Crear instancia del controlador adaptativo"""
     return AdaptiveWalkController(nao_ip, nao_port)
 
-# Test básico
+
 if __name__ == "__main__":
     print("=== Test CNN Caminata Adaptativa ===")
-    
-    # Crear controlador
-    walker = create_adaptive_walker()
-    
-    if walker.cnn:
-        print("Probando predicción CNN...")
-        
-        # Simular datos de sensores
-        test_sensors = [0.1, -0.05, 9.8, 0.02, -0.01, 0.0, 0.05, -0.02,
-                       0.5, 0.6, 0.4, 0.5, 0.6, 0.5, 0.4, 0.6,
-                       0.5, 0.3, 0.1, 0.6]  # vx, vy, wz, velocidad_total
-        
-        # Predicción
-        start_time = time.time()
-        params = walker.cnn.predict_gait_params(test_sensors)
-        prediction_time = time.time() - start_time
-        
-        print("Parámetros predichos:")
-        for param, value in params.items():
-            print("  {}: {:.4f}".format(param, value))
-        
-        print("Tiempo de predicción: {:.2f}ms".format(prediction_time * 1000))
-        
-        # Test de adaptación completa
-        print("\nProbando adaptación completa...")
-        adapted_params = walker.adapt_gait(0.5, 0.3, 0.1)
-        if adapted_params:
-            print("Adaptación exitosa:")
-            for param, value in adapted_params.items():
-                print("  {}: {:.4f}".format(param, value))
-        
-        print("Estadísticas: {}".format(walker.get_stats()))
+    w = create_adaptive_walker()
+    if w.cnn:
+        # Demo rápido (no aplica ni camina):
+        v = [0.1,-0.05,9.8, 0.02,-0.01,0.0, 0.05,-0.02,
+             0.5,0.6,0.4,0.5, 0.6,0.5,0.4,0.6, 0.5,0.3,0.1,0.6]
+        print("Pred demo:", w.cnn.predict_gait_params(v))
+        a = w.adapt_gait(0.5,0.0,0.0)
+        print("Adapt demo:", a)
+        # Para aplicar realmente el gait (NO camina por sí solo), descomenta:
+        # w.apply_gait_params(a)
     else:
-        print("CNN no disponible - verifique dependencias")
+        print("CNN no disponible (instala NumPy).")
