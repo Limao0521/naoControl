@@ -1,296 +1,484 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-adaptive_walk_cnn.py - CNN ligera para caminata adaptativa en NAO (NAOqi puro)
+adaptive_walk_cnn.py - Caminata adaptativa con filtros de confort para NAO/NAOqi
 
-• Predice 5 parámetros de marcha (StepHeight, MaxStepX, MaxStepY, MaxStepTheta, Frequency)
-  a partir de 20 features (IMU, ángulos, FSR, vx/vy/wz/vtotal).
-• Aplica la configuración vía ALMotion.setMotionConfig (NO envía comandos de caminar).
-• Suaviza cambios.
-• Persiste el último gait aplicado en:
-    /home/nao/.local/share/adaptive_gait/last_params.json
-  para que `data_logger_cnn.py` lo registre junto con sensores.
-• NUEVO: Carga automática de pesos entrenados desde:
-    /home/nao/.local/share/adaptive_gait/weights.npz
-  (si no existe, usa pesos aleatorios → modo demo).
+- CNN ligera (numpy) que estima parámetros de marcha estables: MaxStepX, MaxStepY, MaxStepTheta, Frequency, StepHeight.
+- Bucle de adaptación con:
+    * Filtro EMA (suavizado)
+    * Zona muerta (deadband)
+    * Limitador de pendiente (rate limiter)
+    * Consenso de signo (histeresis temporal)
+    * "Comfort lock" (bloqueo cuando camina cómodo; se congela la adaptación un rato)
+- Telemetría a last_params.json para depurar desde shell.
 
 Requisitos:
-  - Python 2.7
-  - NAOqi (ALProxy)
-  - NumPy
+  - Python 2.7 en NAO
+  - NAOqi SDK disponible (ALMotion/ALMemory). Si no están, el script arranca en modo "solo CNN".
+
+Archivo de estado/salida:
+  /home/nao/.local/share/adaptive_gait/last_params.json
+
+Pesos de la CNN:
+  /home/nao/.local/share/adaptive_gait/weights.npz
 """
 
 from __future__ import print_function
-import os, time, json
+import os
+import json
+import time
+import math
 from collections import deque
 
-try:
-    import numpy as np
-    ML_AVAILABLE = True
-except ImportError:
-    print("Warning: NumPy no disponible - CNN deshabilitada (usando parámetros fijos).")
-    ML_AVAILABLE = False
+import numpy as np
 
 try:
     from naoqi import ALProxy
-except Exception as e:
-    ALProxy = None
-    print("Warning: NAOqi ALProxy no disponible: %s" % e)
+    NAOQI_AVAILABLE = True
+except Exception:
+    NAOQI_AVAILABLE = False
 
-# Rutas de persistencia (gait aplicado y pesos entrenados)
-ADAPTIVE_DIR     = "/home/nao/.local/share/adaptive_gait"
-GAIT_JSON_PATH   = os.path.join(ADAPTIVE_DIR, "last_params.json")
-WEIGHTS_NPZ_PATH = os.path.join(ADAPTIVE_DIR, "weights.npz")
+# ------------------------------
+# Utilidades de E/S y rutas
+# ------------------------------
+HOME = os.path.expanduser('~')
+DATA_DIR = os.path.join(HOME, '.local', 'share', 'adaptive_gait')
+if not os.path.isdir(DATA_DIR):
+    try:
+        os.makedirs(DATA_DIR)
+    except OSError:
+        pass
 
+WEIGHTS_PATH = os.path.join(DATA_DIR, 'weights.npz')
+LAST_JSON = os.path.join(DATA_DIR, 'last_params.json')
 
-class LightweightCNN(object):
-    """
-    MLP compacto: 20 → 32 → 16 → 5 (ReLU, ReLU, Sigmoid).
-    Carga pesos desde .npz si está disponible; si no, usa inicialización aleatoria.
-    """
-    def __init__(self):
-        self.input_size   = 20
-        self.hidden1_size = 32
-        self.hidden2_size = 16
-        self.output_size  = 5
+# ------------------------------
+# Configuración (tuneable)
+# ------------------------------
+CFG = {
+    # Frecuencia de actualización (más lento = menos cambios bruscos)
+    'update_period_s': 0.8,   # 0.7 - 1.0 recomendado
 
-        # Parámetros base (fallback)
-        self.base_params = {
-            'StepHeight':   0.025,
-            'MaxStepX':     0.04,
-            'MaxStepY':     0.14,
-            'MaxStepTheta': 0.3,
-            'Frequency':    0.8
+    # Suavizado exponencial de la predicción de la CNN
+    'ema_alpha': 0.2,         # 0.1-0.3
+
+    # Zona muerta: ignora micromovimientos
+    'deadband': {
+        'MaxStepY': 0.0030,       # ~3 mm lateral
+        'MaxStepTheta': 0.0002,   # ~0.01°
+        'MaxStepX': 0.0020,       # ~2 mm
+        'Frequency': 0.0020,
+        'StepHeight': 0.0020,
+    },
+
+    # Limitador de cambio por actualización
+    'rate_limit': {
+        'MaxStepY': 0.0010,
+        'MaxStepTheta': 0.0002,
+        'MaxStepX': 0.0010,
+        'Frequency': 0.0050,
+        'StepHeight': 0.0010,
+    },
+
+    # Consenso de signo: requiere que la mayoría de las últimas N decisiones apunten en la misma dirección
+    'consensus': {
+        'window': 5,
+        'min_same_sign': 4
+    },
+
+    # Comfort lock / hold
+    'comfort': {
+        'enable': True,
+        'stable_secs_to_lock': 3.0,   # tiempo con errores pequeños para bloquear
+        'hold_secs': 10.0,            # tiempo bloqueado
+        'unlock_threshold': {         # si los errores vuelven a subir, desbloquea
+            'MaxStepY': 0.008,
+            'MaxStepTheta': 0.0006,
         }
+    },
 
-        self.param_ranges = {
-            'StepHeight':   (0.01, 0.05),
-            'MaxStepX':     (0.02, 0.08),
-            'MaxStepY':     (0.08, 0.20),
-            'MaxStepTheta': (0.10, 0.50),
-            'Frequency':    (0.50, 1.20)
-        }
+    # Límites físicos/seguridad del NAO (recortes hard)
+    'limits': {
+        'MaxStepX': (0.0, 0.08),
+        'MaxStepY': (0.0, 0.20),
+        'MaxStepTheta': (0.0, 0.35),
+        'Frequency': (0.6, 1.4),
+        'StepHeight': (0.015, 0.03),
+    },
 
-        if ML_AVAILABLE:
-            # Inicialización
-            self.W1 = np.random.randn(self.input_size,  self.hidden1_size) * 0.1
-            self.b1 = np.zeros((1, self.hidden1_size))
-            self.W2 = np.random.randn(self.hidden1_size, self.hidden2_size) * 0.1
-            self.b2 = np.zeros((1, self.hidden2_size))
-            self.W3 = np.random.randn(self.hidden2_size, self.output_size) * 0.1
-            self.b3 = np.zeros((1, self.output_size))
+    # Logging: escribe también prints de depuración
+    'verbose': False,
+}
 
-            # Intentar cargar pesos entrenados
-            self._try_load_weights(WEIGHTS_NPZ_PATH)
+PARAMS = ('MaxStepX','MaxStepY','MaxStepTheta','Frequency','StepHeight')
 
-    # ---------- utilidades ----------
-    def _relu(self, x):
-        return np.maximum(0.0, x)
+# ------------------------------
+# CNN ligera (con numpy)
+# ------------------------------
+class TinyCNN(object):
+    def __init__(self, weights_path):
+        self.ok = False
+        self.W = {}
+        if os.path.isfile(weights_path):
+            try:
+                data = np.load(weights_path)
+                # Se esperan matrices con nombres 'W1','b1','W2','b2','W3','b3'
+                for k in data.files:
+                    self.W[k] = data[k]
+                self.ok = True
+            except Exception as e:
+                print("[E] No pude cargar pesos: %s" % e)
+        else:
+            print("[W] No encontré pesos en %s" % weights_path)
 
-    def _sigmoid(self, x):
-        return 1.0 / (1.0 + np.exp(-np.clip(x, -500.0, 500.0)))
+    def forward(self, x):
+        """
+        x: vector numpy 1xF (features sensores)
+        Devuelve dict con parámetros de marcha (ya en rangos 0..1 normalizados)
+        """
+        if not self.ok:
+            # fallback: devolver base sin cambios
+            base = np.array([0.05, 0.10, 0.30, 0.85, 0.025], dtype=np.float32)
+            return dict(zip(PARAMS, base))
 
-    def _forward(self, input_vector):
-        x = np.array(input_vector, dtype='float32').reshape(1, -1)
-        x = (x - np.mean(x)) / (np.std(x) + 1e-8)
-        z1 = np.dot(x, self.W1) + self.b1
-        a1 = self._relu(z1)
-        z2 = np.dot(a1, self.W2) + self.b2
-        a2 = self._relu(z2)
-        z3 = np.dot(a2, self.W3) + self.b3
-        y  = self._sigmoid(z3)
-        return y.flatten()
-
-    def _try_load_weights(self, path_npz):
         try:
-            if os.path.isfile(path_npz):
-                data = np.load(path_npz)
-                # Se esperan claves: W1,b1,W2,b2,W3,b3
-                self.W1 = np.array(data['W1']); self.b1 = np.array(data['b1'])
-                self.W2 = np.array(data['W2']); self.b2 = np.array(data['b2'])
-                self.W3 = np.array(data['W3']); self.b3 = np.array(data['b3'])
-                print("[CNN] Pesos cargados desde %s" % path_npz)
-            else:
-                print("[CNN] No se encontró %s; usando pesos aleatorios." % path_npz)
-        except Exception as e:
-            print("[CNN] Error cargando pesos (%s). Se usan pesos aleatorios." % e)
-
-    def predict_gait_params(self, sensor_data):
-        if not ML_AVAILABLE:
-            return self.base_params.copy()
-        try:
-            y = self._forward(sensor_data)
-            names = ['StepHeight','MaxStepX','MaxStepY','MaxStepTheta','Frequency']
-            out = {}
-            for i, name in enumerate(names):
-                lo, hi = self.param_ranges[name]
-                out[name] = lo + float(y[i]) * (hi - lo)
+            W1,b1 = self.W['W1'], self.W['b1']
+            W2,b2 = self.W['W2'], self.W['b2']
+            W3,b3 = self.W['W3'], self.W['b3']
+            h1 = np.maximum(0, np.dot(x, W1) + b1)
+            h2 = np.maximum(0, np.dot(h1, W2) + b2)
+            y  = np.dot(h2, W3) + b3
+            # y está ya en unidades reales (no normalizadas) según entrenamiento
+            out = dict(zip(PARAMS, np.squeeze(np.array(y, dtype=np.float64))))
             return out
         except Exception as e:
-            print("Error en predicción CNN: %s" % e)
-            return self.base_params.copy()
+            print("[E] forward(): %s" % e)
+            base = np.array([0.05, 0.10, 0.30, 0.85, 0.025], dtype=np.float32)
+            return dict(zip(PARAMS, base))
 
-
-class AdaptiveWalkController(object):
-    """
-    Controlador adaptativo:
-      - Lee sensores por ALMemory (IMU, ángulos, FSR)
-      - Inserta (vx,vy,wz,vtotal)
-      - Predice gait con la CNN y lo suaviza
-      - Aplica por ALMotion.setMotionConfig (NO manda caminar)
-      - Persiste last_params.json para `data_logger_cnn`
-    """
-    def __init__(self, nao_ip="127.0.0.1", nao_port=9559):
-        self.nao_ip, self.nao_port = nao_ip, nao_port
-        self.motion = self.memory = self.inertial = None
-        if ALProxy:
+# ------------------------------
+# Lectura de sensores NAOqi (minimal)
+# ------------------------------
+class RobotIO(object):
+    def __init__(self):
+        self.motion = None
+        self.mem = None
+        if NAOQI_AVAILABLE:
             try:
-                self.motion   = ALProxy("ALMotion", nao_ip, nao_port)
-                self.memory   = ALProxy("ALMemory", nao_ip, nao_port)
-                self.inertial = ALProxy("ALInertialSensor", nao_ip, nao_port)
-                print("Proxies NAOqi inicializados.")
+                self.motion = ALProxy("ALMotion", "127.0.0.1", 9559)
             except Exception as e:
-                print("Error inicializando NAOqi: %s" % e)
+                print("[W] ALMotion no disponible: %s" % e)
+            try:
+                self.mem = ALProxy("ALMemory", "127.0.0.1", 9559)
+            except Exception as e:
+                print("[W] ALMemory no disponible: %s" % e)
 
-        self.cnn = LightweightCNN() if ML_AVAILABLE else None
-        print("CNN ligera inicializada." if self.cnn else "CNN deshabilitada (sin NumPy).")
+    def get_features(self):
+        """
+        Extrae un vector de características simple desde ALMemory.
+        Si no hay NAOqi, devuelve constantes válidas.
+        """
+        # Campos típicos (puedes ajustar a tus señales reales)
+        keys = [
+            "Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/AngleY/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/AccX/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/AccY/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/AccZ/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/GyrX/Sensor/Value",
+            "Device/SubDeviceList/InertialSensor/GyrY/Sensor/Value",
+        ]
+        if self.mem is None:
+            return np.array([0,0,9.81,0,0,0,0], dtype=np.float32)
 
-        self.sensor_history = deque(maxlen=10)
-        self.last_params = None
-        self.adaptation_enabled = True
+        vals = []
+        for k in keys:
+            try:
+                v = self.mem.getData(k)
+            except Exception:
+                v = 0.0
+            if v is None: v = 0.0
+            vals.append(float(v))
+        return np.array(vals, dtype=np.float32)
 
-        self.prediction_count = 0
-        self.total_prediction_time = 0.0
-
-    # --- lectura sensores ---
-    def _get(self, key):
+    def apply_walk_params(self, params):
+        """
+        Envía parámetros a ALMotion.setWalkTargetVelocity a través de Proxy, si existe.
+        Aquí no mandamos velocidades (vx,vy,theta), sino que ajustamos los límites internos del paso.
+        NAOqi expone setWalkParam (modelo viejo) en algunos releases; si no existe, lo omitimos.
+        """
+        if self.motion is None:
+            return False
+        # Intentar setMoveConfig si existe
+        mapping = {
+            'MaxStepX':       "MaxStepX",
+            'MaxStepY':       "MaxStepY",
+            'MaxStepTheta':   "MaxStepTheta",
+            'Frequency':      "MaxStepFrequency",
+            'StepHeight':     "StepHeight"
+        }
+        to_set = []
+        for k,v in params.items():
+            if k in mapping:
+                to_set.append([mapping[k], float(v)])
+        ok = True
         try:
-            v = self.memory.getData(key)
-            return float(v) if v is not None else 0.0
-        except Exception:
-            return 0.0
-
-    def get_sensor_data(self):
-        v = [0.0]*20
-        try:
-            if self.memory:
-                v[0] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerX/Sensor/Value")
-                v[1] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerY/Sensor/Value")
-                v[2] = self._get("Device/SubDeviceList/InertialSensor/AccelerometerZ/Sensor/Value")
-                v[3] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeX/Sensor/Value")
-                v[4] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeY/Sensor/Value")
-                v[5] = self._get("Device/SubDeviceList/InertialSensor/GyroscopeZ/Sensor/Value")
-                v[6] = self._get("Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value")
-                v[7] = self._get("Device/SubDeviceList/InertialSensor/AngleY/Sensor/Value")
-                v[8]  = self._get("Device/SubDeviceList/LFoot/FSR/FrontLeft/Sensor/Value")
-                v[9]  = self._get("Device/SubDeviceList/LFoot/FSR/FrontRight/Sensor/Value")
-                v[10] = self._get("Device/SubDeviceList/LFoot/FSR/RearLeft/Sensor/Value")
-                v[11] = self._get("Device/SubDeviceList/LFoot/FSR/RearRight/Sensor/Value")
-                v[12] = self._get("Device/SubDeviceList/RFoot/FSR/FrontLeft/Sensor/Value")
-                v[13] = self._get("Device/SubDeviceList/RFoot/FSR/FrontRight/Sensor/Value")
-                v[14] = self._get("Device/SubDeviceList/RFoot/FSR/RearLeft/Sensor/Value")
-                v[15] = self._get("Device/SubDeviceList/RFoot/FSR/RearRight/Sensor/Value")
+            # NAOqi: motion.setMoveConfig acepta lista de [name, value]
+            self.motion.setMoveConfig(to_set)
         except Exception as e:
-            print("Error leyendo sensores: %s" % e)
-        return v
+            # Algunos firmwares usan setWalkArmsConfig / setFootSteps*;
+            # si no podemos escribir, consideramos "no fatal".
+            if CFG['verbose']:
+                print("[W] No pude aplicar moveConfig: %s" % e)
+            ok = False
+        return ok
 
-    def add_command_velocities(self, vec, vx, vy, wz):
-        if vec is None or len(vec) < 20:
-            vec = (vec or []) + [0.0]*(20 - len(vec or []))
-        try:
-            vtot = (vx*vx + vy*vy + wz*wz) ** 0.5
-            vec[16], vec[17], vec[18], vec[19] = float(vx), float(vy), float(wz), float(vtot)
-        except Exception:
-            pass
-        return vec[:20]
+# ------------------------------
+# Filtro de adaptación
+# ------------------------------
+class AdaptationLoop(object):
+    def __init__(self, cnn, rio):
+        self.cnn = cnn
+        self.rio = rio
 
-    # --- suavizado ---
-    def _smooth(self, new_p, alpha=0.3):
-        if self.last_params is None:
-            self.last_params = dict(new_p)
-            return dict(new_p)
+        # estado del filtro
+        self.ema = None
+        self.last_applied = None
+        self.last_update = 0.0
+        self.comfort_on = False
+        self.lock_until = 0.0
+        self.stable_since = None
+
+        self.sign_hist = {p: deque(maxlen=CFG['consensus']['window']) for p in PARAMS}
+
+        # stats
+        self.prediction_times = deque(maxlen=100)
+        self.predictions = 0
+        self.adaptations_enabled = True
+
+    def clamp_limits(self, params):
         out = {}
-        for k, nv in new_p.items():
-            ov = self.last_params.get(k, nv)
-            out[k] = float(ov)*(1.0-alpha) + float(nv)*alpha
-        self.last_params = dict(out)
+        for p,v in params.items():
+            lo, hi = CFG['limits'][p]
+            out[p] = float(min(max(v, lo), hi))
         return out
 
-    # --- persistencia gait aplicado ---
-    def _persist_gait_json(self, params):
-        try:
-            if not os.path.isdir(ADAPTIVE_DIR):
-                os.makedirs(ADAPTIVE_DIR)
-            with open(GAIT_JSON_PATH, 'wb') as f:
-                json.dump(params, f)
-        except Exception as e:
-            print("Warn persistencia gait: %s" % e)
+    def ema_smooth(self, pred):
+        if self.ema is None:
+            self.ema = dict(pred)
+            return dict(pred)
+        a = CFG['ema_alpha']
+        out = {}
+        for p in PARAMS:
+            out[p] = (1-a)*self.ema[p] + a*pred[p]
+        self.ema = dict(out)
+        return out
 
-    # --- adaptación / aplicación ---
-    def adapt_gait(self, vx, vy, wz):
-        if not self.adaptation_enabled or self.cnn is None:
-            return None
-        t0 = time.time()
-        try:
-            s = self.add_command_velocities(self.get_sensor_data(), vx, vy, wz)
-            self.sensor_history.append(s)
-            if len(self.sensor_history) >= 3:
-                s_in = np.mean(list(self.sensor_history)[-3:], axis=0)
+    def deadband(self, target, current):
+        out = {}
+        for p in PARAMS:
+            eps = CFG['deadband'].get(p, 0.0)
+            if abs(target[p] - current[p]) < eps:
+                out[p] = current[p]  # no cambiar
             else:
-                s_in = s
-            pred = self.cnn.predict_gait_params(s_in)
-            smooth = self._smooth(pred)
-            self.prediction_count += 1
-            self.total_prediction_time += (time.time() - t0)
-            if (self.prediction_count % 50) == 0:
-                avg_ms = (self.total_prediction_time / self.prediction_count) * 1000.0
-                print("CNN: {} preds, t_prom={:.3f} ms".format(self.prediction_count, avg_ms))
-            return smooth
-        except Exception as e:
-            print("Error adaptación: %s" % e)
-            return None
+                out[p] = target[p]
+        return out
 
-    def apply_gait_params(self, params):
-        """
-        Aplica los parámetros (setMotionConfig). NO envía comandos de caminar.
-        """
-        if not params or self.motion is None:
+    def rate_limit(self, desired, current):
+        out = {}
+        rate = CFG['rate_limit']
+        for p in PARAMS:
+            dv = desired[p] - current[p]
+            lim = rate.get(p, 1.0)
+            if dv > lim: dv = lim
+            if dv < -lim: dv = -lim
+            out[p] = current[p] + dv
+        return out
+
+    def update_sign_history(self, current, target):
+        for p in ('MaxStepY','MaxStepTheta'):  # consenso en los críticos de estabilidad
+            dv = target[p] - current[p]
+            s = 1 if dv>0 else (-1 if dv<0 else 0)
+            self.sign_hist[p].append(s)
+
+    def has_consensus(self, p):
+        hist = list(self.sign_hist[p])
+        if len(hist) < CFG['consensus']['window']:
             return False
+        # cuenta abs(sign) y coincidencias de signo
+        nonzero = [s for s in hist if s!=0]
+        if len(nonzero) < CFG['consensus']['min_same_sign']:
+            return False
+        pos = nonzero.count(1)
+        neg = nonzero.count(-1)
+        return (max(pos,neg) >= CFG['consensus']['min_same_sign'])
+
+    def comfort_update(self, d_errors):
+        """
+        Decide activar o desactivar el comfort lock.
+        d_errors: dict con |pred-applied| para Y y Theta
+        """
+        now = time.time()
+        if not CFG['comfort']['enable']:
+            self.comfort_on = False
+            self.stable_since = None
+            return
+
+        # si estamos en hold, mantener hasta lock_until
+        if self.comfort_on and now < self.lock_until:
+            return
+
+        # chequeo de desbloqueo por error grande
+        if self.comfort_on and now >= self.lock_until:
+            # seguimos bloqueados solo si el error sigue pequeño
+            uy = CFG['comfort']['unlock_threshold']['MaxStepY']
+            uth= CFG['comfort']['unlock_threshold']['MaxStepTheta']
+            if d_errors['MaxStepY'] > uy or d_errors['MaxStepTheta'] > uth:
+                # desbloquear
+                self.comfort_on = False
+                self.stable_since = None
+            else:
+                # ampliar hold un poquito para no parpadear
+                self.lock_until = now + 0.5
+            return
+
+        # si no está activo, evaluar estabilidad para activarlo
+        small = (
+            d_errors['MaxStepY'] < CFG['deadband']['MaxStepY'] and
+            d_errors['MaxStepTheta'] < CFG['deadband']['MaxStepTheta']
+        )
+        if small:
+            if self.stable_since is None:
+                self.stable_since = now
+            if (now - self.stable_since) >= CFG['comfort']['stable_secs_to_lock']:
+                self.comfort_on = True
+                self.lock_until = now + CFG['comfort']['hold_secs']
+        else:
+            self.stable_since = None
+            self.comfort_on = False
+
+    def step(self):
+        # 1) leer sensores -> features
+        feats = self.rio.get_features()
+
+        # 2) predecir
+        t0 = time.time()
+        pred = self.cnn.forward(feats)
+        t1 = time.time()
+        self.prediction_times.append((t1-t0)*1000.0)
+        self.predictions += 1
+
+        # 3) inicializar current/applied si es la primera vez
+        if self.last_applied is None:
+            self.last_applied = dict(pred)  # start from pred recortado luego
+            self.last_applied = self.clamp_limits(self.last_applied)
+
+        # 4) suavizado
+        pred_s = self.ema_smooth(pred)
+
+        # 5) recortes hard
+        pred_s = self.clamp_limits(pred_s)
+
+        # 6) deadband respecto al aplicado actual
+        desired = self.deadband(pred_s, self.last_applied)
+
+        # 7) consenso
+        self.update_sign_history(self.last_applied, desired)
+        for p in ('MaxStepY','MaxStepTheta'):
+            if not self.has_consensus(p):
+                desired[p] = self.last_applied[p]  # no mueva sin consenso
+
+        # 8) comfort lock
+        d_errors = {
+            'MaxStepY': abs(pred_s['MaxStepY'] - self.last_applied['MaxStepY']),
+            'MaxStepTheta': abs(pred_s['MaxStepTheta'] - self.last_applied['MaxStepTheta'])
+        }
+        self.comfort_update(d_errors)
+
+        # 9) si comfort_on, congelar
+        if self.comfort_on:
+            applied = dict(self.last_applied)
+            rate_limited = False
+        else:
+            # 10) rate limiter
+            applied = self.rate_limit(desired, self.last_applied)
+            rate_limited = any(abs(applied[p]-desired[p])>1e-12 for p in PARAMS)
+
+        # 11) aplicar a NAO (best effort)
+        applied_ok = self.rio.apply_walk_params(applied)
+
+        # 12) telemetría JSON
+        delta = {p: round(applied[p] - self.last_applied[p], 12) for p in PARAMS}
+        delta_norm = math.sqrt(sum(d*d for d in delta.values()))
+        meta = {
+            'ts': time.time(),
+            'pred': {p: float(pred_s[p]) for p in PARAMS},
+            'applied': {p: float(applied[p]) for p in PARAMS},
+            'delta': delta,
+            'delta_norm': float(delta_norm),
+            'rate_limited': bool(rate_limited),
+            'cnn_ms': float(self.prediction_times[-1]),
+            'predictions': self.predictions,
+            'comfort_on': bool(self.comfort_on),
+            'applied_ok': bool(applied_ok),
+        }
+        out = dict(applied)
+        out['_meta'] = meta
+
         try:
-            cfg = [[k, float(v)] for k, v in params.items()]
-            self.motion.setMotionConfig(cfg)
-            self._persist_gait_json(params)
-            return True
+            with open(LAST_JSON, 'w') as f:
+                json.dump(out, f, sort_keys=True)
         except Exception as e:
-            print("Error setMotionConfig: %s" % e)
-            return False
+            if CFG['verbose']:
+                print("[W] No pude escribir %s: %s" % (LAST_JSON, e))
 
-    # --- stats ---
+        # 13) guardar aplicado y tiempo
+        self.last_applied = dict(applied)
+        self.last_update = time.time()
+
+        return out
+
     def get_stats(self):
-        if self.prediction_count:
-            avg_ms = (self.total_prediction_time / float(self.prediction_count)) * 1000.0
-            return {'predictions': self.prediction_count, 'avg_time_ms': avg_ms,
-                    'adaptations_enabled': bool(self.adaptation_enabled),
-                    'cnn_available': self.cnn is not None}
-        return {'predictions': 0, 'cnn_available': self.cnn is not None,
-                'adaptations_enabled': bool(self.adaptation_enabled)}
+        avg_ms = sum(self.prediction_times)/len(self.prediction_times) if self.prediction_times else 0.0
+        return {
+            'avg_time_ms': avg_ms,
+            'predictions': self.predictions,
+            'cnn_available': bool(self.cnn.ok),
+            'adaptations_enabled': bool(self.adaptations_enabled),
+        }
 
-
-def create_adaptive_walker(nao_ip="127.0.0.1", nao_port=9559):
-    return AdaptiveWalkController(nao_ip, nao_port)
-
-
-if __name__ == "__main__":
-    print("=== Test CNN Caminata Adaptativa ===")
-    w = create_adaptive_walker()
-    if w.cnn:
-        # Demo rápido (no aplica ni camina):
-        v = [0.1,-0.05,9.8, 0.02,-0.01,0.0, 0.05,-0.02,
-             0.5,0.6,0.4,0.5, 0.6,0.5,0.4,0.6, 0.5,0.3,0.1,0.6]
-        print("Pred demo:", w.cnn.predict_gait_params(v))
-        a = w.adapt_gait(0.5,0.0,0.0)
-        print("Adapt demo:", a)
-        # Para aplicar realmente el gait (NO camina por sí solo), descomenta:
-        # w.apply_gait_params(a)
+# ------------------------------
+# Main
+# ------------------------------
+def main():
+    print("=== NAO Adaptive Walk (CNN + Comfort Filters) ===")
+    cnn = TinyCNN(WEIGHTS_PATH)
+    if cnn.ok:
+        print("[OK] Pesos cargados:", WEIGHTS_PATH)
     else:
-        print("CNN no disponible (instala NumPy).")
+        print("[W] CNN sin pesos válidos, se usará base fija")
+
+    rio = RobotIO()
+    loop = AdaptationLoop(cnn, rio)
+
+    period = CFG['update_period_s']
+    print("[INFO] Periodo actualización = %.2fs  EMA=%.2f  deadband(y=%.4f,th=%.4f)  comfort=%s"
+          % (period, CFG['ema_alpha'], CFG['deadband']['MaxStepY'], CFG['deadband']['MaxStepTheta'], CFG['comfort']['enable']))
+
+    # Primera escritura para inicializar JSON con algo consistente
+    loop.step()
+
+    try:
+        while True:
+            t0 = time.time()
+            loop.step()
+            # dormir hasta completar periodo
+            dt = time.time() - t0
+            to_sleep = max(0.0, period - dt)
+            time.sleep(to_sleep)
+    except KeyboardInterrupt:
+        print("\n[INFO] Salida por Ctrl+C")
+        print(json.dumps({'cnnStats': loop.get_stats()}, indent=2, sort_keys=True))
+
+if __name__ == '__main__':
+    main()
