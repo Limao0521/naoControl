@@ -1,12 +1,17 @@
-/* UI Menu Styles */
+/* UI Menu Styles (responsive) */
 .ui-menu {
-  padding: 20px;
+  --ui-pad: clamp(10px, 2vw, 20px);
+  --ui-h3: clamp(16px, 2.2vw, 22px);
+  --ui-icon: clamp(18px, 2.4vw, 28px);
+  --ui-name: clamp(14px, 1.8vw, 18px);
+  --ui-desc: clamp(12px, 1.4vw, 14px);
+  padding: var(--ui-pad);
   color: white;
 }
 
 .ui-menu h3 {
-  margin: 0 0 20px 0;
-  font-size: 18px;
+  margin: 0 0 calc(var(--ui-pad) / 1.25) 0;
+  font-size: var(--ui-h3);
   color: white;
   text-align: center;
 }
@@ -14,47 +19,47 @@
 .ui-modes {
   display: flex;
   flex-direction: column;
-  gap: 15px;
-  margin-bottom: 25px;
+  gap: clamp(8px, 1.6vw, 20px);
+  margin-bottom: clamp(12px, 2.4vw, 30px);
 }
 
 .ui-mode-btn {
-  background: rgba(255, 255, 255, 0.1);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 12px;
-  padding: 15px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: clamp(8px, 1.6vw, 14px);
+  padding: clamp(10px, 1.8vw, 18px);
   color: white;
   cursor: pointer;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   text-align: left;
 }
 
 .ui-mode-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  border-color: rgba(255, 255, 255, 0.6);
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.45);
   transform: translateY(-2px);
 }
 
 .ui-mode-btn.active {
-  background: rgba(255, 255, 255, 0.3);
-  border-color: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.7);
 }
 
 .ui-mode-icon {
-  font-size: 24px;
-  margin-bottom: 8px;
+  font-size: var(--ui-icon);
+  margin-bottom: clamp(6px, 1.2vw, 10px);
 }
 
 .ui-mode-name {
-  font-size: 16px;
+  font-size: var(--ui-name);
   font-weight: bold;
-  margin-bottom: 5px;
+  margin-bottom: clamp(4px, 0.8vw, 8px);
   color: white;
 }
 
 .ui-mode-desc {
-  font-size: 12px;
-  opacity: 0.8;
+  font-size: var(--ui-desc);
+  opacity: 0.85;
   line-height: 1.3;
   color: white;
 }
