@@ -114,6 +114,64 @@
   overflow: visible;
 }
 
+/* SIU popup */
+.siu-popup {
+  position: absolute;
+  z-index: 40;
+  right: 12%;
+  top: 18%;
+  background: rgba(0,0,0,0.85);
+  border: 1px solid rgba(255,255,255,0.06);
+  padding: 0.5rem;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.siu-option {
+  background: var(--light-gray);
+  color: #222;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.siu-option:hover { filter: brightness(1.05); }
+
+/* Full-screen translucent overlay and centered modal for SIU */
+.siu-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10050; /* ensure overlay sits above side-panel (z-index:200) and other UI elements */
+}
+
+.siu-modal {
+  width: min(720px, 90vw);
+  max-width: 900px;
+  background: linear-gradient(180deg, #2c2c2c 0%, #3a3a3a 100%);
+  border: 6px solid var(--light-gray);
+  border-radius: 12px;
+  padding: 1.25rem;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+  color: white;
+  z-index: 90;
+}
+
+.siu-modal h3 {
+  margin: 0 0 1rem 0;
+  font-size: clamp(18px, 2.2vw, 22px);
+}
+
+.siu-modal-body { display:flex; gap:1rem; }
+.siu-modal-actions { margin-top: 1rem; display:flex; justify-content:flex-end; }
+.siu-close { background: #1e3a8a; color: white; border: none; padding: 8px 12px; border-radius:6px; cursor:pointer; }
+
 .selectors-section {
   grid-area: selectors;
   display: flex;

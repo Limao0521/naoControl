@@ -26,6 +26,7 @@ const NaoController = () => {
   const kickCooldownRef = useRef(null);
 
   const { sendMessage, lastMessage, isConnected } = useWebSocket(6671);
+  const [siuMenuOpen, setSiuMenuOpen] = useState(false);
 
   // Detectar IP del host
   useEffect(() => {
@@ -233,6 +234,31 @@ const NaoController = () => {
       console.log('[UI] SIU enviado');
     }
   }, [sendMessage]);
+
+  const toggleSiuMenu = useCallback((e) => {
+    e?.stopPropagation();
+    setSiuMenuOpen(v => !v);
+  }, []);
+
+  const selectSiuGesture = useCallback((gesture) => {
+    // close modal
+    setSiuMenuOpen(false);
+
+    // send a gesture action if websocket available
+    if (sendMessage) {
+      sendMessage({ action: 'gesture', name: gesture });
+      console.log('[UI] gesture sent →', gesture);
+    }
+  }, [sendMessage]);
+
+  // close modal with Escape
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === 'Escape' && siuMenuOpen) setSiuMenuOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [siuMenuOpen]);
 
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
@@ -471,11 +497,24 @@ const NaoController = () => {
                 {/* SIU Button (circular, bottom-right of kick) */}
                 <button
                   className="siu-btn"
-                  onClick={handleSiu}
-                  title="SIU"
+                  onClick={toggleSiuMenu}
+                  title="Gestures"
                 >
-                  SIU
+                  {'💃'}
                 </button>
+                {siuMenuOpen && (
+                  <div className="siu-overlay" onClick={() => setSiuMenuOpen(false)}>
+                    <div className="siu-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+                      <h3>Gestures</h3>
+                      <div className="siu-modal-body">
+                        <button className="siu-option" onClick={() => selectSiuGesture('dance')}>Dance</button>
+                      </div>
+                      <div className="siu-modal-actions">
+                        <button className="siu-close" onClick={() => setSiuMenuOpen(false)}>Close</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Center Controls - Solo botones básicos */}
