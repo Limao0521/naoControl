@@ -249,6 +249,10 @@ const NaoController = () => {
       sendMessage({ action: 'gesture', name: gesture });
       console.log('[UI] gesture sent →', gesture);
     }
+    // if the selected gesture is the original SIU, also call the legacy handler
+    if (gesture === 'siu') {
+      handleSiu();
+    }
   }, [sendMessage]);
 
   // close modal with Escape
@@ -507,7 +511,7 @@ const NaoController = () => {
                     <div className="siu-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
                       <h3>Gestures</h3>
                       <div className="siu-modal-body">
-                        <button className="siu-option" onClick={() => selectSiuGesture('dance')}>Dance</button>
+                        <button className="siu-option" onClick={() => selectSiuGesture('siu')}>SIU</button>
                       </div>
                       <div className="siu-modal-actions">
                         <button className="siu-close" onClick={() => setSiuMenuOpen(false)}>Close</button>
