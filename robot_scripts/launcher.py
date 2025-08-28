@@ -4,7 +4,6 @@
 launcher.py – Arranca/Detiene control_server.py + HTTP server
    con un long-press (>=3 s) del sensor táctil medio de la cabeza.
    Usa modelo basado en eventos con fallback a polling para máxima compatibilidad.
-   Gestiona automáticamente modo Choregraphe vs modo WebSocket.
 """
 
 import time

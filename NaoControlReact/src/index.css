@@ -36,12 +36,13 @@ body {
   background: #2c2c2c; /* Fondo oscuro */
   color: white;        /* Texto en color blanco */
   width: 100vw;        /* Ancho completo de la ventana */
-  height: 100vh;       /* Alto completo de la ventana */
+  min-height: 100vh;   /* Permite que el cuerpo crezca según el contenido */
   overflow-x: hidden;  /* Oculta el desplazamiento horizontal */
   overscroll-behavior-y: contain; /* Evita el efecto rebote al desplazar */
   display: flex;       /* Usa flexbox para el layout */
   flex-direction: column; /* Elementos apilados verticalmente */
   align-items: center; /* Centra los elementos horizontalmente */
+  overflow-y: auto;      /* Permite el desplazamiento vertical si es necesario */
 }
 
 code {
@@ -58,4 +59,13 @@ button, .mode-btn, .small-btn, .extra-btn {
   -ms-user-select: none;
   user-select: none;
   -webkit-touch-callout: none; /* Previene el menú contextual en dispositivos táctiles */
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;   /* Permite que la aplicación crezca según el contenido */
+  overflow: auto; /* allow app-level scroll if inner panels require it */
 }

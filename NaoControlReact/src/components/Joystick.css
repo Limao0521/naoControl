@@ -1,30 +1,55 @@
-/* ─── JOYSTICK ─── */
-.joy-wrapper{ 
-  display: flex; 
-  justify-content: center; 
+/* JOYSTICK: clean, single responsive stylesheet */
+.joy-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden; /* contain joystick to its grid area */
+  /* prevent the wrapper from stretching the joystick when parent scales */
+  flex: 0 0 auto;
 }
 
-.joy-base{
-  position: relative; 
-  width: clamp(120px,40vw,200px); 
-  height: clamp(120px,40vw,200px);
-  background: var(--joy-base); 
+.joy-base {
+  position: relative;
+  /* scale together with control panel */
+  --base-joy-size: clamp(80px,24vw,180px);
+  /* use aspect-ratio to guarantee a perfect circle; control size via width only */
+  width: calc(var(--base-joy-size) * var(--ctrl-scale));
+  aspect-ratio: 1 / 1;
+  max-width: calc(200px * var(--ctrl-scale));
+  box-sizing: border-box;
+  background: var(--joy-base);
   border-radius: 50%;
   box-shadow: inset 0 -.5rem 1rem rgba(0,0,0,.6);
   touch-action: none;
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.joy-knob{
-  position: absolute; 
-  left: 50%; 
+.joy-knob {
+  position: absolute;
+  left: 50%;
   top: 50%;
-  width: clamp(50px,15vw,80px); 
-  height: clamp(50px,15vw,80px);
-  background: var(--joy-knob); 
+  --base-knob-size: clamp(36px,10vw,72px);
+  width: calc(var(--base-knob-size) * var(--ctrl-scale));
+  aspect-ratio: 1 / 1;
+  height: auto;
+  max-width: calc(88px * var(--ctrl-scale));
+  background: var(--joy-knob);
   border-radius: 50%;
   transform: translate(-50%,-50%);
   transition: transform .1s cubic-bezier(.25,.46,.45,.94);
-  box-shadow: 0 .2rem .5rem rgba(0,0,0,.6), inset 0 -.2rem .2rem rgba(255,255,255,.1);
+  box-shadow: 0 .2rem .5rem rgba(0,0,0,.6), inset 0 -.2rem .2rem rgba(255,255,255,.06);
   pointer-events: none;
+}
+
+@media (max-width: 480px) {
+  .joy-base { --base-joy-size: clamp(70px,30vw,130px); }
+  .joy-knob { --base-knob-size: clamp(30px,12vw,52px); }
+}
+
+@media (max-width: 430px) {
+  .joy-base { --base-joy-size: clamp(64px,28vw,110px); }
+  .joy-knob { --base-knob-size: clamp(28px,12vw,44px); }
 }

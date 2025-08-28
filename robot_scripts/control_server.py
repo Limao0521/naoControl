@@ -1,19 +1,22 @@
 #!/usr/bin/env python2
 # -*- coding: utf-8 -*-
 """
-control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launcher (single-config)
+control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launcher (single-config, adaptive gait)
 
 • ws://0.0.0.0:6671
 • JSON actions:
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick,
-    volume, getBattery, getAutonomousLife
+    volume, getBattery, getAutonomousLife,
+    adaptiveGait  ← NEW (enable: bool, mode: "auto"|"slippery")
+
 • Watchdog detiene la marcha si no recibe walk en WATCHDOG s
 
-Cambios clave (versión “single-config”):
-- Se elimina setTerrain y todos los presets.
-- Queda un ÚNICO conjunto de parámetros de marcha (gait) que puedes cambiar por WS.
-- Quedan CAPs (vx,vy,wz) editables por WS para limitar velocidades.
+Cambios clave (versión “single-config + adaptive”):
+- Único conjunto de parámetros de marcha (gait) modificable por WS.
+- CAPs (vx,vy,wz) editables por WS.
+- NUEVO: Bucle adaptativo que lee FSR + IMU, calcula CoP y ajusta marcha
+  suavemente (sin saltos) con histeresis y rampas en velocidades.
 """
 
 from __future__ import print_function
@@ -45,6 +48,19 @@ IP_NAO     = "127.0.0.1"
 PORT_NAO   = 9559
 WS_PORT    = 6671
 WATCHDOG   = 0.6
+WEB_DIR    = "/home/nao/Websx/ControllerWebServer"
+HTTP_PORT  = "8000"
+
+# Importar CNN de caminata adaptativa
+try:
+    from adaptive_walk_cnn import create_adaptive_walker
+    adaptive_walker = create_adaptive_walker(IP_NAO, PORT_NAO)
+    logger.info("CNN de caminata adaptativa inicializada")
+    ADAPTIVE_WALK_ENABLED = True
+except ImportError as e:
+    logger.warning("CNN adaptativa no disponible: {}".format(e))
+    adaptive_walker = None
+    ADAPTIVE_WALK_ENABLED = False
 WEB_DIR    = "/home/nao/Websx/ControllerWebServer"
 HTTP_PORT  = "8000"
 
@@ -119,8 +135,8 @@ try:
 except Exception as e:
     log("NAO", "Warn subscribe RobotHasFallen: %s" % e)
 
-# ─── Único Gait + CAPs ─────────────────────────────────────────────────────────
-# Por defecto: vacío -> NAOqi usa sus valores internos. Puedes sobrescribir por WS con action="gait".
+# ─── Único Gait + CAPs (por defecto NAOqi) ─────────────────────────────────────
+# CURRENT_GAIT vacío implica que NAOqi usará sus valores internos de marcha.
 CURRENT_GAIT = []  # e.g.: [["StepHeight",0.03],["MaxStepX",0.028],["MaxStepY",0.10],["MaxStepTheta",0.22],["Frequency",0.50]]
 # CAPs de velocidad (1.0 = sin límite). Editables vía acción "caps".
 CAP_LIMITS  = {"vx": 1.0, "vy": 1.0, "wz": 1.0}
@@ -157,6 +173,104 @@ def _apply_moveToward(vx, vy, wz, move_cfg_pairs):
         log("Walk", "moveToward with config failed: %s → retry no-config" % e)
         motion.moveToward(vx, vy, wz)
 
+# ─── Utilidades de suavizado y mezcla ─────────────────────────────────────────
+def clamp(v, lo, hi):
+    return lo if v < lo else (hi if v > hi else v)
+
+def lerp(a, b, t):
+    return (1.0 - t) * a + t * b
+
+def ema(prev, x, alpha):
+    return (1.0 - alpha) * prev + alpha * x
+
+def pairs_to_dict(pairs):
+    d = {}
+    for k, v in pairs:
+        d[k] = float(v)
+    return d
+
+def dict_to_pairs(d):
+    return [[k, float(v)] for k, v in d.items()]
+
+def merge_pairs(base_pairs, override_pairs):
+    d = pairs_to_dict(base_pairs) if base_pairs else {}
+    d.update(pairs_to_dict(override_pairs))
+    return dict_to_pairs(d)
+
+# ─── Estados de Gait y CAPS con suavizado ─────────────────────────────────────
+# Target (referencia) que decide el adaptador:
+GAIT_REF = []          # lista de pares [["MaxStepX", val], ...]
+CAPS_REF = {"vx":1.0, "vy":1.0, "wz":1.0}
+
+# Aplicado (lo que realmente mandamos a moveToward):
+GAIT_APPLIED = []      # lista de pares suavizada
+CAPS_APPLIED = {"vx":1.0, "vy":1.0, "wz":1.0}
+
+# Parámetros de suavizado
+ALPHA_GAIT = 0.15      # 0..1 (más bajo = más suave)
+CAPS_DOWN_RATE = 0.05  # cuánto bajan por ciclo (rápido)
+CAPS_UP_RATE   = 0.02  # cuánto suben por ciclo (lento)
+
+# Modo adaptativo
+ADAPTIVE = {"enabled": False, "mode": "auto", "slip": False, "last_event": 0.0}
+
+# Presets de referencia
+GAIT_BASE = []  # vacío = NAOqi default
+GAIT_SLIPPERY_REF = [
+    ["MaxStepX", 0.020],
+    ["MaxStepTheta", 0.18],
+    ["Frequency", 0.45],
+    ["StepHeight", 0.034],
+]
+
+CAPS_NORMAL_REF = {"vx":0.80, "vy":0.60, "wz":0.60}  # “máximos” operativos normales
+CAPS_SLIPPERY_REF = {"vx":0.35, "vy":0.25, "wz":0.30}
+
+# ─── FSR/CoP especificación ───────────────────────────────────────────────────
+FSR_POS = {
+    "L": {"FL": (0.07025,  0.0299), "FR": (0.07025, -0.0231), "RL": (-0.03025,  0.0299), "RR": (-0.02965, -0.0191)},
+    "R": {"FL": (0.07025,  0.0231), "FR": (0.07025, -0.0299), "RL": (-0.03025,  0.0191), "RR": (-0.02965, -0.0299)},
+}
+
+FSR_KEYS = {
+    "L": {
+        "FL": "Device/SubDeviceList/LFoot/FSR/FrontLeft/Sensor/Value",
+        "FR": "Device/SubDeviceList/LFoot/FSR/FrontRight/Sensor/Value",
+        "RL": "Device/SubDeviceList/LFoot/FSR/RearLeft/Sensor/Value",
+        "RR": "Device/SubDeviceList/LFoot/FSR/RearRight/Sensor/Value",
+    },
+    "R": {
+        "FL": "Device/SubDeviceList/RFoot/FSR/FrontLeft/Sensor/Value",
+        "FR": "Device/SubDeviceList/RFoot/FSR/FrontRight/Sensor/Value",
+        "RL": "Device/SubDeviceList/RFoot/FSR/RearLeft/Sensor/Value",
+        "RR": "Device/SubDeviceList/RFoot/FSR/RearRight/Sensor/Value",
+    }
+}
+
+def _memf(key, default=0.0):
+    try:
+        return float(memory.getData(key))
+    except Exception:
+        return default
+
+def read_fsr_kg():
+    """Devuelve lecturas FSR en kg y sumas por pie y total."""
+    L = {sid: _memf(FSR_KEYS["L"][sid]) for sid in ("FL","FR","RL","RR")}
+    R = {sid: _memf(FSR_KEYS["R"][sid]) for sid in ("FL","FR","RL","RR")}
+    sumL = sum(L.values()); sumR = sum(R.values())
+    return L, R, sumL, sumR, (sumL + sumR)
+
+def foot_cop(foot, vals):
+    """Centro de presión (x,y) en el marco del tobillo para 'L' o 'R'."""
+    w = sum(vals.values())
+    if w <= 1e-3:
+        return (0.0, 0.0), 0.0
+    sx = 0.0; sy = 0.0
+    for sid, kg in vals.items():
+        x, y = FSR_POS[foot][sid]
+        sx += x * kg; sy += y * kg
+    return (sx / w, sy / w), w
+
 # ─── Watchdog ──────────────────────────────────────────────────────────────────
 _last_walk = time.time()
 def watchdog():
@@ -175,6 +289,141 @@ def watchdog():
 wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
+
+# ─── Bucle adaptativo FSR+IMU con histeresis y suavizado ──────────────────────
+def adaptive_loop():
+    log("Adapt", "Loop adaptativo iniciado")
+
+    # Filtros
+    alpha_sig = 0.20  # filtro señales IMU
+    filt_ax = 0.0
+    filt_pitch = 0.0
+
+    # CoP anteriores
+    prev_cop = {"L": (0.0, 0.0), "R": (0.0, 0.0)}
+    prev_t = time.time()
+
+    # Umbrales e histeresis
+    CONTACT_LOW = 3.0     # kg
+    COP_FWD_THR = 0.055   # m (adelante)
+    DCOP_THR    = 0.20    # m/s
+    PITCH_THR   = 0.14    # rad ~ 8°
+    THR_HIGH    = 0.75
+    THR_LOW     = 0.45
+    COOLDOWN    = 0.6     # s entre eventos fuertes
+
+    global GAIT_REF, GAIT_APPLIED, CAPS_REF, CAPS_APPLIED
+
+    # Iniciales
+    GAIT_REF = merge_pairs(GAIT_BASE, [])     # NAOqi default
+    GAIT_APPLIED = merge_pairs(GAIT_BASE, []) # arranca igual
+    CAPS_REF = dict(CAPS_NORMAL_REF)
+    CAPS_APPLIED = dict(CAPS_NORMAL_REF)
+
+    while True:
+        time.sleep(0.05)
+        now = time.time()
+        dt = max(1e-3, now - prev_t)
+
+        try:
+            # --- Sensores IMU
+            angle_x = _memf("Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value", 0.0)
+            gyro_x  = _memf("Device/SubDeviceList/InertialSensor/GyroscopeX/Sensor/Value", 0.0)
+            acc_x   = _memf("Device/SubDeviceList/InertialSensor/AccelerometerX/Sensor/Value", 0.0)
+
+            filt_pitch = ema(filt_pitch, angle_x, alpha_sig)
+            filt_ax    = ema(filt_ax,    acc_x,   alpha_sig)
+
+            # --- FSR
+            Lvals, Rvals, sumL, sumR, sumTot = read_fsr_kg()
+            copL, wL = foot_cop("L", Lvals)
+            copR, wR = foot_cop("R", Rvals)
+            dcopL = math.hypot(copL[0]-prev_cop["L"][0], copL[1]-prev_cop["L"][1]) / dt
+            dcopR = math.hypot(copR[0]-prev_cop["R"][0], copR[1]-prev_cop["R"][1]) / dt
+            prev_cop["L"] = copL; prev_cop["R"] = copR; prev_t = now
+
+            # --- score de slip (0..1)
+            comp_contact = 1.0 if sumTot < CONTACT_LOW else 0.0
+            comp_cop_fwd = max(0.0, max(copL[0], copR[0]) - COP_FWD_THR) / 0.03
+            comp_dcop    = max(dcopL, dcopR) / 0.35
+            comp_pitch   = max(0.0, filt_pitch - PITCH_THR) / 0.10
+            comp_inert   = max(comp_pitch, min(1.0, abs(gyro_x)/3.0, abs(filt_ax)/1.2))
+
+            # pesos
+            w_ct, w_cop, w_dc, w_in = 0.35, 0.30, 0.20, 0.15
+            score = clamp(w_ct*comp_contact + w_cop*comp_cop_fwd + w_dc*comp_dcop + w_in*comp_inert, 0.0, 1.0)
+
+            # --- histeresis
+            if ADAPTIVE["enabled"]:
+                if (score >= THR_HIGH) and (now - ADAPTIVE["last_event"] > COOLDOWN):
+                    ADAPTIVE["slip"] = True
+                    ADAPTIVE["last_event"] = now
+                elif score <= THR_LOW:
+                    ADAPTIVE["slip"] = False
+            else:
+                ADAPTIVE["slip"] = False
+
+            # --- referencias según modo
+            if ADAPTIVE["enabled"]:
+                # Ajuste lateral continuo: torsoWy del CoP medio
+                lat_bias = 0.0
+                if (wL + wR) > 1e-3:
+                    lat_bias = (copL[1]*wL + copR[1]*wR) / (wL + wR)
+                torso_wy = clamp(0.8 * lat_bias, -0.03, 0.03)
+
+                # Lean back suave si CoP va delante
+                lean_back = -0.015 if (max(copL[0], copR[0]) > COP_FWD_THR) else -0.005
+                step_h    = 0.036 if (max(copL[0], copR[0]) > COP_FWD_THR) else 0.032
+
+                # Base segun modo
+                if ADAPTIVE["mode"] == "slippery" or ADAPTIVE["slip"]:
+                    base = GAIT_SLIPPERY_REF
+                    caps_target = CAPS_SLIPPERY_REF
+                else:
+                    base = GAIT_BASE
+                    caps_target = CAPS_NORMAL_REF
+
+                inc = [
+                    ["TorsoWx", lean_back],
+                    ["TorsoWy", torso_wy],
+                    ["StepHeight", step_h],
+                ]
+                GAIT_REF = merge_pairs(base, inc)
+                CAPS_REF = dict(caps_target)
+            else:
+                GAIT_REF = merge_pairs(GAIT_BASE, [])
+                CAPS_REF = dict(CAPS_NORMAL_REF)
+
+            # --- suavizado hacia aplicado
+            # Gait: mezclamos por claves
+            ref_d = pairs_to_dict(GAIT_REF)
+            app_d = pairs_to_dict(GAIT_APPLIED) if GAIT_APPLIED else {}
+
+            all_keys = set(ref_d.keys()) | set(app_d.keys())
+            new_app = {}
+            for k in all_keys:
+                a = app_d.get(k, ref_d.get(k, 0.0))
+                b = ref_d.get(k, a)
+                new_app[k] = lerp(a, b, ALPHA_GAIT)
+            GAIT_APPLIED = dict_to_pairs(new_app)
+
+            # CAPS: rampas por componente
+            for k in ("vx","vy","wz"):
+                a = CAPS_APPLIED.get(k, 1.0)
+                b = CAPS_REF.get(k, 1.0)
+                if a > b:
+                    a = max(b, a - CAPS_DOWN_RATE)
+                else:
+                    a = min(b, a + CAPS_UP_RATE)
+                CAPS_APPLIED[k] = clamp(a, 0.0, 1.0)
+
+        except Exception as e:
+            log("Adapt", "Error adaptive_loop: %s" % e)
+
+# Lanzar el hilo adaptativo
+adap = threading.Thread(target=adaptive_loop)
+adap.setDaemon(True)
+adap.start()
 
 # ─── Limpieza de suscripciones y procesos ─────────────────────────────────────
 web_proc = None
@@ -231,9 +480,10 @@ signal.signal(signal.SIGTERM, cleanup)
 class RobotWS(WebSocket):
     def handleConnected(self):
         log("WS", "Conectado %s" % (self.address,))
-        # Al conectar, reporta config actual
+        # Al conectar, reporta config actual (aplicada) para no romper clientes
         try:
-            self.sendMessage(json.dumps({"gait": CURRENT_GAIT, "caps": CAP_LIMITS}))
+            self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT,
+                                         "caps": CAPS_APPLIED}))
         except Exception:
             pass
 
@@ -241,7 +491,7 @@ class RobotWS(WebSocket):
         log("WS", "Desconectado %s" % (self.address,))
 
     def handleMessage(self):
-        global _last_walk, CURRENT_GAIT, CAP_LIMITS
+        global _last_walk, CURRENT_GAIT, CAP_LIMITS, GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF
         raw = self.data.strip()
         log("WS", "Recibido RAW: %s" % raw)
         try:
@@ -252,30 +502,47 @@ class RobotWS(WebSocket):
 
         action = msg.get("action")
         try:
-            # ── Caminar reactivo con gait actual + caps ────────────────────────
+            # ── Caminar reactivo con gait actual + caps (suavizados) ──────────
             if action == "walk":
                 vx, vy, wz = map(float, (msg.get("vx",0), msg.get("vy",0), msg.get("wz",0)))
                 # Normaliza magnitud del vector (x,y) si excede 1.0
                 norm = math.hypot(vx, vy)
                 if norm > 1.0:
                     vx, vy = vx/norm, vy/norm
-                # Aplica CAPs
-                vx = max(-CAP_LIMITS["vx"], min(CAP_LIMITS["vx"], vx))
-                vy = max(-CAP_LIMITS["vy"], min(CAP_LIMITS["vy"], vy))
-                wz = max(-CAP_LIMITS["wz"], min(CAP_LIMITS["wz"], wz))
 
-                move_cfg = _config_to_move_list(CURRENT_GAIT)
+                # Aplicar CAPS suavizados
+                vx = max(-CAPS_APPLIED["vx"], min(CAPS_APPLIED["vx"], vx))
+                vy = max(-CAPS_APPLIED["vy"], min(CAPS_APPLIED["vy"], vy))
+                wz = max(-CAPS_APPLIED["wz"], min(CAPS_APPLIED["wz"], wz))
+
+                # CNN Adaptativa: Predecir parámetros de marcha óptimos
+                adaptive_cfg = None
+                if ADAPTIVE_WALK_ENABLED and adaptive_walker:
+                    try:
+                        adaptive_params = adaptive_walker.adapt_gait(vx, vy, wz)
+                        if adaptive_params:
+                            adaptive_cfg = _config_to_move_list(adaptive_params)
+                            logger.debug("CNN adaptativa: {}".format(adaptive_params))
+                            # Aplicar parámetros CNN al motion
+                            adaptive_walker.apply_gait_params(adaptive_params)
+                    except Exception as e:
+                        logger.warning("Error en CNN adaptativa: {}".format(e))
+
+                # Usar configuración adaptativa si está disponible, sino la configuración actual
+                move_cfg = adaptive_cfg if adaptive_cfg else _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                 _apply_moveToward(vx, vy, wz, move_cfg)
                 _last_walk = time.time()
-                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s" %
-                    (vx, vy, wz, move_cfg, CAP_LIMITS))
+                
+                cfg_source = "CNN" if adaptive_cfg else "Manual"
+                log("SIM", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s [%s]" %
+                    (vx, vy, wz, move_cfg, CAPS_APPLIED, cfg_source))
 
             # ── Caminar a un objetivo (bloqueante) con mismo gait ─────────────
             elif action == "walkTo":
                 x = float(msg.get("x", 0.0))
                 y = float(msg.get("y", 0.0))
                 theta = float(msg.get("theta", 0.0))
-                move_cfg = _config_to_move_list(CURRENT_GAIT)
+                move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                 try:
                     motion.moveTo(x, y, theta, move_cfg)
                 except Exception as e:
@@ -283,19 +550,21 @@ class RobotWS(WebSocket):
                     motion.moveTo(x, y, theta)
                 log("SIM", "moveTo(x=%.2f,y=%.2f,th=%.2f)" % (x,y,theta))
 
-            # ── Seteo de Gait (único mecanismo de cambio de marcha) ───────────
+            # ── Seteo de Gait (manual por WS) ─────────────────────────────────
             elif action == "gait":
                 user_cfg = msg.get("config", {})
                 # admite dict {"StepHeight":0.03,...} o lista [["StepHeight",0.03],...]
                 if not isinstance(user_cfg, (dict, list)):
                     raise ValueError("config debe ser dict o lista de pares")
                 CURRENT_GAIT = _config_to_move_list(user_cfg)
+                # si hay adaptativo encendido, consideramos el CURRENT_GAIT como base
+                GAIT_REF = merge_pairs(CURRENT_GAIT, [])
                 self.sendMessage(json.dumps({"gaitApplied": CURRENT_GAIT}))
-                log("Gait", "Nuevo gait config = %s" % CURRENT_GAIT)
+                log("Gait", "Nuevo gait config (manual) = %s" % CURRENT_GAIT)
 
             elif action == "getGait":
-                self.sendMessage(json.dumps({"gait": CURRENT_GAIT}))
-                log("Gait", "getGait → %s" % CURRENT_GAIT)
+                self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT}))
+                log("Gait", "getGait → %s" % (GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT))
 
             # ── Seteo/consulta de CAPs de velocidad ───────────────────────────
             elif action == "caps":
@@ -313,21 +582,26 @@ class RobotWS(WebSocket):
                 updated = {}
                 if vx is not None:
                     CAP_LIMITS["vx"] = clamp01(vx); updated["vx"] = CAP_LIMITS["vx"]
+                    CAPS_REF["vx"] = min(CAPS_REF.get("vx",1.0), CAP_LIMITS["vx"])
                 if vy is not None:
                     CAP_LIMITS["vy"] = clamp01(vy); updated["vy"] = CAP_LIMITS["vy"]
+                    CAPS_REF["vy"] = min(CAPS_REF.get("vy",1.0), CAP_LIMITS["vy"])
                 if wz is not None:
                     CAP_LIMITS["wz"] = clamp01(wz); updated["wz"] = CAP_LIMITS["wz"]
-                self.sendMessage(json.dumps({"caps": CAP_LIMITS, "updated": updated}))
-                log("Caps", "CAP_LIMITS = %s (updated %s)" % (CAP_LIMITS, updated))
+                    CAPS_REF["wz"] = min(CAPS_REF.get("wz",1.0), CAP_LIMITS["wz"])
+                self.sendMessage(json.dumps({"caps": CAPS_APPLIED, "updated": updated}))
+                log("Caps", "CAP_LIMITS(user) = %s ; caps_applied=%s" % (CAP_LIMITS, CAPS_APPLIED))
 
             elif action == "getCaps":
-                self.sendMessage(json.dumps({"caps": CAP_LIMITS}))
-                log("Caps", "getCaps → %s" % CAP_LIMITS)
+                self.sendMessage(json.dumps({"caps": CAPS_APPLIED}))
+                log("Caps", "getCaps → %s" % CAPS_APPLIED)
 
             # ── Atajo para leer todo de una ───────────────────────────────────
             elif action == "getConfig":
-                self.sendMessage(json.dumps({"gait": CURRENT_GAIT, "caps": CAP_LIMITS}))
-                log("Config", "getConfig → gait=%s caps=%s" % (CURRENT_GAIT, CAP_LIMITS))
+                self.sendMessage(json.dumps({"gait": (GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT),
+                                             "caps": CAPS_APPLIED,
+                                             "adaptive": ADAPTIVE}))
+                log("Config", "getConfig → gait=%s caps=%s adaptive=%s" % ((GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT), CAPS_APPLIED, ADAPTIVE))
 
             # ── Protecciones de pie ───────────────────────────────────────────
             elif action == "footProtection":
@@ -352,7 +626,15 @@ class RobotWS(WebSocket):
             # ── LEDs ──────────────────────────────────────────────────────────
             elif action == "led":
                 grp = msg.get("group", "ChestLeds")
-                if isinstance(grp, unicode): grp = grp.encode('utf-8')
+                try:
+                    unicode_type = unicode
+                except NameError:
+                    unicode_type = str
+                if isinstance(grp, unicode_type):
+                    try:
+                        grp = grp.encode('utf-8')
+                    except Exception:
+                        pass
                 r, g, b = map(float, (msg.get("r",0), msg.get("g",0), msg.get("b",0)))
                 duration = float(msg.get("duration", 0.0))
                 rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
@@ -410,10 +692,8 @@ class RobotWS(WebSocket):
             # ── Nuevo: ejecutar behavior "siu" (o buscar por substring "siu") ───
             elif action == "siu":
                 try:
-                    # nombre preferido del behavior (ajusta si conoces el path exacto)
                     behavior_name = "siu-17777b/behavior_1"
                     if behavior.isBehaviorInstalled(behavior_name):
-                        # detener otros behaviors en ejecución
                         for bhv in behavior.getRunningBehaviors():
                             try:
                                 behavior.stopBehavior(bhv)
@@ -426,7 +706,6 @@ class RobotWS(WebSocket):
                         except Exception:
                             pass
                     else:
-                        # buscar cualquier behavior que contenga "siu" en el nombre
                         installed = behavior.getInstalledBehaviors()
                         matches = [b for b in installed if "siu" in b.lower()]
                         if matches:
@@ -461,7 +740,6 @@ class RobotWS(WebSocket):
                     bname = msg.get("behavior", "")
                     if not bname:
                         raise ValueError("Se esperaba 'behavior' en el mensaje")
-                    # si el cliente pasa un nombre parcial, intentar match por substring
                     if behavior.isBehaviorInstalled(bname):
                         target = bname
                     else:
@@ -474,7 +752,6 @@ class RobotWS(WebSocket):
                             self.sendMessage(json.dumps({"runBehavior": "not_found", "query": bname}))
                             target = None
                     if target:
-                        # detener behaviors activos
                         for bhv in behavior.getRunningBehaviors():
                             try:
                                 behavior.stopBehavior(bhv)
@@ -515,6 +792,59 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     log("WS", "Error getAutonomousLife: %s" % e)
                     self.sendMessage(json.dumps({"autonomousLifeEnabled": False}))
+
+            # ── Activar / configurar modo adaptativo ─────────────────────────
+            elif action == "adaptiveGait":
+                enable = bool(msg.get("enable", True))
+                mode = str(msg.get("mode", ADAPTIVE["mode"]))
+                ADAPTIVE["enabled"] = enable
+                if mode in ("auto", "slippery"):
+                    ADAPTIVE["mode"] = mode
+                ADAPTIVE["last_event"] = 0.0  # reset suave
+                self.sendMessage(json.dumps({"adaptiveGait": {"enabled": ADAPTIVE["enabled"], "mode": ADAPTIVE["mode"]}}))
+                log("Adapt", "adaptiveGait → enabled=%s mode=%s" % (ADAPTIVE["enabled"], ADAPTIVE["mode"]))
+
+            # ── Control CNN Adaptativa ────────────────────────────────────────
+            elif action == "adaptiveCNN":
+                try:
+                    enable = msg.get("enabled", True)
+                    if adaptive_walker:
+                        adaptive_walker.adaptation_enabled = enable
+                        stats = adaptive_walker.get_stats()
+                        self.sendMessage(json.dumps({
+                            "adaptiveCNN": {
+                                "enabled": enable,
+                                "available": ADAPTIVE_WALK_ENABLED,
+                                "stats": stats
+                            }
+                        }))
+                        logger.info("CNN adaptativa {} - Stats: {}".format(
+                            "habilitada" if enable else "deshabilitada", stats))
+                    else:
+                        self.sendMessage(json.dumps({
+                            "adaptiveCNN": {
+                                "enabled": False,
+                                "available": False,
+                                "error": "CNN no disponible"
+                            }
+                        }))
+                        logger.warning("CNN adaptativa no disponible")
+                except Exception as e:
+                    logger.error("Error controlando CNN: {}".format(e))
+                    self.sendMessage(json.dumps({"adaptiveCNN": {"error": str(e)}}))
+
+            # ── Estadísticas CNN Adaptativa ───────────────────────────────────
+            elif action == "getCNNStats":
+                try:
+                    if adaptive_walker:
+                        stats = adaptive_walker.get_stats()
+                        self.sendMessage(json.dumps({"cnnStats": stats}))
+                        logger.debug("Estadísticas CNN enviadas: {}".format(stats))
+                    else:
+                        self.sendMessage(json.dumps({"cnnStats": {"available": False}}))
+                except Exception as e:
+                    logger.error("Error obteniendo estadísticas CNN: {}".format(e))
+                    self.sendMessage(json.dumps({"cnnStats": {"error": str(e)}}))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
