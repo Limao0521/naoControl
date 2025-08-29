@@ -1,17 +1,16 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-data_logger_xgboost.py - Logger de datos para entrenamiento de modelos XGBoost
+data_logger.py - Generic data logger for gait training datasets
 
-Recolecta datos de sensores y parámetros de marcha para entrenar los modelos XGBoost.
-Guarda datos en formato CSV compatible con train_xgboost_gait.py
+Creates CSV datasets with inertial, foot pressure and gait-parameter columns.
+Designed to run on NAO (Python 2.7) and on desktop (Python 3.x) for data collection.
 
-Requisitos:
-  - Python 2.7 en NAO
-  - NAOqi SDK disponible (ALMotion/ALMemory)
+Usage (example):
+  python data_logger.py --output ./datasets/walk_session.csv --duration 300 --frequency 10
 
-Uso:
-  python2 data_logger_xgboost.py --output /home/nao/datasets/walk_session.csv --duration 300
+This module replaces the older data_logger_xgboost.py and is agnostic to the
+machine-learning model used later (RandomForest, XGBoost, etc.).
 """
 
 from __future__ import print_function
@@ -20,16 +19,16 @@ import sys
 import csv
 import time
 import argparse
+import io
 from datetime import datetime
 
 try:
     from naoqi import ALProxy
     NAOQI_AVAILABLE = True
-except ImportError:
+except Exception:
     NAOQI_AVAILABLE = False
-    print("[WARN] NAOqi no disponible - modo simulación")
 
-# Orden de features para XGBoost (debe coincidir con train_xgboost_gait.py)
+# Order of features (kept compatible with earlier tools)
 FEAT_ORDER = [
     'accel_x','accel_y','accel_z',
     'gyro_x','gyro_y','gyro_z',
@@ -41,27 +40,26 @@ FEAT_ORDER = [
 
 GAIT_PARAMS = ['StepHeight','MaxStepX','MaxStepY','MaxStepTheta','Frequency']
 
-class SensorReader:
-    """Lector de sensores del robot NAO"""
-    
+
+class SensorReader(object):
+    """Reads sensors from NAO (or simulates values when NAOqi not available)."""
+
     def __init__(self, nao_ip="127.0.0.1", nao_port=9559):
         self.motion = None
         self.memory = None
-        
         if NAOQI_AVAILABLE:
             try:
                 self.motion = ALProxy("ALMotion", nao_ip, nao_port)
                 self.memory = ALProxy("ALMemory", nao_ip, nao_port)
-                print("[INFO] Conectado a NAOqi en %s:%d" % (nao_ip, nao_port))
+                print("[INFO] Connected to NAOqi on %s:%d" % (nao_ip, nao_port))
             except Exception as e:
-                print("[ERROR] No se pudo conectar a NAOqi: %s" % e)
+                print("[WARN] Could not connect to NAOqi: %s" % e)
                 self.motion = None
                 self.memory = None
-        
+
         self.last_gait_params = self._get_default_gait_params()
-        
+
     def _get_default_gait_params(self):
-        """Parámetros de marcha por defecto"""
         return {
             'StepHeight': 0.025,
             'MaxStepX': 0.04,
@@ -69,9 +67,8 @@ class SensorReader:
             'MaxStepTheta': 0.35,
             'Frequency': 1.0
         }
-    
+
     def _safe_get_sensor(self, key, default=0.0):
-        """Lectura segura de sensor con valor por defecto"""
         if self.memory is None:
             return default
         try:
@@ -79,84 +76,48 @@ class SensorReader:
             return float(value) if value is not None else default
         except Exception:
             return default
-    
+
     def get_inertial_data(self):
-        """Lee datos de sensores inerciales"""
         data = {}
-        
-        # Acelerómetros
         data['accel_x'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/AccX/Sensor/Value", 0.0)
         data['accel_y'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/AccY/Sensor/Value", 0.0)
         data['accel_z'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/AccZ/Sensor/Value", 9.81)
-        
-        # Giroscopios
         data['gyro_x'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/GyrX/Sensor/Value", 0.0)
         data['gyro_y'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/GyrY/Sensor/Value", 0.0)
         data['gyro_z'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/GyrZ/Sensor/Value", 0.0)
-        
-        # Ángulos
         data['angle_x'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/AngleX/Sensor/Value", 0.0)
         data['angle_y'] = self._safe_get_sensor("Device/SubDeviceList/InertialSensor/AngleY/Sensor/Value", 0.0)
-        
         return data
-    
+
     def get_foot_pressure_data(self):
-        """Lee datos de sensores de presión de pies"""
         data = {}
-        
-        # Pie izquierdo
         data['lfoot_fl'] = self._safe_get_sensor("Device/SubDeviceList/LFoot/Bumper/Left/Sensor/Value", 0.0)
         data['lfoot_fr'] = self._safe_get_sensor("Device/SubDeviceList/LFoot/Bumper/Right/Sensor/Value", 0.0)
-        data['lfoot_rl'] = self._safe_get_sensor("Device/SubDeviceList/LFoot/Bumper/Left/Sensor/Value", 0.0)  # Repetir por compatibilidad
+        data['lfoot_rl'] = self._safe_get_sensor("Device/SubDeviceList/LFoot/Bumper/Left/Sensor/Value", 0.0)
         data['lfoot_rr'] = self._safe_get_sensor("Device/SubDeviceList/LFoot/Bumper/Right/Sensor/Value", 0.0)
-        
-        # Pie derecho
         data['rfoot_fl'] = self._safe_get_sensor("Device/SubDeviceList/RFoot/Bumper/Left/Sensor/Value", 0.0)
         data['rfoot_fr'] = self._safe_get_sensor("Device/SubDeviceList/RFoot/Bumper/Right/Sensor/Value", 0.0)
-        data['rfoot_rl'] = self._safe_get_sensor("Device/SubDeviceList/RFoot/Bumper/Left/Sensor/Value", 0.0)   # Repetir por compatibilidad
+        data['rfoot_rl'] = self._safe_get_sensor("Device/SubDeviceList/RFoot/Bumper/Left/Sensor/Value", 0.0)
         data['rfoot_rr'] = self._safe_get_sensor("Device/SubDeviceList/RFoot/Bumper/Right/Sensor/Value", 0.0)
-        
         return data
-    
+
     def get_velocity_data(self):
-        """Estima datos de velocidad (simplificado)"""
-        # En un sistema real, esto vendría de odometría o estimación de movimiento
-        return {
-            'vx': 0.0,      # Velocidad lineal X
-            'vy': 0.0,      # Velocidad lineal Y  
-            'wz': 0.0,      # Velocidad angular Z
-            'vtotal': 0.0   # Velocidad total
-        }
-    
+        return {'vx': 0.0, 'vy': 0.0, 'wz': 0.0, 'vtotal': 0.0}
+
     def get_current_gait_params(self):
-        """Obtiene parámetros de marcha actuales"""
         if self.motion is None:
             return self.last_gait_params.copy()
-        
         try:
-            # Intentar leer configuración actual de ALMotion
-            # Nota: Esto puede variar según la versión de NAOqi
-            current_params = self.last_gait_params.copy()
-            
-            # Aquí podrías leer los parámetros reales si NAOqi los expone
-            # Por ahora devolvemos los últimos conocidos
-            return current_params
-            
-        except Exception as e:
-            print("[WARN] No se pudieron leer parámetros de marcha: %s" % e)
             return self.last_gait_params.copy()
-    
+        except Exception:
+            return self.last_gait_params.copy()
+
     def set_gait_params(self, params):
-        """Establece nuevos parámetros de marcha"""
         if self.motion is None:
-            print("[WARN] No hay conexión ALMotion - guardando parámetros localmente")
             self.last_gait_params.update(params)
             return False
-        
         try:
-            # Convertir a formato NAOqi
             config_list = []
-            
             if 'StepHeight' in params:
                 config_list.append(["StepHeight", float(params['StepHeight'])])
             if 'MaxStepX' in params:
@@ -167,177 +128,146 @@ class SensorReader:
                 config_list.append(["MaxStepTheta", float(params['MaxStepTheta'])])
             if 'Frequency' in params:
                 config_list.append(["MaxStepFrequency", float(params['Frequency'])])
-            
             self.motion.setMoveConfig(config_list)
             self.last_gait_params.update(params)
             return True
-            
-        except Exception as e:
-            print("[ERROR] No se pudieron aplicar parámetros de marcha: %s" % e)
+        except Exception:
             return False
-    
+
     def get_complete_sample(self):
-        """Obtiene una muestra completa con todos los datos"""
         sample = {}
-        
-        # Agregar sensores inerciales
         sample.update(self.get_inertial_data())
-        
-        # Agregar sensores de presión
         sample.update(self.get_foot_pressure_data())
-        
-        # Agregar velocidades
         sample.update(self.get_velocity_data())
-        
-        # Agregar parámetros de marcha actuales
         sample.update(self.get_current_gait_params())
-        
-        # Agregar timestamp
         sample['timestamp'] = time.time()
-        
         return sample
 
-class DataLogger:
-    """Logger de datos para entrenamiento XGBoost"""
-    
+
+class DataLogger(object):
+    """Generic CSV data logger for gait samples."""
+
     def __init__(self, output_file, sensor_reader):
         self.output_file = output_file
         self.sensor_reader = sensor_reader
         self.csv_writer = None
         self.csv_file = None
         self.samples_written = 0
-        
-        # Crear directorio si no existe
+
         output_dir = os.path.dirname(output_file)
         if output_dir and not os.path.exists(output_dir):
             os.makedirs(output_dir)
-    
+
+    def _open_csv(self):
+        # Python 3: newline='' to avoid extra blank lines; Python 2: binary mode
+        if sys.version_info[0] >= 3:
+            return open(self.output_file, 'w', newline='')
+        else:
+            return open(self.output_file, 'wb')
+
     def start_logging(self):
-        """Inicia el logging a archivo CSV"""
         try:
-            self.csv_file = open(self.output_file, 'wb')
-            
-            # Crear header: features + gait params + timestamp
+            self.csv_file = self._open_csv()
             fieldnames = FEAT_ORDER + GAIT_PARAMS + ['timestamp']
-            
-            self.csv_writer = csv.DictWriter(
-                self.csv_file, 
-                fieldnames=fieldnames,
-                extrasaction='ignore'  # Ignorar campos extra
-            )
-            
+            self.csv_writer = csv.DictWriter(self.csv_file, fieldnames=fieldnames, extrasaction='ignore')
             self.csv_writer.writeheader()
-            print("[INFO] Logging iniciado: %s" % self.output_file)
+            print('[INFO] Logging started -> %s' % self.output_file)
             return True
-            
         except Exception as e:
-            print("[ERROR] No se pudo iniciar logging: %s" % e)
+            print('[ERROR] Could not start logging: %s' % e)
             return False
-    
+
     def log_sample(self):
-        """Registra una muestra de datos"""
         if self.csv_writer is None:
             return False
-        
         try:
             sample = self.sensor_reader.get_complete_sample()
+            # Ensure only expected fields are passed (DictWriter extrasaction='ignore')
             self.csv_writer.writerow(sample)
-            self.csv_file.flush()  # Asegurar escritura inmediata
+            try:
+                self.csv_file.flush()
+            except Exception:
+                pass
             self.samples_written += 1
             return True
-            
         except Exception as e:
-            print("[ERROR] Error escribiendo muestra: %s" % e)
+            print('[ERROR] Error writing sample: %s' % e)
             return False
-    
+
     def stop_logging(self):
-        """Detiene el logging"""
         if self.csv_file:
-            self.csv_file.close()
+            try:
+                self.csv_file.close()
+            except Exception:
+                pass
             self.csv_file = None
             self.csv_writer = None
-        
-        print("[INFO] Logging detenido. Muestras escritas: %d" % self.samples_written)
+        print('[INFO] Logging stopped. Samples written: %d' % self.samples_written)
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Logger de datos para entrenamiento XGBoost")
-    parser.add_argument('--output', required=True, help='Archivo CSV de salida')
-    parser.add_argument('--duration', type=float, default=60.0, help='Duración en segundos (0=infinito)')
-    parser.add_argument('--frequency', type=float, default=10.0, help='Frecuencia de muestreo (Hz)')
-    parser.add_argument('--nao-ip', default='127.0.0.1', help='IP del robot NAO')
-    parser.add_argument('--nao-port', type=int, default=9559, help='Puerto NAOqi')
-    parser.add_argument('--verbose', action='store_true', help='Output detallado')
-    
+    parser = argparse.ArgumentParser(description='Data logger for gait training datasets')
+    parser.add_argument('--output', required=True, help='Output CSV file')
+    parser.add_argument('--duration', type=float, default=60.0, help='Duration in seconds (0=infinite)')
+    parser.add_argument('--frequency', type=float, default=10.0, help='Sampling frequency (Hz)')
+    parser.add_argument('--nao-ip', default='127.0.0.1', help='NAO IP')
+    parser.add_argument('--nao-port', type=int, default=9559, help='NAOqi port')
+    parser.add_argument('--verbose', action='store_true', help='Verbose output')
     args = parser.parse_args()
-    
-    # Validar parámetros
+
     if args.frequency <= 0:
-        print("[ERROR] Frecuencia debe ser > 0")
+        print('[ERROR] frequency must be > 0')
         sys.exit(1)
-    
+
     sample_period = 1.0 / args.frequency
-    
-    print("=== Data Logger XGBoost ===")
-    print("Archivo de salida: %s" % args.output)
-    print("Duración: %s segundos" % ("infinita" if args.duration <= 0 else str(args.duration)))
-    print("Frecuencia: %.1f Hz (periodo: %.3f s)" % (args.frequency, sample_period))
-    print("Robot: %s:%d" % (args.nao_ip, args.nao_port))
-    
-    # Inicializar componentes
+
+    print('=== Data Logger ===')
+    print('Output: %s' % args.output)
+    print('Duration: %s' % ('infinite' if args.duration <= 0 else str(args.duration)))
+    print('Frequency: %.1f Hz' % args.frequency)
+
     sensor_reader = SensorReader(args.nao_ip, args.nao_port)
     data_logger = DataLogger(args.output, sensor_reader)
-    
+
     if not data_logger.start_logging():
-        print("[ERROR] No se pudo iniciar el logging")
         sys.exit(1)
-    
-    # Loop principal de muestreo
+
     start_time = time.time()
     last_sample_time = 0
-    
+
     try:
-        print("\\n[INFO] Iniciando recolección de datos... (Ctrl+C para parar)")
-        
+        print('\n[INFO] Starting data collection... (Ctrl+C to stop)')
         while True:
             current_time = time.time()
-            
-            # Verificar si es hora de tomar una muestra
             if current_time - last_sample_time >= sample_period:
                 if data_logger.log_sample():
                     last_sample_time = current_time
-                    
                     if args.verbose:
                         elapsed = current_time - start_time
-                        print("  Muestra %d (t=%.1fs)" % (data_logger.samples_written, elapsed))
+                        print('  Sample %d (t=%.1fs)' % (data_logger.samples_written, elapsed))
                 else:
-                    print("[WARN] Error en muestra %d" % (data_logger.samples_written + 1))
-            
-            # Verificar duración
+                    print('[WARN] Error logging sample %d' % (data_logger.samples_written + 1))
+
             if args.duration > 0 and (current_time - start_time) >= args.duration:
-                print("\\n[INFO] Duración completada")
+                print('\n[INFO] Duration completed')
                 break
-            
-            # Pequeña pausa para no saturar CPU
+
             time.sleep(0.01)
-    
+
     except KeyboardInterrupt:
-        print("\\n[INFO] Detenido por usuario")
-    
+        print('\n[INFO] Stopped by user')
     except Exception as e:
-        print("\\n[ERROR] Error inesperado: %s" % e)
-    
+        print('\n[ERROR] Unexpected error: %s' % e)
     finally:
         data_logger.stop_logging()
-        
-        # Estadísticas finales
         elapsed_total = time.time() - start_time
         if elapsed_total > 0:
-            actual_frequency = data_logger.samples_written / elapsed_total
-            print("\\nEstadísticas:")
-            print("  Tiempo total: %.1f segundos" % elapsed_total)
-            print("  Muestras: %d" % data_logger.samples_written)
-            print("  Frecuencia real: %.2f Hz" % actual_frequency)
-            print("  Archivo: %s" % args.output)
+            actual_frequency = float(data_logger.samples_written) / elapsed_total
+            print('\nStats:')
+            print('  Total time: %.1f s' % elapsed_total)
+            print('  Samples: %d' % data_logger.samples_written)
+            print('  Real frequency: %.2f Hz' % actual_frequency)
+
 
 if __name__ == '__main__':
     main()
