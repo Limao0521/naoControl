@@ -1,0 +1,74 @@
+Random Forest Evaluation Report
+==================================================
+Timestamp: 2025-08-29T10:51:54.419351
+Models directory: models/
+
+Parameter: StepHeight
+------------------------------
+Physical space metrics:
+  R² Score:    -270883.6719
+  RMSE:        0.013983
+  MAE:         0.013983
+  MAPE:        55.97%
+
+Normalized space metrics:
+  R² Score:    -270883.6719
+  RMSE:        0.349572
+  MAE:         0.349571
+
+Parameter: MaxStepX
+------------------------------
+Physical space metrics:
+  R² Score:    -63102.4706
+  RMSE:        0.017556
+  MAE:         0.017556
+  MAPE:        43.94%
+
+Normalized space metrics:
+  R² Score:    -63102.4706
+  RMSE:        0.292607
+  MAE:         0.292605
+
+Parameter: MaxStepY
+------------------------------
+Physical space metrics:
+  R² Score:    -2.7052
+  RMSE:        0.130009
+  MAE:         0.115550
+  MAPE:        48.27%
+
+Normalized space metrics:
+  R² Score:    -7.3464
+  RMSE:        0.654851
+  MAE:         0.629972
+
+Parameter: MaxStepTheta
+------------------------------
+Physical space metrics:
+  R² Score:    -6811675.1993
+  RMSE:        0.080012
+  MAE:         0.080012
+  MAPE:        26.67%
+
+Normalized space metrics:
+  R² Score:    -6811675.1993
+  RMSE:        0.200030
+  MAE:         0.200030
+
+Parameter: Frequency
+------------------------------
+Physical space metrics:
+  R² Score:    -111548.6166
+  RMSE:        0.260152
+  MAE:         0.260152
+  MAPE:        32.54%
+
+Normalized space metrics:
+  R² Score:    -111548.6166
+  RMSE:        0.371645
+  MAE:         0.371645
+
+Average Performance:
+  R² Score:    -1451442.5327
+  RMSE:        0.100342
+  MAPE:        41.48%

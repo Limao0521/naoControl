@@ -8,54 +8,33 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick,
     volume, getBattery, getAutonomousLife, turnLeft, turnRight,
-    adaptiveGait, adaptiveRandomForest, getRandomForestStats,
+    adaptiveGait, adaptiveLightGBM, getLightGBMStats,
     startLogging, stopLogging, getLoggingStatus, logSample ← NEW
 
-• Watchdog detiene la marcha si no recibe walk en WATCHDOG s
+• Watchdog            elif action == "move":
+                joint = msg.get("joint","")
+                val   = float(msg.get("value",0))
+                motion.setAngles(str(joint), val, 0.1)
+                log("Move", "setAngles(%s, %.2f)" % (joint,val))ne la marcha si no recibe walk en WATCHDOG s
 
 Cambios clave (versión "single-config + adaptive"):
 - Único conjunto de parámetros de marcha (gait) modificable por WS.
 - CAPs (vx,vy,wz) editables por WS.
 - NUEVO: Bucle adaptativo que lee FSR + IMU, calcula CoP y ajusta marcha
   suavemente (sin saltos) con histeresis y rampas en velocidades.
-- Soporte para RandomForest adaptativo con logging CSV
+- Soporte para LightGBM AutoML adaptativo con logging CSV
 - Control de data logger integrado para generar datasets de entrenamiento
 """
 
 from __future__ import print_function
 import sys, os, time, math, threading, json, socket, errno, subprocess, signal
 from datetime import datetime
-
-# ─── Imports robóticos ────────────────────────────────────────────────────────
-try:
-    from naoqi import ALProxy
-except ImportError:
-    print("NAOqi no disponible; usando proxy dummy")
-    class ALProxy:
-        def __init__(self, service, ip="127.0.0.1", port=9559):
-            self.service = service
-            self.ip = ip
-            self.port = port
-        
-        def __getattr__(self, name):
-            def dummy_method(*args, **kwargs):
-                print("[DUMMY %s] %s(*%s, **%s)" % (self.service, name, args, kwargs))
-                return None
-            return dummy_method
+from naoqi import ALProxy
 
 # ───── Rutas WS local ───────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, "/home/nao/SimpleWebSocketServer-0.1.2")
-# Agregar path para desarrollo local
-local_ws_path = os.path.join(os.path.dirname(__file__), "..", "NaoControlInstaller", "payload", "SimpleWebSocketServer-0.1.2")
-if os.path.exists(local_ws_path):
-    sys.path.insert(0, local_ws_path)
-
-try:
-    from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
-except ImportError:
-    print("SimpleWebSocketServer no disponible")
-    sys.exit(1)
+from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 
 # Importar sistema de logging
 try:
@@ -79,17 +58,6 @@ WATCHDOG   = 0.6
 WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
 HTTP_PORT  = "8000"
 
-# Importar RandomForest de caminata adaptativa
-try:
-    from adaptive_walk_randomforest import AdaptiveWalkRandomForest
-    adaptive_walker = AdaptiveWalkRandomForest()
-    logger.info("RandomForest de caminata adaptativa inicializada")
-    ADAPTIVE_WALK_ENABLED = True
-except (ImportError, AttributeError, SyntaxError) as e:
-    logger.warning("RandomForest adaptativo no disponible: {}".format(e))
-    adaptive_walker = None
-    ADAPTIVE_WALK_ENABLED = False
-
 # Importar data logger
 try:
     from data_logger import DataLogger, SensorReader
@@ -98,6 +66,17 @@ try:
 except (ImportError, AttributeError) as e:
     logger.warning("Data logger no disponible: {}".format(e))
     DATA_LOGGER_AVAILABLE = False
+
+# Importar LightGBM AutoML de caminata adaptativa
+try:
+    from adaptive_walk_lightgbm_nao import AdaptiveWalkLightGBM
+    adaptive_walker = AdaptiveWalkLightGBM("models_npz_automl")
+    logger.info("LightGBM AutoML de caminata adaptativa inicializada")
+    ADAPTIVE_WALK_ENABLED = True
+except (ImportError, AttributeError, SyntaxError) as e:
+    logger.warning("LightGBM AutoML adaptativo no disponible: {}".format(e))
+    adaptive_walker = None
+    ADAPTIVE_WALK_ENABLED = False
 
 def log(tag, msg):
     """Función de logging mejorada que usa el sistema centralizado"""
@@ -118,62 +97,57 @@ def log(tag, msg):
 # ───── Proxies NAOqi ───────────────────────────────────────────────────────────
 logger.info("Inicializando proxies NAOqi...")
 try:
-    motion_proxy = ALProxy("ALMotion", IP_NAO, PORT_NAO)
-    posture_proxy = ALProxy("ALRobotPosture", IP_NAO, PORT_NAO)
-    autonomous_proxy = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
-    leds_proxy = ALProxy("ALLeds", IP_NAO, PORT_NAO)
-    tts_proxy = ALProxy("ALTextToSpeech", IP_NAO, PORT_NAO)
-    battery_proxy = ALProxy("ALBattery", IP_NAO, PORT_NAO)
-    memory_proxy = ALProxy("ALMemory", IP_NAO, PORT_NAO)
-    audio_proxy = ALProxy("ALAudioDevice", IP_NAO, PORT_NAO)
-    behavior_proxy = ALProxy("ALBehaviorManager", IP_NAO, PORT_NAO)
-    fall_manager_proxy = ALProxy("ALFallManager", IP_NAO, PORT_NAO)
+    motion     = ALProxy("ALMotion",         IP_NAO, PORT_NAO)
+    posture    = ALProxy("ALRobotPosture",   IP_NAO, PORT_NAO)
+    life       = ALProxy("ALAutonomousLife", IP_NAO, PORT_NAO)
+    leds       = ALProxy("ALLeds",           IP_NAO, PORT_NAO)
+    tts        = ALProxy("ALTextToSpeech",   IP_NAO, PORT_NAO)
+    battery    = ALProxy("ALBattery",        IP_NAO, PORT_NAO)
+    memory     = ALProxy("ALMemory",         IP_NAO, PORT_NAO)
+    audio      = ALProxy("ALAudioDevice",    IP_NAO, PORT_NAO)
+    behavior   = ALProxy("ALBehaviorManager", IP_NAO, PORT_NAO)
     logger.info("Todos los proxies NAOqi inicializados correctamente")
 except Exception as e:
     logger.critical("Error inicializando proxies NAOqi: {}".format(e))
-    motion_proxy = posture_proxy = autonomous_proxy = leds_proxy = None
-    tts_proxy = battery_proxy = memory_proxy = audio_proxy = None
-    behavior_proxy = fall_manager_proxy = None
-    log("NAO", "Continuando sin NAOqi...")
+    sys.exit(1)
 
 # ─── Setup inicial seguro ──────────────────────────────────────────────────────
-if motion_proxy:
-    try:
-        # Fall manager ON → auto-recover
-        motion_proxy.setFallManagerEnabled(True)
-        log("NAO", "Fall manager ENABLED → auto-recover ON")
-        
-        # Mantener Autonomous Life desactivado y rigidez activa para control directo
-        if autonomous_proxy:
-            autonomous_proxy.setState("disabled")
-        motion_proxy.setStiffnesses("Body", 1.0)
-        log("NAO", "AutonomousLife disabled; Body stiffness ON")
-        
-        # Activar balanceo de brazos durante el caminar (mejora estabilidad)
-        motion_proxy.setMoveArmsEnabled(True, True)
-        log("NAO", "MoveArmsEnabled(True, True)")
-        
-        # Mantener protección de contacto de pie activada por defecto
-        motion_proxy.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", True]])
-        log("NAO", "FootContactProtection = True")
-    except Exception as e:
-        log("NAO", "Error configuración inicial: %s" % e)
+# Fall manager ON → auto-recover
+motion.setFallManagerEnabled(True)
+log("NAO", "Fall manager ENABLED → auto-recover ON")
+
+# Mantener Autonomous Life desactivado y rigidez activa para control directo
+life.setState("disabled")
+motion.setStiffnesses("Body", 1.0)
+log("NAO", "AutonomousLife disabled; Body stiffness ON")
+
+# Activar balanceo de brazos durante el caminar (mejora estabilidad)
+try:
+    motion.setMoveArmsEnabled(True, True)
+    log("NAO", "MoveArmsEnabled(True, True)")
+except Exception as e:
+    log("NAO", "Warn setMoveArmsEnabled: %s" % e)
+
+# Mantener protección de contacto de pie activada por defecto
+try:
+    motion.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", True]])
+    log("NAO", "FootContactProtection = True")
+except Exception as e:
+    log("NAO", "Warn FootContactProtection: %s" % e)
 
 # ─── Callback de caída ─────────────────────────────────────────────────────────
 def onFall(_key, _value, _msg):
     log("FallEvt", "detected! Recuperando postura...")
     try:
-        if posture_proxy:
-            posture_proxy.goToPosture("Stand", 0.7)
+        posture.goToPosture("Stand", 0.7)
     except Exception as e:
         log("FallEvt", "Recover error: %s" % e)
 
-if memory_proxy:
-    try:
-        memory_proxy.subscribeToEvent("RobotHasFallen", __name__, "onFall")
-        log("NAO", "Suscrito a evento RobotHasFallen")
-    except Exception as e:
-        log("NAO", "Warn subscribe RobotHasFallen: %s" % e)
+try:
+    memory.subscribeToEvent("RobotHasFallen", __name__, "onFall")
+    log("NAO", "Suscrito a evento RobotHasFallen")
+except Exception as e:
+    log("NAO", "Warn subscribe RobotHasFallen: %s" % e)
 
 # ─── Funciones auxiliares ─────────────────────────────────────────────────────
 def clamp(v, lo, hi):
@@ -221,24 +195,48 @@ def _apply_moveToward(vx, vy, wz, move_cfg_pairs):
     Llama moveToward con config. Si falla reintenta sin config.
     """
     try:
-        if motion_proxy:
-            motion_proxy.moveToward(vx, vy, wz, move_cfg_pairs)
+        motion.moveToward(vx, vy, wz, move_cfg_pairs)
     except Exception as e:
         log("Walk", "moveToward with config failed: %s → retry no-config" % e)
-        if motion_proxy:
-            motion_proxy.moveToward(vx, vy, wz)
+        motion.moveToward(vx, vy, wz)
+
+def _apply_absolute_limits(vx, vy, wz):
+    """
+    Aplicar límites absolutos a las velocidades antes de cualquier otro procesamiento.
+    
+    Límites forzados:
+    - vx: entre -0.6 y 0.6
+    - vy: entre -0.45 y 0.45
+    - wz: sin límites adicionales (solo CAPS normales)
+    
+    Estos límites se aplican SIEMPRE, independientemente de CAPS o otros sistemas.
+    """
+    # Limitar vx entre -0.6 y 0.6
+    if vx > 0.6:
+        vx = 0.6
+    elif vx < -0.6:
+        vx = -0.6
+    
+    # Limitar vy entre -0.45 y 0.45
+    if vy > 0.45:
+        vy = 0.45
+    elif vy < -0.45:
+        vy = -0.45
+    
+    # wz sin límites adicionales (se deja para CAPS)
+    return vx, vy, wz
 
 # ─── Único Gait + CAPs (por defecto NAOqi) ─────────────────────────────────────
 CURRENT_GAIT = []  # e.g.: [["StepHeight",0.03],["MaxStepX",0.028],["MaxStepY",0.10],["MaxStepTheta",0.22],["Frequency",0.50]]
-CAP_LIMITS  = {"vx": 1.0, "vy": 1.0, "wz": 1.0}
+CAP_LIMITS  = {"vx": 0.5, "vy": 0.5, "wz": 0.5}
 
 # ─── Estados de Gait y CAPS con suavizado ─────────────────────────────────────
 GAIT_REF = []          # lista de pares [["MaxStepX", val], ...]
-CAPS_REF = {"vx":1.0, "vy":1.0, "wz":1.0}
+CAPS_REF = {"vx":0.5, "vy":0.5, "wz":0.5}
 
 # Aplicado (lo que realmente mandamos a moveToward):
 GAIT_APPLIED = []      # lista de pares suavizada
-CAPS_APPLIED = {"vx":1.0, "vy":1.0, "wz":1.0}
+CAPS_APPLIED = {"vx":0.5, "vy":0.5, "wz":0.5}
 
 # Parámetros de suavizado
 ALPHA_GAIT = 0.15      # 0..1 (más bajo = más suave)
@@ -264,8 +262,7 @@ def watchdog():
         time.sleep(0.05)
         if time.time() - _last_walk > WATCHDOG:
             try:
-                if motion_proxy:
-                    motion_proxy.stopMove()
+                motion.stopMove()
                 _last_walk = time.time()
                 log("Watchdog", "stopMove() tras timeout")
             except Exception as e:
@@ -275,7 +272,46 @@ wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
 
-# ─── Bucle adaptativo simplificado con RandomForest ──────────────────────────
+# ─── Función de verificación de Golden Lock ────────────────────────────────────
+def _check_golden_lock():
+    """
+    Verifica si existen parámetros golden bloqueados.
+    Retorna (locked, golden_params) donde:
+    - locked: True si hay parámetros bloqueados válidos
+    - golden_params: dict con los parámetros a aplicar o None
+    """
+    try:
+        lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
+        if not os.path.exists(lock_file):
+            return False, None
+            
+        with open(lock_file, 'r') as f:
+            lock_data = json.load(f)
+        
+        # Verificar que el lock sea válido y no haya expirado
+        if not lock_data.get("locked", False):
+            return False, None
+            
+        # Verificar expiración si está definida
+        expires_at = lock_data.get("expires_at")
+        if expires_at and time.time() > expires_at:
+            logger.info("Golden lock expirado, removiendo...")
+            os.remove(lock_file)
+            return False, None
+            
+        # Extraer parámetros golden
+        golden_params = lock_data.get("locked_parameters")
+        if not golden_params:
+            return False, None
+            
+        logger.debug("Golden parameters activos: {}".format(golden_params))
+        return True, golden_params
+        
+    except Exception as e:
+        logger.warning("Error verificando golden lock: {}".format(e))
+        return False, None
+
+# ─── Bucle adaptativo simplificado con LightGBM AutoML ──────────────────────────
 def adaptive_loop():
     global GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF, CURRENT_GAIT
     log("Adapt", "Loop adaptativo iniciado")
@@ -290,23 +326,41 @@ def adaptive_loop():
         try:
             time.sleep(0.1)  # 10 Hz
             
-            # RandomForest adaptativo si está disponible
-            if ADAPTIVE_WALK_ENABLED and adaptive_walker and ADAPTIVE["enabled"]:
-                try:
-                    # Predecir parámetros de marcha con RandomForest
-                    adaptive_params = adaptive_walker.predict_gait_params()
-                    if adaptive_params:
-                        # Convertir a formato esperado
-                        adaptive_gait = []
-                        for param, value in adaptive_params.items():
-                            if param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
-                                adaptive_gait.append([param, value])
-                        
-                        if adaptive_gait:
-                            GAIT_REF = adaptive_gait
-                            logger.debug("RandomForest adaptativo: {}".format(adaptive_params))
-                except Exception as e:
-                    logger.warning("Error en RandomForest adaptativo: {}".format(e))
+            # ✨ VERIFICAR GOLDEN LOCK PRIMERO
+            is_locked, golden_params = _check_golden_lock()
+            
+            if is_locked and golden_params:
+                # Aplicar parámetros golden directamente sin variación
+                adaptive_gait = []
+                for param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
+                    if param in golden_params:
+                        adaptive_gait.append([param, golden_params[param]])
+                
+                if adaptive_gait:
+                    GAIT_REF = adaptive_gait
+                    logger.debug("Aplicando golden parameters: {}".format(golden_params))
+                    
+                # Skip el resto del loop adaptativo cuando está locked
+                
+            else:
+                # Comportamiento adaptativo normal solo si NO está locked
+                # LightGBM AutoML adaptativo si está disponible
+                if ADAPTIVE_WALK_ENABLED and adaptive_walker and ADAPTIVE["enabled"]:
+                    try:
+                        # Predecir parámetros de marcha con LightGBM AutoML
+                        adaptive_params = adaptive_walker.predict_gait_parameters()
+                        if adaptive_params:
+                            # Convertir a formato esperado
+                            adaptive_gait = []
+                            for param, value in adaptive_params.items():
+                                if param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
+                                    adaptive_gait.append([param, value])
+                            
+                            if adaptive_gait:
+                                GAIT_REF = adaptive_gait
+                                logger.debug("LightGBM AutoML adaptativo: {}".format(adaptive_params))
+                    except Exception as e:
+                        logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
             
             # Suavizar gait hacia referencia
             if GAIT_REF:
@@ -349,8 +403,7 @@ def cleanup_all_subscriptions():
                              "WordRecognized","SpeechDetected"]
         for event in events_to_cleanup:
             try:
-                if memory_proxy:
-                    memory_proxy.unsubscribeToEvent(event, __name__)
+                memory.unsubscribeToEvent(event, __name__)
             except Exception:
                 pass
     except Exception as e:
@@ -362,8 +415,7 @@ def cleanup(signum, frame=None):
     
     # Mensaje TTS de cierre
     try:
-        if tts_proxy:
-            tts_proxy.say("nao control apagado")
+        tts.say("nao control apagado")
         logger.info("Mensaje TTS de cierre enviado")
     except Exception as e:
         logger.warning("No se pudo enviar mensaje TTS de cierre: {}".format(e))
@@ -383,9 +435,8 @@ def cleanup(signum, frame=None):
     
     try:
         log("Cleanup", "Liberando NAOqi...")
-        if motion_proxy:
-            motion_proxy.stopMove()
-            motion_proxy.waitUntilMoveIsFinished()
+        motion.stopMove()
+        motion.waitUntilMoveIsFinished()
         log("Cleanup", "NAOqi OK")
     except Exception as e:
         log("Cleanup", "Error liberando NAOqi: {}".format(e))
@@ -427,33 +478,47 @@ class RobotWS(WebSocket):
             # ── Caminar reactivo con gait actual + caps (suavizados) ──────────
             if action == "walk":
                 vx, vy, wz = map(float, (msg.get("vx",0), msg.get("vy",0), msg.get("wz",0)))
+                
+                # 🚨 LÍMITES ABSOLUTOS FORZADOS (aplicados SIEMPRE antes que cualquier otra limitación)
+                # vx: entre -0.6 y 0.6
+                if vx > 0.6:
+                    vx = 0.6
+                elif vx < -0.6:
+                    vx = -0.6
+                
+                # vy: entre -0.45 y 0.45  
+                if vy > 0.45:
+                    vy = 0.45
+                elif vy < -0.45:
+                    vy = -0.45
+                
                 # Normaliza magnitud del vector (x,y) si excede 1.0
                 norm = math.hypot(vx, vy)
                 if norm > 1.0:
                     vx, vy = vx/norm, vy/norm
 
-                # Aplicar CAPS suavizados
+                # Aplicar CAPS suavizados (después de límites absolutos)
                 vx = max(-CAPS_APPLIED["vx"], min(CAPS_APPLIED["vx"], vx))
                 vy = max(-CAPS_APPLIED["vy"], min(CAPS_APPLIED["vy"], vy))
                 wz = max(-CAPS_APPLIED["wz"], min(CAPS_APPLIED["wz"], wz))
 
-                # RandomForest Adaptativo: Predecir parámetros de marcha óptimos
+                # LightGBM AutoML Adaptativo: Predecir parámetros de marcha óptimos
                 adaptive_cfg = None
                 if ADAPTIVE_WALK_ENABLED and adaptive_walker and ADAPTIVE["enabled"]:
                     try:
-                        adaptive_params = adaptive_walker.predict_gait_params()
+                        adaptive_params = adaptive_walker.predict_gait_parameters()
                         if adaptive_params:
                             adaptive_cfg = _config_to_move_list(adaptive_params)
-                            logger.debug("RandomForest adaptativo: {}".format(adaptive_params))
+                            logger.debug("LightGBM AutoML adaptativo: {}".format(adaptive_params))
                     except Exception as e:
-                        logger.warning("Error en RandomForest adaptativo: {}".format(e))
+                        logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
 
                 # Usar configuración adaptativa si está disponible, sino la configuración actual
                 move_cfg = adaptive_cfg if adaptive_cfg else _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                 _apply_moveToward(vx, vy, wz, move_cfg)
                 _last_walk = time.time()
                 
-                cfg_source = "RF" if adaptive_cfg else "Manual"
+                cfg_source = "LightGBM" if adaptive_cfg else "Manual"
                 log("Walk", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s [%s]" %
                     (vx, vy, wz, move_cfg, CAPS_APPLIED, cfg_source))
 
@@ -464,12 +529,10 @@ class RobotWS(WebSocket):
                 theta = float(msg.get("theta", 0.0))
                 move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                 try:
-                    if motion_proxy:
-                        motion_proxy.moveTo(x, y, theta, move_cfg)
+                    motion.moveTo(x, y, theta, move_cfg)
                 except Exception as e:
                     log("WalkTo", "moveTo with cfg failed: %s → retry sin cfg" % e)
-                    if motion_proxy:
-                        motion_proxy.moveTo(x, y, theta)
+                    motion.moveTo(x, y, theta)
                 log("WalkTo", "moveTo(x=%.2f,y=%.2f,th=%.2f)" % (x,y,theta))
 
             # ── Girar sobre su propio eje - Izquierda ─────────────────────────
@@ -485,8 +548,7 @@ class RobotWS(WebSocket):
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
-                    if motion_proxy:
-                        motion_proxy.stopMove()
+                    motion.stopMove()
                     log("Turn", "turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO" % (angular_speed, duration))
                 else:
                     # Giro continuo hasta que se detenga
@@ -508,8 +570,7 @@ class RobotWS(WebSocket):
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
-                    if motion_proxy:
-                        motion_proxy.stopMove()
+                    motion.stopMove()
                     log("Turn", "turnRight(speed=%.2f, duration=%.2f) - COMPLETADO" % (abs(angular_speed), duration))
                 else:
                     # Giro continuo hasta que se detenga
@@ -574,8 +635,7 @@ class RobotWS(WebSocket):
             # ── Protecciones de pie ───────────────────────────────────────────
             elif action == "footProtection":
                 enable = bool(msg.get("enable", True))
-                if motion_proxy:
-                    motion_proxy.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", enable]])
+                motion.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", enable]])
                 self.sendMessage(json.dumps({"footProtection": enable}))
                 log("FootProt", "FootContactProtection set to %s" % enable)
 
@@ -583,15 +643,12 @@ class RobotWS(WebSocket):
             elif action == "move":
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0))
-                if motion_proxy:
-                    motion_proxy.setAngles(str(joint), val, 0.1)
-                log("Move", "setAngles('%s',%.2f)" % (joint,val))
+                log("Move", "setAngles(%s, %.2f)" % (joint,val))
 
             # ── Postura ───────────────────────────────────────────────────────
             elif action == "posture":
                 pst = msg.get("value","Stand")
-                if posture_proxy:
-                    posture_proxy.goToPosture(str(pst), 0.7)
+                posture.goToPosture(str(pst), 0.7)
                 log("Posture", "goToPosture('%s')" % pst)
 
             # ── LEDs ──────────────────────────────────────────────────────────
@@ -612,27 +669,23 @@ class RobotWS(WebSocket):
                 rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
                 if grp in ("LeftEarLeds", "RightEarLeds"):
                     intensity = (rgb_int & 0xFF) / 255.0
-                    if leds_proxy:
-                        leds_proxy.fade(grp, intensity, duration)
+                    leds.fade(grp, intensity, duration)
                     log("LED", "fade('%s',%.2f,%.2f)" % (grp, intensity, duration))
                 else:
-                    if leds_proxy:
-                        leds_proxy.fadeRGB(grp, rgb_int, duration)
+                    leds.fadeRGB(grp, rgb_int, duration)
                     log("LED", "fadeRGB('%s',0x%06X,%.2f)" % (grp, rgb_int, duration))
 
             # ── Hablar ────────────────────────────────────────────────────────
             elif action == "say":
                 txt = msg.get("text","")
-                if tts_proxy:
-                    tts_proxy.say(str(txt))
+                tts.say(str(txt))
                 log("TTS", "say('%s')" % txt)
 
             # ── Idioma TTS ────────────────────────────────────────────────────
             elif action == "language":
                 lang = msg.get("value","")
                 try:
-                    if tts_proxy:
-                        tts_proxy.setLanguage(str(lang))
+                    tts.setLanguage(str(lang))
                     log("TTS", "setLanguage('%s')" % lang)
                 except Exception as e:
                     log("WS", "Error setLanguage('%s'): %s" % (lang, e))
@@ -641,28 +694,26 @@ class RobotWS(WebSocket):
             elif action == "autonomous":
                 enable = bool(msg.get("enable", False))
                 new_state = "interactive" if enable else "disabled"
-                if autonomous_proxy:
-                    autonomous_proxy.setState(new_state)
+                life.setState(new_state)
                 log("Autonomous", "AutonomousLife.setState('%s')" % new_state)
 
             # ── Kick (ejecuta behavior si existe) ─────────────────────────────
             elif action == "kick":
                 try:
                     behavior_name = "kicknao-f6eb94/behavior_1"
-                    if behavior_proxy and behavior_proxy.isBehaviorInstalled(behavior_name):
-                        for bhv in behavior_proxy.getRunningBehaviors():
-                            behavior_proxy.stopBehavior(bhv)
-                        behavior_proxy.runBehavior(behavior_name)
+                    if behavior and behavior.isBehaviorInstalled(behavior_name):
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        behavior.runBehavior(behavior_name)
                         log("Kick", "Ejecutando kick behavior: '%s'" % behavior_name)
                     else:
                         log("WS", "⚠ Behavior kick no instalado: '%s'" % behavior_name)
-                        if behavior_proxy:
-                            installed = behavior_proxy.getInstalledBehaviors()
-                            kicks = [b for b in installed if "kick" in b.lower()]
-                            if kicks:
-                                behavior_proxy.runBehavior(kicks[0])
-                                log("Kick", "Ejecutando kick alternativo: '%s'" % kicks[0])
-                            else:
+                        installed = behavior.getInstalledBehaviors()
+                        kicks = [b for b in installed if "kick" in b.lower()]
+                        if kicks:
+                            behavior.runBehavior(kicks[0])
+                            log("Kick", "Ejecutando kick alternativo: '%s'" % kicks[0])
+                        else:
                                 log("WS", "⚠ No se encontró behavior de kick")
                 except Exception as e:
                     log("WS", "Error ejecutando kick: %s" % e)
@@ -670,18 +721,16 @@ class RobotWS(WebSocket):
             # ── Volumen ─────────────────────────────────────────────────────
             elif action == "volume":
                 vol = float(msg.get("value", 50))
-                if audio_proxy:
-                    audio_proxy.setOutputVolume(vol)
+                audio.setOutputVolume(vol)
                 log("Audio", "AudioDevice.setOutputVolume(%.1f)" % vol)
 
             # ── Estado de batería ─────────────────────────────────────────────
             elif action == "getBattery":
                 level = 100  # Valor por defecto
-                if battery_proxy:
-                    try:
-                        level = battery_proxy.getBatteryCharge()
-                    except:
-                        pass
+                try:
+                    level = battery.getBatteryCharge()
+                except:
+                    pass
                 low   = (level < 20)
                 full  = (level >= 95)
                 payload = json.dumps({"battery": level, "low": low, "full": full})
@@ -691,9 +740,7 @@ class RobotWS(WebSocket):
             # ── Estado Autonomous Life ────────────────────────────────────────
             elif action == "getAutonomousLife":
                 try:
-                    current_state = "unknown"
-                    if autonomous_proxy:
-                        current_state = autonomous_proxy.getState()
+                    current_state = life.getState()
                     is_enabled = current_state != "disabled"
                     self.sendMessage(json.dumps({"autonomousLifeEnabled": is_enabled}))
                     log("Autonomous","getAutonomousLife → enabled=%s"%(is_enabled))
@@ -712,49 +759,104 @@ class RobotWS(WebSocket):
                 self.sendMessage(json.dumps({"adaptiveGait": {"enabled": ADAPTIVE["enabled"], "mode": ADAPTIVE["mode"]}}))
                 log("Adapt", "adaptiveGait → enabled=%s mode=%s" % (ADAPTIVE["enabled"], ADAPTIVE["mode"]))
 
-            # ── Control RandomForest Adaptativo ───────────────────────────────
-            elif action == "adaptiveRandomForest":
+            # ── Control LightGBM AutoML Adaptativo ───────────────────────────────
+            elif action == "adaptiveLightGBM":
                 try:
                     enable = msg.get("enabled", True)
                     if adaptive_walker:
-                        # No hay enable/disable en RandomForest, simplemente habilitamos el modo adaptativo
+                        # No hay enable/disable en LightGBM, simplemente habilitamos el modo adaptativo
                         ADAPTIVE["enabled"] = enable
                         stats = {}
                         if hasattr(adaptive_walker, 'get_stats'):
                             stats = adaptive_walker.get_stats()
                         self.sendMessage(json.dumps({
-                            "adaptiveRandomForest": {
+                            "adaptiveLightGBM": {
                                 "enabled": enable,
                                 "available": ADAPTIVE_WALK_ENABLED,
                                 "stats": stats
                             }
                         }))
-                        logger.info("RandomForest adaptativo {} - Stats: {}".format(
+                        logger.info("LightGBM AutoML adaptativo {} - Stats: {}".format(
+                            "habilitado" if enable else "deshabilitado", stats))
+                    else:
+                        self.sendMessage(json.dumps({
+                            "adaptiveLightGBM": {
+                                "enabled": False,
+                                "available": False,
+                                "error": "LightGBM AutoML no disponible"
+                            }
+                        }))
+                        logger.warning("LightGBM AutoML adaptativo no disponible")
+                except Exception as e:
+                    logger.error("Error controlando LightGBM: {}".format(e))
+                    self.sendMessage(json.dumps({"adaptiveLightGBM": {"error": str(e)}}))
+
+            # ── Compatibilidad con comando anterior ───────────────────────────────
+            elif action == "adaptiveRandomForest":
+                # Redirigir a adaptiveLightGBM para compatibilidad
+                new_msg = msg.copy()
+                new_msg["command"] = "adaptiveLightGBM"
+                # Procesar como LightGBM
+                try:
+                    enable = new_msg.get("enabled", True)
+                    if adaptive_walker:
+                        ADAPTIVE["enabled"] = enable
+                        stats = {}
+                        if hasattr(adaptive_walker, 'get_stats'):
+                            stats = adaptive_walker.get_stats()
+                        # Responder con formato original para compatibilidad
+                        self.sendMessage(json.dumps({
+                            "adaptiveRandomForest": {
+                                "enabled": enable,
+                                "available": ADAPTIVE_WALK_ENABLED,
+                                "stats": stats,
+                                "upgraded_to": "LightGBM"
+                            }
+                        }))
+                        logger.info("RandomForest (ahora LightGBM) adaptativo {} - Stats: {}".format(
                             "habilitado" if enable else "deshabilitado", stats))
                     else:
                         self.sendMessage(json.dumps({
                             "adaptiveRandomForest": {
                                 "enabled": False,
                                 "available": False,
-                                "error": "RandomForest no disponible"
+                                "error": "LightGBM AutoML no disponible"
                             }
                         }))
-                        logger.warning("RandomForest adaptativo no disponible")
+                        logger.warning("LightGBM AutoML adaptativo no disponible")
                 except Exception as e:
-                    logger.error("Error controlando RandomForest: {}".format(e))
+                    logger.error("Error controlando LightGBM: {}".format(e))
                     self.sendMessage(json.dumps({"adaptiveRandomForest": {"error": str(e)}}))
 
-            # ── Estadísticas RandomForest Adaptativo ──────────────────────────
+            # ── Estadísticas LightGBM AutoML Adaptativo ──────────────────────────
+            elif action == "getLightGBMStats":
+                try:
+                    if adaptive_walker:
+                        stats = {}
+                        if hasattr(adaptive_walker, 'get_stats'):
+                            stats = adaptive_walker.get_stats()
+                        self.sendMessage(json.dumps({"lightGBMStats": stats}))
+                        logger.debug("Estadísticas LightGBM enviadas: {}".format(stats))
+                    else:
+                        self.sendMessage(json.dumps({"lightGBMStats": {"error": "LightGBM no disponible"}}))
+                        logger.warning("LightGBM no disponible para estadísticas")
+                except Exception as e:
+                    logger.error("Error obteniendo estadísticas LightGBM: {}".format(e))
+                    self.sendMessage(json.dumps({"lightGBMStats": {"error": str(e)}}))
+
+            # ── Compatibilidad estadísticas RandomForest ──────────────────────────
             elif action == "getRandomForestStats":
                 try:
                     if adaptive_walker:
                         stats = {}
                         if hasattr(adaptive_walker, 'get_stats'):
                             stats = adaptive_walker.get_stats()
+                        # Responder con formato original pero datos de LightGBM
+                        stats["upgraded_to"] = "LightGBM"
                         self.sendMessage(json.dumps({"randomForestStats": stats}))
-                        logger.debug("Estadísticas RandomForest enviadas: {}".format(stats))
+                        logger.debug("Estadísticas RandomForest (ahora LightGBM) enviadas: {}".format(stats))
                     else:
-                        self.sendMessage(json.dumps({"randomForestStats": {"available": False}}))
+                        self.sendMessage(json.dumps({"randomForestStats": {"available": False, "upgraded_to": "LightGBM"}}))
                 except Exception as e:
                     logger.error("Error obteniendo estadísticas RandomForest: {}".format(e))
                     self.sendMessage(json.dumps({"randomForestStats": {"error": str(e)}}))
@@ -872,6 +974,83 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     logger.error("Error logging sample: {}".format(e))
                     self.sendMessage(json.dumps({"logSample": {"success": False, "error": str(e)}}))
+                    
+            # ── Sistema Golden Parameters ──────────────────────────────────────────
+            elif action == "getGoldenLockStatus":
+                """Obtener estado actual del sistema de golden lock"""
+                try:
+                    is_locked, golden_params = _check_golden_lock()
+                    
+                    response = {
+                        "goldenLockStatus": {
+                            "locked": is_locked,
+                            "parameters": golden_params if is_locked else None,
+                            "lock_file_exists": os.path.exists(os.path.join(os.path.dirname(__file__), "golden_params_lock.json"))
+                        }
+                    }
+                    self.sendMessage(json.dumps(response))
+                    logger.debug("Estado golden lock enviado: locked={}".format(is_locked))
+                    
+                except Exception as e:
+                    logger.error("Error obteniendo estado golden lock: {}".format(e))
+                    self.sendMessage(json.dumps({"goldenLockStatus": {"error": str(e)}}))
+                    
+            elif action == "unlockGoldenParams":
+                """Forzar unlock de parámetros golden"""
+                try:
+                    lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
+                    
+                    if os.path.exists(lock_file):
+                        os.remove(lock_file)
+                        logger.info("Golden parameters lock removido manualmente")
+                        response = {"unlockGoldenParams": {"success": True, "message": "Lock removido"}}
+                    else:
+                        response = {"unlockGoldenParams": {"success": False, "message": "No hay lock activo"}}
+                    
+                    self.sendMessage(json.dumps(response))
+                    
+                except Exception as e:
+                    logger.error("Error removiendo golden lock: {}".format(e))
+                    self.sendMessage(json.dumps({"unlockGoldenParams": {"success": False, "error": str(e)}}))
+                    
+            elif action == "setGoldenParams":
+                """Establecer parámetros golden manualmente"""
+                try:
+                    # Obtener parámetros del mensaje
+                    golden_params = msg.get("parameters", {})
+                    duration_seconds = msg.get("duration", 3600)  # 1 hora por defecto
+                    
+                    if not golden_params:
+                        response = {"setGoldenParams": {"success": False, "error": "No se proporcionaron parámetros"}}
+                    else:
+                        # Crear archivo de lock
+                        lock_data = {
+                            "locked": True,
+                            "locked_parameters": golden_params,
+                            "locked_at": time.time(),
+                            "expires_at": time.time() + duration_seconds,
+                            "source": "manual_websocket",
+                            "force_unlock": False
+                        }
+                        
+                        lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
+                        with open(lock_file, 'w') as f:
+                            json.dump(lock_data, f, indent=2)
+                        
+                        logger.info("Golden parameters establecidos manualmente: {}".format(golden_params))
+                        response = {
+                            "setGoldenParams": {
+                                "success": True,
+                                "parameters": golden_params,
+                                "duration": duration_seconds
+                            }
+                        }
+                    
+                    self.sendMessage(json.dumps(response))
+                    
+                except Exception as e:
+                    logger.error("Error estableciendo golden parameters: {}".format(e))
+                    self.sendMessage(json.dumps({"setGoldenParams": {"success": False, "error": str(e)}}))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
@@ -899,8 +1078,7 @@ if __name__ == "__main__":
         
         # Mensaje TTS de confirmación
         try:
-            if tts_proxy:
-                tts_proxy.say("nao control iniciado")
+            tts.say("nao control iniciado")
             logger.info("Mensaje TTS de inicio enviado")
         except Exception as e:
             logger.warning("No se pudo enviar mensaje TTS: {}".format(e))
