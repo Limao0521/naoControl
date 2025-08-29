@@ -7,13 +7,11 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
 • JSON actions:
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick,
-    volume, getBattery, getAutonomousLife,
+    volume, getBattery, getAutonomousLife, turnLeft, turnRight,
     reloadPage, setAudio, setVideo, getWebStreams
-    enableXGBoost, disableXGBoost, getXGBoostStats
 
 Usa gait/caps por separado para caminar reactivo.
 Head-touch → launcher web (auto-config IP).
-Modo adaptativo XGBoost opcional para mejorar la marcha.
 """
 
 import sys
@@ -118,9 +116,6 @@ CAPS_REF = CAP_LIMITS.copy()
 CAPS_UP_RATE = 0.01
 CAPS_DOWN_RATE = 0.005
 
-# XGBoost adaptativo
-adaptive_walker = None
-
 # ─── Inicialización NAOqi ─────────────────────────────────────────────────────
 def init_naoqi():
     global motion_proxy, memory_proxy, tts_proxy, leds_proxy, battery_proxy
@@ -159,22 +154,6 @@ def onFall(eventName, value, subscriberIdentifier):
         except Exception as e:
             log("Fall", "Error manejando caída: %s" % e)
 
-# ─── XGBoost adaptativo ───────────────────────────────────────────────────────
-def init_adaptive_walker():
-    global adaptive_walker
-    try:
-        # Intentar cargar el módulo XGBoost adaptativo
-        adaptive_walker_module = __import__("adaptive_walk_xgboost")
-        adaptive_walker = adaptive_walker_module.AdaptiveWalkController(
-            robot_ip=ROBOT_IP,
-            robot_port=ROBOT_PORT
-        )
-        log("XGBoost", "✓ Controlador adaptativo inicializado")
-        return True
-    except Exception as e:
-        log("XGBoost", "✗ Error inicializando adaptativo: %s" % e)
-        return False
-
 # ─── Bucle adaptativo ─────────────────────────────────────────────────────────
 def adaptive_loop():
     global GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF
@@ -182,15 +161,6 @@ def adaptive_loop():
     while True:
         try:
             time.sleep(0.1)  # 10 Hz
-            
-            # Adaptar gait usando XGBoost si está disponible
-            if adaptive_walker and hasattr(adaptive_walker, 'adapt_gait'):
-                try:
-                    new_gait = adaptive_walker.adapt_gait()
-                    if new_gait:
-                        GAIT_REF.update(new_gait)
-                except Exception as e:
-                    log("Adapt", "Error adaptando gait: %s" % e)
             
             # Aplicar cambios suaves en gait
             new_app = {}
@@ -253,9 +223,15 @@ class RobotWS(WebSocket):
             msg = json.loads(raw)
         except Exception as e:
             log("WS", "JSON inválido: %s (%s)" % (raw, e))
+            self.sendErrorResponse("Invalid JSON format")
             return
 
         action = msg.get("action")
+        if not action:
+            log("WS", "No se especificó action")
+            self.sendErrorResponse("No action specified")
+            return
+            
         try:
             # ── Caminar reactivo con gait actual + caps (suavizados) ──────────
             if action == "walk":
@@ -274,6 +250,7 @@ class RobotWS(WebSocket):
                 if motion_proxy:
                     motion_proxy.moveToward(vx, vy, wz)
                 log("Walk", "→ (%.2f, %.2f, %.2f)" % (vx, vy, wz))
+                # No enviar respuesta automática para walk
 
             # ── Caminar a posición ────────────────────────────────────────────
             elif action == "walkTo":
@@ -283,6 +260,7 @@ class RobotWS(WebSocket):
                 if motion_proxy:
                     motion_proxy.walkTo(x, y, theta)
                 log("WalkTo", "→ (%.2f, %.2f, %.2f)" % (x, y, theta))
+                # No enviar respuesta automática
 
             # ── Mover cabeza/brazos ───────────────────────────────────────────
             elif action == "move":
@@ -294,12 +272,14 @@ class RobotWS(WebSocket):
                 if motion_proxy and chain and angles and times:
                     motion_proxy.angleInterpolation(chain, angles, times, absolute)
                 log("Move", "%s → %s" % (chain, angles))
+                # No enviar respuesta automática
 
             # ── Configurar gait ───────────────────────────────────────────────
             elif action == "gait":
                 new_gait = msg.get("gait", {})
                 GAIT_REF.update(new_gait)
                 log("Gait", "Nuevo gait: %s" % new_gait)
+                # No enviar respuesta automática
 
             # ── Obtener gait actual ───────────────────────────────────────────
             elif action == "getGait":
@@ -310,6 +290,7 @@ class RobotWS(WebSocket):
                 new_caps = msg.get("caps", {})
                 CAPS_REF.update(new_caps)
                 log("Caps", "Nuevas caps: %s" % new_caps)
+                # No enviar respuesta automática
 
             # ── Obtener caps actuales ─────────────────────────────────────────
             elif action == "getCaps":
@@ -330,6 +311,7 @@ class RobotWS(WebSocket):
                 if motion_proxy:
                     motion_proxy.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", enabled]])
                 log("FootProt", "Protección: %s" % enabled)
+                # No enviar respuesta automática
 
             # ── Postura ───────────────────────────────────────────────────────
             elif action == "posture":
@@ -338,6 +320,7 @@ class RobotWS(WebSocket):
                 if posture_proxy:
                     posture_proxy.goToPosture(posture_name, speed)
                 log("Posture", "%s (speed=%.1f)" % (posture_name, speed))
+                # No enviar respuesta automática para postura
 
             # ── LEDs ──────────────────────────────────────────────────────────
             elif action == "led":
@@ -347,6 +330,7 @@ class RobotWS(WebSocket):
                 if leds_proxy and name:
                     leds_proxy.fadeRGB(name, color, duration)
                 log("LED", "%s → 0x%06X" % (name, color))
+                # No enviar respuesta automática para LEDs
 
             # ── Texto a voz ───────────────────────────────────────────────────
             elif action == "say":
@@ -354,6 +338,7 @@ class RobotWS(WebSocket):
                 if tts_proxy and text:
                     tts_proxy.say(text)
                 log("TTS", "Diciendo: '%s'" % text)
+                # No enviar respuesta automática para TTS
 
             # ── Idioma ────────────────────────────────────────────────────────
             elif action == "language":
@@ -361,6 +346,7 @@ class RobotWS(WebSocket):
                 if tts_proxy:
                     tts_proxy.setLanguage(lang)
                 log("TTS", "Idioma: %s" % lang)
+                # No enviar respuesta automática
 
             # ── Vida autónoma ─────────────────────────────────────────────────
             elif action == "autonomous":
@@ -371,6 +357,7 @@ class RobotWS(WebSocket):
                     else:
                         autonomous_proxy.setState("disabled")
                 log("Autonomous", "Estado: %s" % ("enabled" if enabled else "disabled"))
+                # No enviar respuesta automática
 
             # ── Patada ────────────────────────────────────────────────────────
             elif action == "kick":
@@ -386,6 +373,22 @@ class RobotWS(WebSocket):
                         time.sleep(0.5)
                         motion_proxy.setAngles("LKneePitch", 0.5, 0.3)
                 log("Kick", "Patada con %s" % leg)
+                # No enviar respuesta automática
+
+            # ── Giros ─────────────────────────────────────────────────────────
+            elif action == "turnLeft":
+                angle = float(msg.get("angle", 0.5))  # radianes por defecto
+                if motion_proxy:
+                    motion_proxy.moveTo(0, 0, angle)
+                log("Turn", "Girando izquierda %.2f rad" % angle)
+                # No enviar respuesta automática
+
+            elif action == "turnRight":
+                angle = float(msg.get("angle", -0.5))  # radianes por defecto (negativo = derecha)
+                if motion_proxy:
+                    motion_proxy.moveTo(0, 0, angle)
+                log("Turn", "Girando derecha %.2f rad" % angle)
+                # No enviar respuesta automática
 
             # ── Volumen ───────────────────────────────────────────────────────
             elif action == "volume":
@@ -393,6 +396,7 @@ class RobotWS(WebSocket):
                 if audio_proxy:
                     audio_proxy.setOutputVolume(level)
                 log("Audio", "Volumen: %d" % level)
+                # No enviar respuesta automática
 
             # ── Batería ───────────────────────────────────────────────────────
             elif action == "getBattery":
@@ -414,84 +418,58 @@ class RobotWS(WebSocket):
                         pass
                 self.sendMessage(json.dumps({"autonomousLife": state}))
 
-            # ── Control XGBoost Adaptativo ────────────────────────────────────
-            elif action == "enableXGBoost":
-                try:
-                    if not adaptive_walker:
-                        init_adaptive_walker()
-                    
-                    if adaptive_walker:
-                        if hasattr(adaptive_walker, 'enable_adaptations'):
-                            adaptive_walker.enable_adaptations()
-                        self.sendMessage(json.dumps({
-                            "adaptiveXGBoost": {
-                                "enabled": True,
-                                "status": "XGBoost adaptativo habilitado"
-                            }
-                        }))
-                        logger.info("XGBoost adaptativo habilitado")
-                    else:
-                        self.sendMessage(json.dumps({
-                            "adaptiveXGBoost": {
-                                "enabled": False,
-                                "error": "No se pudo inicializar XGBoost"
-                            }
-                        }))
-                        logger.warning("XGBoost adaptativo no disponible")
-                except Exception as e:
-                    logger.error("Error habilitando XGBoost: {}".format(e))
-                    self.sendMessage(json.dumps({"adaptiveXGBoost": {"error": str(e)}}))
-
-            elif action == "disableXGBoost":
-                try:
-                    if adaptive_walker and hasattr(adaptive_walker, 'disable_adaptations'):
-                        adaptive_walker.disable_adaptations()
-                        self.sendMessage(json.dumps({
-                            "adaptiveXGBoost": {
-                                "enabled": False,
-                                "status": "XGBoost adaptativo deshabilitado"
-                            }
-                        }))
-                        logger.info("XGBoost adaptativo deshabilitado")
-                    else:
-                        self.sendMessage(json.dumps({
-                            "adaptiveXGBoost": {
-                                "enabled": False,
-                                "error": "XGBoost no está inicializado"
-                            }
-                        }))
-                        logger.warning("XGBoost adaptativo no disponible")
-                except Exception as e:
-                    logger.error("Error controlando XGBoost: {}".format(e))
-                    self.sendMessage(json.dumps({"adaptiveXGBoost": {"error": str(e)}}))
-
-            # ── Estadísticas XGBoost Adaptativo ───────────────────────────────
-            elif action == "getXGBoostStats":
-                try:
-                    if adaptive_walker:
-                        stats = {
-                            "model_loaded": adaptive_walker.xgb_model.ok if hasattr(adaptive_walker, 'xgb_model') else False,
-                            "adaptations_enabled": getattr(adaptive_walker, 'adaptations_enabled', True)
-                        }
-                        self.sendMessage(json.dumps({"xgboostStats": stats}))
-                        logger.debug("Estadísticas XGBoost enviadas: {}".format(stats))
-                    else:
-                        self.sendMessage(json.dumps({"xgboostStats": {"available": False}}))
-                except Exception as e:
-                    logger.error("Error obteniendo estadísticas XGBoost: {}".format(e))
-                    self.sendMessage(json.dumps({"xgboostStats": {"error": str(e)}}))
-
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)
+                self.sendErrorResponse("Unknown action: %s" % action)
                 
         except Exception as e:
             log("WS", "Excepción en %s: %s" % (action, e))
+            self.sendErrorResponse("Error executing action %s: %s" % (action, str(e)))
+
+    def sendSuccessResponse(self, action, data=None):
+        """Envía una respuesta de éxito al cliente"""
+        try:
+            response = {
+                "type": "success", 
+                "action": action
+            }
+            if data:
+                response["data"] = data
+            message = json.dumps(response)
+            log("WS", "Enviando respuesta exitosa para: %s" % action)
+            self.sendMessage(message)
+        except Exception as e:
+            log("WS", "Error enviando respuesta exitosa para %s: %s" % (action, e))
+
+    def sendErrorResponse(self, message):
+        """Envía una respuesta de error al cliente"""
+        try:
+            response = {
+                "type": "error",
+                "message": message
+            }
+            error_msg = json.dumps(response)
+            log("WS", "Enviando error: %s" % message)
+            self.sendMessage(error_msg)
+        except Exception as e:
+            log("WS", "Error enviando respuesta de error: %s" % e)
 
     def handleConnected(self):
         log("WS", "Cliente conectado desde %s" % self.address[0])
+        # No enviar mensaje de bienvenida automático para evitar problemas
 
     def handleClose(self):
-        log("WS", "Cliente desconectado")
+        log("WS", "Cliente desconectado desde %s" % self.address[0])
+        
+    def sendMessage(self, message):
+        """Override del método sendMessage con manejo de errores mejorado"""
+        try:
+            # Usar el método padre directamente
+            super(RobotWS, self).sendMessage(message)
+            log("WS", "Mensaje enviado: %s" % message[:100])  # Log truncado
+        except Exception as e:
+            log("WS", "Error enviando mensaje: %s" % e)
+            # No relanzar la excepción para evitar cerrar la conexión
 
 # ─── Función principal ────────────────────────────────────────────────────────
 def main():
@@ -512,9 +490,6 @@ def main():
             memory_proxy.subscribeToEvent("RobotHasFallen", "control_server", "onFall")
         except Exception as e:
             log("Main", "Error suscribiendo a RobotHasFallen: %s" % e)
-    
-    # Inicializar XGBoost adaptativo
-    init_adaptive_walker()
     
     # Lanzar el hilo adaptativo
     adap = threading.Thread(target=adaptive_loop)
