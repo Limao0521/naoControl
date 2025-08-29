@@ -234,6 +234,19 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Comandos de rotación
+  const handleTurnLeft = useCallback(() => {
+    if (sendMessage({ action: 'turnLeft', speed: 0.5, duration: 2.0 })) {
+      console.log('[UI] Turn Left enviado');
+    }
+  }, [sendMessage]);
+
+  const handleTurnRight = useCallback(() => {
+    if (sendMessage({ action: 'turnRight', speed: 0.4 })) {
+      console.log('[UI] Turn Right enviado');
+    }
+  }, [sendMessage]);
+
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
     setActiveMenu(menuId);
@@ -450,7 +463,9 @@ const NaoController = () => {
               <div className="joystick-section-full">
                 <Joystick 
                   onMove={handleJoystickMove} 
-                  mode={currentMode} 
+                  mode={currentMode}
+                  onTurnLeft={handleTurnLeft}
+                  onTurnRight={handleTurnRight}
                 />
               </div>
             </>
@@ -493,6 +508,8 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode="walk"
+                  onTurnLeft={handleTurnLeft}
+                  onTurnRight={handleTurnRight}
                 />
               </div>
             </>
