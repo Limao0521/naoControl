@@ -1,14 +1,13 @@
 .nao-controller {
   display: flex;
   align-items: stretch;
-  width: 100%;
-  min-height: 100vh;
+  width: 100vw;
+  height: 100vh;
   position: relative;
   padding: 0.5rem;
   gap: 0.5rem;
   overflow: hidden;
   box-sizing: border-box;
-  max-width: 100%;
 }
 
 /* ─── Contenido principal ─── */
@@ -25,44 +24,18 @@
 }
 
 /* ─── Contenedor principal ─── */
-.nes-pad{
+.nes-pad{ 
   display: grid;
-  align-items: center;
-  /* responsive spacing and scale variables */
-  /* ctrl-scale is a unitless multiplier adjusted by media queries below */
-  --ctrl-scale: 1;
-  --panel-gap: clamp(0.5rem, 1.6vw, 2rem);
-
-  /* base (unscaled) sizes — these use clamp so they still adapt to vw but
-    then get multiplied by --ctrl-scale for global proportional scaling */
-  --base-btn-font: clamp(12px, 2.2vw, 20px);
-  --base-btn-pad-vertical: clamp(8px, 1.2vw, 16px);
-  --base-btn-pad-horizontal: clamp(12px, 2vw, 24px);
-  --base-btn-radius: clamp(6px, 1vw, 12px);
-
-  /* computed (scaled) values used across the pad */
-  --btn-font: calc(var(--base-btn-font) * var(--ctrl-scale));
-  --btn-pad-vertical: calc(var(--base-btn-pad-vertical) * var(--ctrl-scale));
-  --btn-pad-horizontal: calc(var(--base-btn-pad-horizontal) * var(--ctrl-scale));
-  --btn-radius: calc(var(--base-btn-radius) * var(--ctrl-scale));
-
-  gap: var(--panel-gap);
-  background: var(--dark-gray);
+  align-items: center; 
+  gap: clamp(0.5rem, 2vw, 1.5rem);
+  background: var(--dark-gray); 
   border: 6px solid var(--light-gray);
-  border-radius: .5rem;
-  /* pad scales with ctrl-scale so interior space reduces on small screens */
-  --base-pad: clamp(12px, 2vw, 32px);
-  padding: calc(var(--base-pad) * var(--ctrl-scale));
-
-  /* base column widths for the left and middle columns; these are scaled by --ctrl-scale */
-  --base-col1: clamp(140px, 18vw, 260px);
-  --base-col2: clamp(110px, 12vw, 200px);
-  --col1: calc(var(--base-col1) * var(--ctrl-scale));
-  --col2: calc(var(--base-col2) * var(--ctrl-scale));
+  border-radius: .5rem; 
+  padding: clamp(0.5rem, 3vw, 2rem);
   width: 100%;
   max-width: 100%;
-  height: 100%;
-  max-height: 100%;
+  height: calc(100vh - 1rem);
+  max-height: calc(100vh - 1rem);
   position: relative;
   box-sizing: border-box;
   overflow: hidden;
@@ -70,107 +43,48 @@
 
 /* UI Fútbol - 3 columnas con kick */
 .nes-pad.ui-futbol {
-  grid-template-columns: var(--col1) var(--col2) 1fr;
+  grid-template-columns: clamp(100px, 16vw, 160px) clamp(80px, 12vw, 120px) 1fr;
   grid-template-rows: auto 1fr;
-  grid-template-areas:
+  grid-template-areas: 
     "status status status"
     "kick center joystick";
-  gap: 2rem;
+  gap: clamp(0.5rem, 1.5vw, 1.5rem);
 }
 
 /* UI Normal - 3 columnas sin kick */
 .nes-pad.ui-normal {
-  grid-template-columns: var(--col1) var(--col2) 1fr;
+  grid-template-columns: clamp(120px, 20vw, 200px) clamp(80px, 12vw, 120px) 1fr;
   grid-template-rows: auto 1fr;
-  grid-template-areas:
+  grid-template-areas: 
     "status status status"
     "selectors center joystick";
-  gap: 2rem;
-}
-
-/* ─── Status Info en las esquinas ─── */
+  gap: clamp(0.5rem, 1.5vw, 1.5rem);
+}/* ─── Status Info en las esquinas ─── */
 .control-status {
   grid-area: status;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: clamp(0.7rem, 1.2vw, 0.95rem);
+  font-size: clamp(0.7rem, 1.5vw, 0.8rem);
   color: var(--light-gray);
-  margin-bottom: 1rem;
+  margin-bottom: clamp(0.5rem, 1vw, 1rem);
   flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 /* ─── Layout Sections ─── */
 .kick-section {
   grid-area: kick;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   width: 100%;
-  max-width: var(--col1);
-  padding: 1rem;
-  gap: 12px;
+  padding: clamp(0.25rem, 1vw, 0.5rem);
+  gap: clamp(5px, 1vw, 8px);
   box-sizing: border-box;
-  overflow: visible;
+  position: relative;
 }
-
-/* SIU popup */
-.siu-popup {
-  position: absolute;
-  z-index: 40;
-  right: 12%;
-  top: 18%;
-  background: rgba(0,0,0,0.85);
-  border: 1px solid rgba(255,255,255,0.06);
-  padding: 0.5rem;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-}
-
-.siu-option {
-  background: var(--light-gray);
-  color: #222;
-  border: none;
-  padding: 8px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.siu-option:hover { filter: brightness(1.05); }
-
-/* Full-screen translucent overlay and centered modal for SIU */
-.siu-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10050; /* ensure overlay sits above side-panel (z-index:200) and other UI elements */
-}
-
-.siu-modal {
-  width: min(720px, 90vw);
-  max-width: 900px;
-  background: linear-gradient(180deg, #2c2c2c 0%, #3a3a3a 100%);
-  border: 6px solid var(--light-gray);
-  border-radius: 12px;
-  padding: 1.25rem;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.6);
-  color: white;
-  z-index: 90;
-}
-
-.siu-modal h3 {
-  margin: 0 0 1rem 0;
-  font-size: clamp(18px, 2.2vw, 22px);
-}
-
-.siu-modal-body { display:flex; gap:1rem; }
-.siu-modal-actions { margin-top: 1rem; display:flex; justify-content:flex-end; }
-.siu-close { background: #1e3a8a; color: white; border: none; padding: 8px 12px; border-radius:6px; cursor:pointer; }
 
 .selectors-section {
   grid-area: selectors;
@@ -178,10 +92,9 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: 0.8rem;
+  gap: clamp(0.5rem, 1vw, 0.8rem);
   width: 100%;
-  max-width: var(--col1);
-  padding: 0 0.5rem;
+  padding: 0 clamp(0.25rem, 1vw, 0.5rem);
 }
 
 .center-controls {
@@ -190,19 +103,16 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: clamp(0.5rem, 1.2vw, 1rem);
-  /* height scales with ctrl-scale to preserve proportions */
-  height: calc(100% * var(--ctrl-scale)); /* use parent's height so it doesn't escape viewport */
-  max-height: calc(100% * var(--ctrl-scale));
-  padding: 0 0.5rem;
+  gap: clamp(0.5rem, 1vw, 0.8rem);
+  width: 100%;
+  padding: 0 clamp(0.25rem, 1vw, 0.5rem);
 }
 
 /* Botones del centro más pequeños */
 .center-controls button {
-  font-size: var(--btn-font) !important;
-  padding: var(--btn-pad-vertical) var(--btn-pad-horizontal) !important;
-  border-radius: var(--btn-radius) !important;
-  min-height: calc(var(--btn-font) * 2.2) !important;
+  font-size: clamp(10px, 2vw, 12px) !important;
+  padding: clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 12px) !important;
+  min-height: clamp(30px, 6vw, 35px) !important;
   height: auto !important;
 }
 
@@ -211,32 +121,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
   min-width: 0;
-  overflow: visible;
-  /* ensure joystick area shrinks in height proportionally */
-  height: calc(100% * var(--ctrl-scale));
-  max-height: calc(100% * var(--ctrl-scale));
-}
-
-/* Scale both axes visually but preserve grid layout by compensating the box size.
-   This lets the joystick and buttons scale together proportionally. */
-.center-controls, .center-controls-full,
-.joystick-section, .joystick-section-full {
-  --s: var(--ctrl-scale);
-  transform-origin: top left;
-  transform: scale(var(--s));
-  /* expand the box so after scaling it visually matches original grid cell size */
-  width: calc(100% / var(--s));
-  height: calc(100% / var(--s));
-}
-
-/* General buttons inside the nes-pad should scale proportionally */
-.nes-pad button,
-.nes-pad .mode-btn,
-.nes-pad .small-btn {
-  font-size: var(--btn-font);
-  padding: var(--btn-pad-vertical) var(--btn-pad-horizontal);
-  border-radius: var(--btn-radius);
 }
 
 /* ─── UI Normal - Layout de 3 columnas sin kick ─── */
@@ -246,11 +132,9 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: 0.8rem;
+  gap: clamp(0.5rem, 1vw, 0.8rem);
   width: 100%;
-  max-width: var(--col1);
-  padding: 0 0.5rem;
-  min-width: 0;
+  padding: 0 clamp(0.25rem, 1vw, 0.5rem);
 }
 
 .center-controls-full {
@@ -259,19 +143,16 @@
   flex-direction: column;
   align-items: stretch;
   justify-content: center;
-  gap: 0.8rem;
+  gap: clamp(0.5rem, 1vw, 0.8rem);
   width: 100%;
-  /* scale center controls column width with ctrl-scale */
-  max-width: var(--col2);
-  padding: 0 0.5rem;
-  min-width: 0;
+  padding: 0 clamp(0.25rem, 1vw, 0.5rem);
 }
 
 /* Botones del centro en modo normal también más pequeños */
 .center-controls-full button {
-  font-size: 12px !important;
-  padding: 8px 12px !important;
-  min-height: 35px !important;
+  font-size: clamp(10px, 2vw, 12px) !important;
+  padding: clamp(6px, 1.5vw, 8px) clamp(8px, 2vw, 12px) !important;
+  min-height: clamp(30px, 6vw, 35px) !important;
   height: auto !important;
 }
 
@@ -282,7 +163,6 @@
   justify-content: center;
   width: 100%;
   min-width: 0;
-  overflow: visible;
 }
 
 /* ─── Kick Button ─── */
@@ -291,12 +171,10 @@
   color: #333;
   border: none;
   border-radius: 50%;
-  /* keep circular but responsive — use base size scaled by --ctrl-scale */
-  --base-kick-size: clamp(64px, 12vw, 140px);
-  --base-kick-font: clamp(13px, 1.8vw, 18px);
-  width: calc(var(--base-kick-size) * var(--ctrl-scale));
+  /* usar proporciones responsivas más pequeñas */
+  width: clamp(60px, 12vw, 100px);
   aspect-ratio: 1 / 1;
-  font-size: calc(var(--base-kick-font) * var(--ctrl-scale));
+  font-size: clamp(10px, 2.5vw, 14px);
   font-weight: bold;
   box-shadow: 0 0.2rem 0.5rem rgba(0,0,0,0.2);
   display: flex;
@@ -323,9 +201,7 @@
 
 /* SIU button: small circular in bottom-right of kick */
 .siu-btn {
-  --base-siu-size: clamp(40px, 8vw, 100px);
-  --base-siu-font: clamp(12px, 1.6vw, 16px);
-  width: calc(var(--base-siu-size) * var(--ctrl-scale));
+  width: clamp(45px, 9vw, 70px);
   aspect-ratio: 1 / 1;
   border-radius: 50%;
   background: #1e3a8a;
@@ -335,7 +211,7 @@
   align-items: center;
   justify-content: center;
   font-weight: 700;
-  font-size: calc(var(--base-siu-font) * var(--ctrl-scale));
+  font-size: clamp(10px, 2vw, 12px);
   cursor: pointer;
   box-shadow: 0 6px 12px rgba(0,0,0,0.22);
   transition: transform .12s ease, background .12s ease;
@@ -379,29 +255,45 @@
 /* Tablets y pantallas medianas */
 @media (max-width: 1024px) {
   .nao-controller {
-    padding: 0.25rem;
-    gap: 0.25rem;
+    padding: clamp(0.125rem, 0.5vw, 0.25rem);
+    gap: clamp(0.125rem, 0.5vw, 0.25rem);
   }
   
   .nes-pad {
     height: calc(100vh - 0.5rem);
-    padding: 1.5rem 0.5rem;
-  --ctrl-scale: 0.95;
+    padding: clamp(0.8rem, 1.8vw, 1.2rem) clamp(0.25rem, 0.8vw, 0.4rem);
+    border-width: 4px;
+  }
+  
+  .nes-pad.ui-futbol {
+    grid-template-columns: clamp(80px, 14vw, 130px) clamp(60px, 10vw, 90px) 1fr;
+  }
+  
+  .nes-pad.ui-normal {
+    grid-template-columns: clamp(100px, 18vw, 160px) clamp(60px, 10vw, 90px) 1fr;
   }
 }
 
 /* Pantallas pequeñas */
 @media (max-width: 768px) {
   .nao-controller {
-    padding: 0.125rem;
-    gap: 0.125rem;
+    padding: clamp(0.06rem, 0.3vw, 0.125rem);
+    gap: clamp(0.06rem, 0.3vw, 0.125rem);
   }
   
   .nes-pad {
     height: calc(100vh - 0.25rem);
-    padding: 1rem 0.5rem;
-    gap: 0.5rem;
-  --ctrl-scale: 0.9;
+    padding: clamp(0.5rem, 1.5vw, 1rem) clamp(0.25rem, 0.8vw, 0.5rem);
+    gap: clamp(0.3rem, 1vw, 0.5rem);
+    border-width: 3px;
+  }
+  
+  .nes-pad.ui-futbol {
+    grid-template-columns: clamp(80px, 16vw, 140px) clamp(70px, 11vw, 100px) 1fr;
+  }
+  
+  .nes-pad.ui-normal {
+    grid-template-columns: clamp(100px, 20vw, 180px) clamp(70px, 11vw, 100px) 1fr;
   }
   
   .side-panel {
@@ -422,68 +314,19 @@
   
   .nes-pad {
     height: 100vh;
-    padding: 0.25rem;
-    font-size: 0.9rem;
+    padding: clamp(0.25rem, 1vw, 0.5rem);
+    font-size: clamp(0.8rem, 2vw, 0.9rem);
     border-radius: 0;
     border-width: 2px;
-    gap: 0.25rem;
-  --ctrl-scale: 0.82;
+    gap: clamp(0.2rem, 0.8vw, 0.3rem);
   }
-
-  /* Ajustar grid para móviles - distribución equilibrada */
+  
   .nes-pad.ui-futbol {
-    grid-template-columns: 120px 90px 1fr;
-    grid-template-rows: 60px 1fr;
-    padding: 0.25rem;
+    grid-template-columns: clamp(60px, 14vw, 100px) clamp(50px, 10vw, 80px) 1fr;
   }
-
+  
   .nes-pad.ui-normal {
-    grid-template-columns: 130px 90px 1fr;
-    grid-template-rows: 60px 1fr;
-    padding: 0.25rem;
-  }
-
-  /* Botones más grandes y proporcionados para móvil */
-  .kick-btn {
-    width: min(85%, 100px);
-    font-size: 14px;
-  }
-
-  .siu-btn {
-    width: min(70%, 75px);
-    font-size: 12px;
-  }
-
-  .kick-section {
-    max-width: 120px;
-    padding: 0.5rem;
-    gap: 10px;
-    justify-content: center;
-  }
-
-  .center-controls, .center-controls-full {
-    max-width: 90px;
-    gap: 0.5rem;
-    padding: 0.25rem;
-  }
-
-  .center-controls button, .center-controls-full button {
-    font-size: 11px !important;
-    padding: 8px 10px !important;
-    min-height: 32px !important;
-  }
-
-  .joystick-section, .joystick-section-full {
-    padding: 0.25rem;
-    min-height: 0;
-    overflow: visible;
-  }
-
-  .control-status {
-    font-size: 0.7rem;
-    margin-bottom: 0.25rem;
-    gap: 0.25rem;
-    flex-wrap: wrap;
+    grid-template-columns: clamp(80px, 18vw, 120px) clamp(50px, 10vw, 80px) 1fr;
   }
   
   .side-panel {
@@ -491,75 +334,18 @@
   }
   
   .side-panel-nav {
-    width: 45px;
+    width: 50px;
     padding: 0.5rem 0;
   }
   
   .side-nav-btn {
-    width: 28px;
-    height: 28px;
-    font-size: 0.9rem;
+    width: 32px;
+    height: 32px;
+    font-size: 1rem;
   }
   
   .side-panel-content {
-    width: 180px;
-  }
-}
-
-/* iPhone 14 y dispositivos similares (390px) */
-@media (max-width: 430px) {
-  .nao-controller {
-    height: 100vh;
-    height: 100dvh; /* dynamic viewport height para móviles */
-  }
-
-  .nes-pad {
-    height: 100vh;
-    height: 100dvh;
-  --ctrl-scale: 0.78;
-  }
-
-  .nes-pad.ui-futbol {
-    grid-template-columns: 110px 80px 1fr;
-    gap: 0.2rem;
-  }
-
-  .nes-pad.ui-normal {
-    grid-template-columns: 120px 80px 1fr;
-    gap: 0.2rem;
-  }
-
-  .kick-btn {
-    width: min(80%, 90px);
-    font-size: 13px;
-  }
-
-  .siu-btn {
-    width: min(65%, 65px);
-    font-size: 11px;
-  }
-
-  .kick-section {
-    max-width: 110px;
-    padding: 0.25rem;
-    gap: 8px;
-  }
-
-  .center-controls, .center-controls-full {
-    max-width: 80px;
-    gap: 0.4rem;
-  }
-
-  .center-controls button, .center-controls-full button {
-    font-size: 10px !important;
-    padding: 6px 8px !important;
-    min-height: 30px !important;
-  }
-
-  .control-status {
-    font-size: 0.65rem;
-    margin-bottom: 0.2rem;
-    gap: 0.2rem;
+    width: 200px;
   }
 }
 
@@ -586,61 +372,7 @@
 }
 
 /* Pantallas muy altas (portrait mode) */
-@media (orientation: portrait) and (max-width: 480px) {
-  .nao-controller {
-    flex-direction: row;
-    gap: 0;
-  }
-  
-  .nes-pad {
-    height: 100vh;
-    width: calc(100vw - 50px);
-  }
-  
-  .side-panel {
-    width: 50px;
-    height: 100vh;
-    flex-direction: column;
-  }
-  
-  .side-panel-nav {
-    width: 50px;
-    height: auto;
-    flex-direction: column;
-    padding: 0.25rem 0;
-  }
-  
-  .side-panel-content {
-    width: 220px;
-    height: auto;
-  }
-
-  /* Grid más compacto en portrait */
-  .nes-pad.ui-futbol {
-    grid-template-columns: 100px 75px 1fr;
-    grid-template-rows: 50px 1fr;
-    gap: 0.2rem;
-    padding: 0.2rem;
-  }
-
-  .nes-pad.ui-normal {
-    grid-template-columns: 110px 75px 1fr;
-    grid-template-rows: 50px 1fr;
-    gap: 0.2rem;
-    padding: 0.2rem;
-  }
-
-  .kick-section {
-    padding: 0.2rem;
-  }
-
-  .center-controls, .center-controls-full {
-    padding: 0.2rem;
-  }
-}
-
-/* Portrait mode para pantallas más grandes */
-@media (orientation: portrait) and (min-width: 481px) {
+@media (orientation: portrait) {
   .nao-controller {
     flex-direction: column;
     gap: 0.25rem;

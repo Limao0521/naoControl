@@ -26,7 +26,6 @@ const NaoController = () => {
   const kickCooldownRef = useRef(null);
 
   const { sendMessage, lastMessage, isConnected } = useWebSocket(6671);
-  const [siuMenuOpen, setSiuMenuOpen] = useState(false);
 
   // Detectar IP del host
   useEffect(() => {
@@ -235,34 +234,18 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
-  const toggleSiuMenu = useCallback((e) => {
-    e?.stopPropagation();
-    setSiuMenuOpen(v => !v);
-  }, []);
-
-  const selectSiuGesture = useCallback((gesture) => {
-    // close modal
-    setSiuMenuOpen(false);
-
-    // send a gesture action if websocket available
-    if (sendMessage) {
-      sendMessage({ action: 'gesture', name: gesture });
-      console.log('[UI] gesture sent →', gesture);
-    }
-    // if the selected gesture is the original SIU, also call the legacy handler
-    if (gesture === 'siu') {
-      handleSiu();
+  // Comandos de rotación
+  const handleTurnLeft = useCallback(() => {
+    if (sendMessage({ action: 'turnLeft', speed: 0.5, duration: 2.0 })) {
+      console.log('[UI] Turn Left enviado');
     }
   }, [sendMessage]);
 
-  // close modal with Escape
-  useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === 'Escape' && siuMenuOpen) setSiuMenuOpen(false);
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [siuMenuOpen]);
+  const handleTurnRight = useCallback(() => {
+    if (sendMessage({ action: 'turnRight', speed: 0.4 })) {
+      console.log('[UI] Turn Right enviado');
+    }
+  }, [sendMessage]);
 
   // Funciones de los menús
   const handleMenuSelect = useCallback((menuId) => {
@@ -480,7 +463,9 @@ const NaoController = () => {
               <div className="joystick-section-full">
                 <Joystick 
                   onMove={handleJoystickMove} 
-                  mode={currentMode} 
+                  mode={currentMode}
+                  onTurnLeft={handleTurnLeft}
+                  onTurnRight={handleTurnRight}
                 />
               </div>
             </>
@@ -501,24 +486,11 @@ const NaoController = () => {
                 {/* SIU Button (circular, bottom-right of kick) */}
                 <button
                   className="siu-btn"
-                  onClick={toggleSiuMenu}
-                  title="Gestures"
+                  onClick={handleSiu}
+                  title="SIU"
                 >
-                  {'💃'}
+                  SIU
                 </button>
-                {siuMenuOpen && (
-                  <div className="siu-overlay" onClick={() => setSiuMenuOpen(false)}>
-                    <div className="siu-modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-                      <h3>Gestures</h3>
-                      <div className="siu-modal-body">
-                        <button className="siu-option" onClick={() => selectSiuGesture('siu')}>SIU</button>
-                      </div>
-                      <div className="siu-modal-actions">
-                        <button className="siu-close" onClick={() => setSiuMenuOpen(false)}>Close</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
 
               {/* Center Controls - Solo botones básicos */}
@@ -536,6 +508,8 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode="walk"
+                  onTurnLeft={handleTurnLeft}
+                  onTurnRight={handleTurnRight}
                 />
               </div>
             </>

@@ -4,10 +4,9 @@
   color: #333;
   border: none;
   border-radius: 50%;
-  /* use shared base kick size if present, otherwise fall back to clamp */
-  width: calc(var(--base-kick-size, clamp(56px, 10vw, 90px)) * var(--ctrl-scale, 1));
-  height: calc(var(--base-kick-size, clamp(56px, 10vw, 90px)) * var(--ctrl-scale, 1));
-  font-size: calc(var(--base-kick-font, clamp(16px, 2.4vw, 28px)) * var(--ctrl-scale, 1));
+  width: 4.5rem;
+  height: 4.5rem;
+  font-size: 2rem;
   font-weight: bold;
   box-shadow: 0 0.2rem 0.5rem rgba(0,0,0,0.2);
   display: flex;
@@ -29,21 +28,22 @@
 .center{ 
   display: flex; 
   flex-direction: column; 
-  gap: .5rem;
+  gap: clamp(0.3rem, 1vw, 0.5rem);
   width: 100%;
 }
 
 .small-btn{
-  background: var(--light-gray);
-  color: #222;
-  border: none;
-  border-radius: calc(var(--base-btn-radius, 0.3rem) * var(--ctrl-scale, 1));
-  padding: calc(var(--base-btn-pad-vertical, 6px) * var(--ctrl-scale, 1)) calc(var(--base-btn-pad-horizontal, 10px) * var(--ctrl-scale, 1));
-  font-size: calc(var(--base-btn-font, 12px) * var(--ctrl-scale, 1));
+  background: var(--light-gray); 
+  color: #222; 
+  border: none; 
+  border-radius: .3rem;
+  padding: clamp(0.3rem, 1vw, 0.4rem) clamp(0.6rem, 1.5vw, 0.8rem); 
+  font-size: clamp(0.7rem, 1.8vw, 0.9rem); 
   box-shadow: inset 0 -.2rem 0 var(--shadow);
   transition: transform .05s;
   cursor: pointer;
   width: 100%;
+  min-height: clamp(28px, 5vw, 36px);
 }
 
 .small-btn:active{ 

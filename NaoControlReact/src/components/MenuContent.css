@@ -1,11 +1,10 @@
-/* ─── Menu Content (responsive) ─── */
+/* ─── Menu Content ─── */
 .menu-content {
   height: 100%;
   width: 100%;
   background: #1a1a1a;
   color: white;
-  --menu-pad: clamp(10px, 2vw, 18px);
-  padding: var(--menu-pad);
+  padding: 1rem;
   overflow-y: auto;
 }
 
@@ -30,5 +29,5 @@
 .menu-content .menu-header {
   color: white !important;
   border-bottom: 1px solid #333 !important;
-  margin-bottom: clamp(8px,1.6vw,16px) !important;
+  margin-bottom: 1rem !important;
 }

@@ -53,8 +53,7 @@ const useJoystick = (onMove, mode = 'walk') => {
     
     setKnobPosition(dx, dy);
     
-  // Invert X so left produces negative and right positive consistently
-  const nx = -dx / LIM;
+    const nx = dx / LIM;
     const ny = -dy / LIM;
     
     // Usar el mismo umbral que el código original (0.05)
@@ -116,7 +115,8 @@ const useJoystick = (onMove, mode = 'walk') => {
   const handleTouchMove = useCallback((e) => {
     if (!isActive) return;
     
-    for (const touch of e.touches) {
+    for (let i = 0; i < e.touches.length; i++) {
+      const touch = e.touches[i];
       if (touch.identifier === touchIdRef.current) {
         handleMove(touch.clientX, touch.clientY);
         break;
