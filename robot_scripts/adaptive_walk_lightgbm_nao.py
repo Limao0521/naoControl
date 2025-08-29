@@ -128,15 +128,22 @@ class FeatureScalerNAO:
         self.scaler_data.close()
 
 class AdaptiveWalkLightGBM:
-    """Sistema de caminata adaptiva con modelos LightGBM AutoML"""
+    """Sistema de caminata adaptiva con modelos LightGBM AutoML y modo Golden Parameters"""
     
-    def __init__(self, models_dir="models_npz_automl"):
+    def __init__(self, models_dir="models_npz_automl", golden_csv_path="gait_params_log.csv"):
         self.models_dir = models_dir
         self.models = {}
         self.scaler = None
         self.motion = None
         self.memory = None
         self.enabled = False
+        
+        # 🌟 NUEVO: Configuración de modo híbrido
+        self.mode = "training"  # "training" o "golden"
+        self.golden_csv_path = golden_csv_path
+        self.golden_params = None
+        self.last_csv_load = 0
+        self.csv_reload_interval = 30  # segundos
         
         # Configuración de caminata
         self.default_params = {
@@ -157,6 +164,9 @@ class AdaptiveWalkLightGBM:
         
         # Cargar modelos AutoML
         self._load_automl_models()
+        
+        # 🌟 NUEVO: Cargar parámetros golden si están disponibles
+        self._load_golden_parameters()
     
     def _init_nao_proxies(self):
         """Inicializar proxies NAO"""
