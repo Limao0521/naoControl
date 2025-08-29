@@ -8,7 +8,8 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick,
     volume, getBattery, getAutonomousLife, turnLeft, turnRight,
-    adaptiveGait  ← NEW (enable: bool, mode: "auto"|"slippery")
+    adaptiveGait, adaptiveRandomForest, getRandomForestStats,
+    startLogging, stopLogging, getLoggingStatus, logSample ← NEW
 
 • Watchdog detiene la marcha si no recibe walk en WATCHDOG s
 
@@ -18,6 +19,7 @@ Cambios clave (versión "single-config + adaptive"):
 - NUEVO: Bucle adaptativo que lee FSR + IMU, calcula CoP y ajusta marcha
   suavemente (sin saltos) con histeresis y rampas en velocidades.
 - Soporte para RandomForest adaptativo con logging CSV
+- Control de data logger integrado para generar datasets de entrenamiento
 """
 
 from __future__ import print_function
@@ -44,6 +46,10 @@ except ImportError:
 # ───── Rutas WS local ───────────────────────────────────────────────────────────
 sys.path.insert(0, os.path.dirname(__file__))
 sys.path.insert(0, "/home/nao/SimpleWebSocketServer-0.1.2")
+# Agregar path para desarrollo local
+local_ws_path = os.path.join(os.path.dirname(__file__), "..", "NaoControlInstaller", "payload", "SimpleWebSocketServer-0.1.2")
+if os.path.exists(local_ws_path):
+    sys.path.insert(0, local_ws_path)
 
 try:
     from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
@@ -79,10 +85,19 @@ try:
     adaptive_walker = AdaptiveWalkRandomForest()
     logger.info("RandomForest de caminata adaptativa inicializada")
     ADAPTIVE_WALK_ENABLED = True
-except ImportError as e:
+except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning("RandomForest adaptativo no disponible: {}".format(e))
     adaptive_walker = None
     ADAPTIVE_WALK_ENABLED = False
+
+# Importar data logger
+try:
+    from data_logger import DataLogger, SensorReader
+    DATA_LOGGER_AVAILABLE = True
+    logger.info("Data logger disponible")
+except (ImportError, AttributeError) as e:
+    logger.warning("Data logger no disponible: {}".format(e))
+    DATA_LOGGER_AVAILABLE = False
 
 def log(tag, msg):
     """Función de logging mejorada que usa el sistema centralizado"""
@@ -235,6 +250,11 @@ ADAPTIVE = {"enabled": False, "mode": "auto", "slip": False, "last_event": 0.0}
 
 # Estado de caminar
 _last_walk = time.time()
+
+# ─── Data Logger state ─────────────────────────────────────────────────────────
+data_logger_instance = None
+sensor_reader_instance = None
+logging_active = False
 
 # ─── Watchdog ──────────────────────────────────────────────────────────────────
 def watchdog():
@@ -392,6 +412,7 @@ class RobotWS(WebSocket):
 
     def handleMessage(self):
         global _last_walk, CURRENT_GAIT, CAP_LIMITS, GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF
+        global data_logger_instance, sensor_reader_instance, logging_active
         raw = self.data.strip()
         log("WS", "Recibido RAW: %s" % raw)
         
@@ -737,6 +758,120 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     logger.error("Error obteniendo estadísticas RandomForest: {}".format(e))
                     self.sendMessage(json.dumps({"randomForestStats": {"error": str(e)}}))
+
+            # ── Control Data Logger ───────────────────────────────────────────
+            elif action == "startLogging":
+                try:
+                    if not DATA_LOGGER_AVAILABLE:
+                        self.sendMessage(json.dumps({"startLogging": {"success": False, "error": "Data logger no disponible"}}))
+                        return
+                    
+                    if logging_active:
+                        self.sendMessage(json.dumps({"startLogging": {"success": False, "error": "Logging ya activo"}}))
+                        return
+                    
+                    # Obtener parámetros
+                    duration = float(msg.get("duration", 300))  # 5 minutos por defecto
+                    frequency = float(msg.get("frequency", 10))  # 10 Hz por defecto
+                    output_file = msg.get("output", "")
+                    
+                    # Generar nombre de archivo si no se proporciona
+                    if not output_file:
+                        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                        output_file = "/home/nao/logs/adaptive_data_{}.csv".format(timestamp)
+                        # En Windows para testing
+                        if os.name == 'nt':
+                            output_file = "C:/tmp/adaptive_data_{}.csv".format(timestamp)
+                    
+                    # Inicializar componentes
+                    sensor_reader_instance = SensorReader(IP_NAO, PORT_NAO)
+                    data_logger_instance = DataLogger(output_file, sensor_reader_instance)
+                    
+                    if data_logger_instance.start_logging():
+                        logging_active = True
+                        response = {
+                            "startLogging": {
+                                "success": True,
+                                "output": output_file,
+                                "duration": duration,
+                                "frequency": frequency
+                            }
+                        }
+                        log("DataLogger", "Logging iniciado: {} ({}s @ {}Hz)".format(output_file, duration, frequency))
+                    else:
+                        response = {"startLogging": {"success": False, "error": "No se pudo iniciar logging"}}
+                    
+                    self.sendMessage(json.dumps(response))
+                    
+                except Exception as e:
+                    logger.error("Error iniciando logging: {}".format(e))
+                    self.sendMessage(json.dumps({"startLogging": {"success": False, "error": str(e)}}))
+
+            elif action == "stopLogging":
+                try:
+                    if not logging_active or not data_logger_instance:
+                        self.sendMessage(json.dumps({"stopLogging": {"success": False, "error": "Logging no activo"}}))
+                        return
+                    
+                    samples_written = data_logger_instance.samples_written
+                    data_logger_instance.stop_logging()
+                    logging_active = False
+                    
+                    response = {
+                        "stopLogging": {
+                            "success": True,
+                            "samples": samples_written
+                        }
+                    }
+                    self.sendMessage(json.dumps(response))
+                    log("DataLogger", "Logging detenido. Muestras: {}".format(samples_written))
+                    
+                except Exception as e:
+                    logger.error("Error deteniendo logging: {}".format(e))
+                    self.sendMessage(json.dumps({"stopLogging": {"success": False, "error": str(e)}}))
+
+            elif action == "getLoggingStatus":
+                try:
+                    samples = 0
+                    output_file = ""
+                    if data_logger_instance:
+                        samples = data_logger_instance.samples_written
+                        output_file = data_logger_instance.output_file
+                    
+                    response = {
+                        "loggingStatus": {
+                            "active": logging_active,
+                            "available": DATA_LOGGER_AVAILABLE,
+                            "samples": samples,
+                            "output": output_file
+                        }
+                    }
+                    self.sendMessage(json.dumps(response))
+                    
+                except Exception as e:
+                    logger.error("Error obteniendo estado logging: {}".format(e))
+                    self.sendMessage(json.dumps({"loggingStatus": {"error": str(e)}}))
+
+            elif action == "logSample":
+                try:
+                    if not logging_active or not data_logger_instance:
+                        self.sendMessage(json.dumps({"logSample": {"success": False, "error": "Logging no activo"}}))
+                        return
+                    
+                    success = data_logger_instance.log_sample()
+                    samples = data_logger_instance.samples_written
+                    
+                    response = {
+                        "logSample": {
+                            "success": success,
+                            "samples": samples
+                        }
+                    }
+                    self.sendMessage(json.dumps(response))
+                    
+                except Exception as e:
+                    logger.error("Error logging sample: {}".format(e))
+                    self.sendMessage(json.dumps({"logSample": {"success": False, "error": str(e)}}))
 
             else:
                 log("WS", "⚠ Acción desconocida '%s'" % action)

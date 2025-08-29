@@ -36,10 +36,17 @@ import numpy as np
 try:
     import builtins as _builtins
 except ImportError:
-    # Python2
-    _builtins = __builtins__
+    # Python2 - __builtins__ puede ser dict o módulo
+    import __builtin__ as _builtins
 
-safe_input = getattr(_builtins, 'raw_input', None) or getattr(_builtins, 'input')
+# Función segura para obtener input
+def safe_input_func():
+    try:
+        return raw_input
+    except NameError:
+        return input
+
+safe_input = safe_input_func()
 
 # Importes NAOqi
 try:
