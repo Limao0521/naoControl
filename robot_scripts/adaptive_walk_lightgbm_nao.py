@@ -61,7 +61,7 @@ class LightGBMNAOPredictor:
             self.trees.append(tree_dict)
             offset += length
         
-        print(f"[INFO] Modelo LightGBM cargado: {self.n_trees} árboles, {self.n_features} features")
+        print("[INFO] Modelo LightGBM cargado: {} árboles, {} features".format(self.n_trees, self.n_features))
     
     def _deserialize_tree(self, tree_array, idx):
         """Deserializar árbol desde array"""
@@ -112,7 +112,7 @@ class FeatureScalerNAO:
         self.scaler_type = str(self.scaler_data['scaler_type'])
         self.mean = self.scaler_data['mean']
         self.scale = self.scaler_data['scale']
-        print(f"[INFO] Scaler cargado: {self.scaler_type}")
+        print("[INFO] Scaler cargado: {}".format(self.scaler_type))
     
     def transform(self, X):
         """Transformar features"""
@@ -163,7 +163,9 @@ class AdaptiveWalkLightGBM:
         self._init_nao_proxies()
         
         # Cargar modelos AutoML
-        self._load_automl_models()
+        models_loaded = self._load_automl_models()
+        if not models_loaded:
+            print("[WARN] Modelos LightGBM no disponibles, usando modo simulación")
         
         # 🌟 NUEVO: Cargar parámetros golden si están disponibles
         self._load_golden_parameters()
@@ -171,19 +173,50 @@ class AdaptiveWalkLightGBM:
     def _init_nao_proxies(self):
         """Inicializar proxies NAO"""
         if ALProxy is None:
-            print("[WARN] Modo simulación - proxies no disponibles")
+            print("[WARN] Modo simulación - NAOqi no disponible")
             return
         
         try:
-            self.motion = ALProxy("ALMotion")
-            self.memory = ALProxy("ALMemory")
+            print("[INFO] Intentando conectar a NAOqi...")
+            print("[INFO] IP: 127.0.0.1, Puerto: 9559")
+            
+            # Intentar crear proxies con timeout
+            self.motion = ALProxy("ALMotion", "127.0.0.1", 9559)
+            self.memory = ALProxy("ALMemory", "127.0.0.1", 9559)
+            
+            # Verificar que los proxies funcionan
+            robot_awake = self.motion.robotIsWakeUp()
             print("[INFO] Proxies NAO inicializados")
+            print("[INFO] Robot despierto: {}".format(robot_awake))
+            
+            if not robot_awake:
+                print("[INFO] Despertando robot...")
+                self.motion.wakeUp()
+                
         except Exception as e:
-            print(f"[ERROR] Error inicializando proxies: {e}")
+            print("[ERROR] Error inicializando proxies: {}".format(e))
+            print("[INFO] Posibles causas:")
+            print("  - NAOqi no está ejecutándose")
+            print("  - Robot apagado o en modo sleep")
+            print("  - IP/Puerto incorrectos")
+            print("  - Problemas de red")
+            print("[INFO] Continuando en modo simulación...")
+            self.motion = None
+            self.memory = None
     
     def _load_automl_models(self):
         """Cargar modelos LightGBM AutoML"""
-        print(f"[INFO] Cargando modelos desde {self.models_dir}/")
+        print("[INFO] Cargando modelos desde {}/".format(self.models_dir))
+        
+        # Verificar que el directorio existe
+        if not os.path.exists(self.models_dir):
+            print("[ERROR] Directorio de modelos no encontrado: {}".format(self.models_dir))
+            print("[INFO] Creando directorio de modelos para futuro uso...")
+            try:
+                os.makedirs(self.models_dir)
+            except Exception as e:
+                print("[WARN] No se pudo crear directorio: {}".format(e))
+            return False
         
         try:
             # Cargar scaler
@@ -191,26 +224,47 @@ class AdaptiveWalkLightGBM:
             if os.path.exists(scaler_path):
                 self.scaler = FeatureScalerNAO(scaler_path)
             else:
-                print(f"[ERROR] Scaler no encontrado: {scaler_path}")
+                print("[ERROR] Scaler no encontrado: {}".format(scaler_path))
+                print("[INFO] Archivos disponibles en {}:".format(self.models_dir))
+                try:
+                    files = os.listdir(self.models_dir)
+                    for f in files:
+                        print("  - {}".format(f))
+                except Exception:
+                    print("  (No se pudo listar directorio)")
                 return False
             
             # Cargar modelos por target
             for target in GAIT_TARGETS:
-                model_path = os.path.join(self.models_dir, f"lightgbm_model_{target}.npz")
+                model_path = os.path.join(self.models_dir, "lightgbm_model_{}.npz".format(target))
                 
                 if os.path.exists(model_path):
                     self.models[target] = LightGBMNAOPredictor(model_path)
-                    print(f"[INFO] Modelo {target} cargado exitosamente")
+                    print("[INFO] Modelo {} cargado exitosamente".format(target))
                 else:
-                    print(f"[ERROR] Modelo no encontrado: {model_path}")
+                    print("[ERROR] Modelo no encontrado: {}".format(model_path))
                     return False
             
-            print(f"[SUCCESS] {len(self.models)} modelos LightGBM cargados")
+            print("[SUCCESS] {} modelos LightGBM cargados".format(len(self.models)))
             return True
             
         except Exception as e:
-            print(f"[ERROR] Error cargando modelos: {e}")
+            print("[ERROR] Error cargando modelos: {}".format(e))
             return False
+    
+    def _load_golden_parameters(self):
+        """Cargar parámetros golden desde CSV si están disponibles"""
+        try:
+            if not os.path.exists(self.golden_csv_path):
+                print("[INFO] No se encontró archivo golden CSV: {}".format(self.golden_csv_path))
+                return
+            
+            # Leer parámetros golden (implementación simplificada)
+            print("[INFO] Sistema golden parameters disponible: {}".format(self.golden_csv_path))
+            # Por ahora no cargamos automáticamente, solo reportamos disponibilidad
+            
+        except Exception as e:
+            print("[WARN] Error cargando parámetros golden: {}".format(e))
     
     def _get_sensor_data(self):
         """Obtener datos de sensores del NAO"""
@@ -252,12 +306,12 @@ class AdaptiveWalkLightGBM:
             # FSR data
             for foot in ['lfoot', 'rfoot']:
                 for sensor in ['fl', 'fr', 'rl', 'rr']:
-                    key = f"{foot}_{sensor}"
+                    key = "{}_{}".format(foot, sensor)
                     foot_name = "LFoot" if foot == 'lfoot' else "RFoot"
                     sensor_name = {"fl": "FrontLeft", "fr": "FrontRight", 
                                  "rl": "RearLeft", "rr": "RearRight"}[sensor]
                     
-                    fsr_path = f"Device/SubDeviceList/{foot_name}/FSR/{sensor_name}/Sensor/Value"
+                    fsr_path = "Device/SubDeviceList/{}/FSR/{}/Sensor/Value".format(foot_name, sensor_name)
                     fsr_value = self.memory.getData(fsr_path)
                     sensor_data[key] = fsr_value if fsr_value else 0.0
             
@@ -274,7 +328,7 @@ class AdaptiveWalkLightGBM:
             return sensor_data
             
         except Exception as e:
-            print(f"[ERROR] Error leyendo sensores: {e}")
+            print("[ERROR] Error leyendo sensores: {}".format(e))
             return self._get_sensor_data()  # Fallback a datos simulados
     
     def _apply_feature_engineering(self, sensor_data):
@@ -360,14 +414,14 @@ class AdaptiveWalkLightGBM:
                     predictions[target_name] = float(pred_value)
                     
                 except Exception as e:
-                    print(f"[ERROR] Error prediciendo {target_name}: {e}")
+                    print("[ERROR] Error prediciendo {}: {}".format(target_name, e))
                     predictions[target_name] = self.default_params[target_name]
             
             # Verificar estabilidad basada en ángulos
             stability_score = 1.0 - min(1.0, sensor_data['stability_index'] / 0.5)
             
             if stability_score < self.stability_threshold:
-                print(f"[WARN] Baja estabilidad ({stability_score:.2f}), usando parámetros conservadores")
+                print("[WARN] Baja estabilidad ({:.2f}), usando parámetros conservadores".format(stability_score))
                 # Mezclar con parámetros por defecto
                 for target in predictions:
                     predictions[target] = (0.7 * self.default_params[target] + 
@@ -385,16 +439,14 @@ class AdaptiveWalkLightGBM:
             if len(self.prediction_history) > 10:
                 self.prediction_history.pop(0)
             
-            print(f"[PREDICT] StepHeight:{predictions['StepHeight']:.3f}, " +
-                  f"MaxStepX:{predictions['MaxStepX']:.3f}, " +
-                  f"MaxStepY:{predictions['MaxStepY']:.3f}, " +
-                  f"MaxStepTheta:{predictions['MaxStepTheta']:.3f}, " +
-                  f"Frequency:{predictions['Frequency']:.3f} (stability:{stability_score:.2f})")
+            print("[PREDICT] StepHeight:{:.3f}, MaxStepX:{:.3f}, MaxStepY:{:.3f}, MaxStepTheta:{:.3f}, Frequency:{:.3f} (stability:{:.2f})".format(
+                predictions['StepHeight'], predictions['MaxStepX'], predictions['MaxStepY'], 
+                predictions['MaxStepTheta'], predictions['Frequency'], stability_score))
             
             return predictions
             
         except Exception as e:
-            print(f"[ERROR] Error en predicción: {e}")
+            print("[ERROR] Error en predicción: {}".format(e))
             return self.default_params.copy()
     
     def update_gait_parameters(self):
@@ -418,17 +470,31 @@ class AdaptiveWalkLightGBM:
             return True
             
         except Exception as e:
-            print(f"[ERROR] Error actualizando parámetros: {e}")
+            print("[ERROR] Error actualizando parámetros: {}".format(e))
             return False
     
     def start_adaptive_walk(self, x=0.02, y=0.0, theta=0.0):
         """Iniciar caminata adaptiva"""
+        print("[INFO] Iniciando caminata adaptiva con LightGBM AutoML...")
+        
         if not self.motion:
-            print("[ERROR] Motion proxy no disponible")
-            return False
+            print("[WARN] Motion proxy no disponible - ejecutando en modo simulación")
+            print("[SIMULATION] Simulando caminata con velocidades: x={:.3f}, y={:.3f}, theta={:.3f}".format(x, y, theta))
+            
+            # Predecir parámetros sin aplicarlos al robot
+            initial_params = self.predict_gait_parameters()
+            
+            print("[SIMULATION] Parámetros de caminata que se aplicarían:")
+            for param, value in initial_params.items():
+                print("  {}: {:.4f}".format(param, value))
+            
+            print("[SIMULATION] En un robot real, estos parámetros se aplicarían al ALMotion")
+            print("[SIMULATION] Para testing real, conecta a un NAO con NAOqi ejecutándose")
+            
+            self.enabled = True
+            return True
         
         try:
-            print("[INFO] Iniciando caminata adaptiva con LightGBM AutoML...")
             self.enabled = True
             
             # Predecir parámetros iniciales
@@ -437,29 +503,32 @@ class AdaptiveWalkLightGBM:
             # Configurar y iniciar caminata
             self.motion.moveToward(x, y, theta)
             
-            print(f"[SUCCESS] Caminata adaptiva iniciada con parámetros LightGBM:")
+            print("[SUCCESS] Caminata adaptiva iniciada con parámetros LightGBM:")
             for param, value in initial_params.items():
-                print(f"  {param}: {value:.4f}")
+                print("  {}: {:.4f}".format(param, value))
             
             return True
             
         except Exception as e:
-            print(f"[ERROR] Error iniciando caminata: {e}")
+            print("[ERROR] Error iniciando caminata: {}".format(e))
             return False
     
     def stop_adaptive_walk(self):
         """Detener caminata adaptiva"""
         self.enabled = False
         
-        if self.motion:
-            try:
-                self.motion.stopMove()
-                print("[INFO] Caminata adaptiva detenida")
-                return True
-            except:
-                pass
+        if not self.motion:
+            print("[SIMULATION] Simulando parada de caminata")
+            print("[INFO] Caminata adaptiva detenida (simulación)")
+            return True
         
-        return False
+        try:
+            self.motion.stopMove()
+            print("[INFO] Caminata adaptiva detenida")
+            return True
+        except Exception as e:
+            print("[ERROR] Error deteniendo caminata: {}".format(e))
+            return False
     
     def cleanup(self):
         """Limpiar recursos"""
@@ -494,11 +563,33 @@ if __name__ == "__main__":
     adaptive_walk = AdaptiveWalkLightGBM()
     
     if not adaptive_walk.models:
-        print("[ERROR] No se pudieron cargar modelos LightGBM")
-        sys.exit(1)
+        print("[WARN] No se pudieron cargar modelos LightGBM")
+        print("[INFO] El sistema funcionará en modo simulación")
+        print("")
+        print("Para usar modelos LightGBM:")
+        print("1. Copia los archivos *.npz al directorio: models_npz_automl/")
+        print("2. Archivos necesarios:")
+        print("   - feature_scaler.npz")
+        print("   - lightgbm_model_StepHeight.npz")
+        print("   - lightgbm_model_MaxStepX.npz") 
+        print("   - lightgbm_model_MaxStepY.npz")
+        print("   - lightgbm_model_MaxStepTheta.npz")
+        print("   - lightgbm_model_Frequency.npz")
+        print("3. Reinicia el programa")
+        print("")
+        
+        # Preguntar si continuar sin modelos
+        try:
+            continuar = safe_input("¿Continuar en modo simulación? (y/n): ").strip().lower()
+            if continuar not in ['y', 'yes', 's', 'si']:
+                print("[INFO] Programa terminado")
+                sys.exit(0)
+        except KeyboardInterrupt:
+            print("\n[INFO] Programa terminado")
+            sys.exit(0)
     
     try:
-        print("\\nComandos disponibles:")
+        print("\nComandos disponibles:")
         print("  'start' - Iniciar caminata adaptiva")
         print("  'stop'  - Detener caminata") 
         print("  'predict' - Mostrar predicción actual")
@@ -506,7 +597,7 @@ if __name__ == "__main__":
         
         while True:
             try:
-                cmd = safe_input("\\n> ").strip().lower()
+                cmd = safe_input("\n> ").strip().lower()
                 
                 if cmd == 'start':
                     x = float(safe_input("Velocidad X (default 0.02): ") or "0.02")
@@ -521,7 +612,7 @@ if __name__ == "__main__":
                     params = adaptive_walk.predict_gait_parameters()
                     print("Predicción actual:")
                     for param, value in params.items():
-                        print(f"  {param}: {value:.4f}")
+                        print("  {}: {:.4f}".format(param, value))
                         
                 elif cmd == 'quit':
                     break
@@ -532,8 +623,8 @@ if __name__ == "__main__":
             except KeyboardInterrupt:
                 break
             except Exception as e:
-                print(f"Error: {e}")
+                print("Error: {}".format(e))
     
     finally:
         adaptive_walk.cleanup()
-        print("\\n[INFO] Programa terminado")
+        print("\n[INFO] Programa terminado")
