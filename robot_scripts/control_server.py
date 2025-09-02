@@ -202,16 +202,16 @@ def _apply_absolute_limits(vx, vy, wz):
     Estos límites se aplican SIEMPRE, independientemente de CAPS o otros sistemas.
     """
     # Limitar vx entre -0.6 y 0.6
-    if vx > 0.5:
-        vx = 0.5
-    elif vx < -0.5:
-        vx = -0.5
-    
+    if vx > 0.4:
+        vx = 0.4
+    elif vx < -0.4:
+        vx = -0.4
+
     # Limitar vy entre -0.45 y 0.45
-    if vy > 0.35:
-        vy = 0.35
-    elif vy < -0.35:
-        vy = -0.35
+    if vy > 0.25:
+        vy = 0.25
+    elif vy < -0.25:
+        vy = -0.25
     
     # wz sin límites adicionales (se deja para CAPS)
     return vx, vy, wz
