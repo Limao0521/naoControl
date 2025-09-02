@@ -748,17 +748,6 @@ class RobotWS(WebSocket):
                     log("WS", "Error getAutonomousLife: %s" % e)
                     self.sendMessage(json.dumps({"autonomousLifeEnabled": False}))
 
-            # ── Activar / configurar modo adaptativo ─────────────────────────
-            elif action == "adaptiveGait":
-                enable = bool(msg.get("enable", True))
-                mode = str(msg.get("mode", ADAPTIVE["mode"]))
-                ADAPTIVE["enabled"] = enable
-                if mode in ("auto", "slippery"):
-                    ADAPTIVE["mode"] = mode
-                ADAPTIVE["last_event"] = 0.0  # reset suave
-                self.sendMessage(json.dumps({"adaptiveGait": {"enabled": ADAPTIVE["enabled"], "mode": ADAPTIVE["mode"]}}))
-                log("Adapt", "adaptiveGait → enabled=%s mode=%s" % (ADAPTIVE["enabled"], ADAPTIVE["mode"]))
-
             # ── Control LightGBM AutoML Adaptativo ───────────────────────────────
             elif action == "adaptiveLightGBM":
                 try:
@@ -791,43 +780,6 @@ class RobotWS(WebSocket):
                     logger.error("Error controlando LightGBM: {}".format(e))
                     self.sendMessage(json.dumps({"adaptiveLightGBM": {"error": str(e)}}))
 
-            # ── Compatibilidad con comando anterior ───────────────────────────────
-            elif action == "adaptiveRandomForest":
-                # Redirigir a adaptiveLightGBM para compatibilidad
-                new_msg = msg.copy()
-                new_msg["command"] = "adaptiveLightGBM"
-                # Procesar como LightGBM
-                try:
-                    enable = new_msg.get("enabled", True)
-                    if adaptive_walker:
-                        ADAPTIVE["enabled"] = enable
-                        stats = {}
-                        if hasattr(adaptive_walker, 'get_stats'):
-                            stats = adaptive_walker.get_stats()
-                        # Responder con formato original para compatibilidad
-                        self.sendMessage(json.dumps({
-                            "adaptiveRandomForest": {
-                                "enabled": enable,
-                                "available": ADAPTIVE_WALK_ENABLED,
-                                "stats": stats,
-                                "upgraded_to": "LightGBM"
-                            }
-                        }))
-                        logger.info("RandomForest (ahora LightGBM) adaptativo {} - Stats: {}".format(
-                            "habilitado" if enable else "deshabilitado", stats))
-                    else:
-                        self.sendMessage(json.dumps({
-                            "adaptiveRandomForest": {
-                                "enabled": False,
-                                "available": False,
-                                "error": "LightGBM AutoML no disponible"
-                            }
-                        }))
-                        logger.warning("LightGBM AutoML adaptativo no disponible")
-                except Exception as e:
-                    logger.error("Error controlando LightGBM: {}".format(e))
-                    self.sendMessage(json.dumps({"adaptiveRandomForest": {"error": str(e)}}))
-
             # ── Estadísticas LightGBM AutoML Adaptativo ──────────────────────────
             elif action == "getLightGBMStats":
                 try:
@@ -843,23 +795,6 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     logger.error("Error obteniendo estadísticas LightGBM: {}".format(e))
                     self.sendMessage(json.dumps({"lightGBMStats": {"error": str(e)}}))
-
-            # ── Compatibilidad estadísticas RandomForest ──────────────────────────
-            elif action == "getRandomForestStats":
-                try:
-                    if adaptive_walker:
-                        stats = {}
-                        if hasattr(adaptive_walker, 'get_stats'):
-                            stats = adaptive_walker.get_stats()
-                        # Responder con formato original pero datos de LightGBM
-                        stats["upgraded_to"] = "LightGBM"
-                        self.sendMessage(json.dumps({"randomForestStats": stats}))
-                        logger.debug("Estadísticas RandomForest (ahora LightGBM) enviadas: {}".format(stats))
-                    else:
-                        self.sendMessage(json.dumps({"randomForestStats": {"available": False, "upgraded_to": "LightGBM"}}))
-                except Exception as e:
-                    logger.error("Error obteniendo estadísticas RandomForest: {}".format(e))
-                    self.sendMessage(json.dumps({"randomForestStats": {"error": str(e)}}))
 
             # ── Control Data Logger ───────────────────────────────────────────
             elif action == "startLogging":

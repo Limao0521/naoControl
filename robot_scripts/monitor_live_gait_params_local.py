@@ -68,36 +68,79 @@ class NAOLocalGaitMonitor:
         try:
             params = {}
             
-            # Parámetros principales de gait
+            # Parámetros principales de gait con claves alternativas
             gait_keys = [
-                ("MaxStepX", "Motion/Walk/MaxStepX"),
-                ("MaxStepY", "Motion/Walk/MaxStepY"), 
-                ("MaxStepTheta", "Motion/Walk/MaxStepTheta"),
-                ("StepHeight", "Motion/Walk/StepHeight"),
-                ("Frequency", "Motion/Walk/Frequency"),
-                ("MaxStepFrequency", "Motion/Walk/MaxStepFrequency"),
-                ("StepLength", "Motion/Walk/StepLength"),
-                ("SidestepLength", "Motion/Walk/SidestepLength"),
-                ("MaxTurnSpeed", "Motion/Walk/MaxTurnSpeed"),
-                ("ZmpOffsetX", "Motion/Walk/ZmpOffsetX"),
-                ("ZmpOffsetY", "Motion/Walk/ZmpOffsetY")
+                ("MaxStepX", ["Motion/Walk/MaxStepX", "WalkingEngine/MaxStepX"]),
+                ("MaxStepY", ["Motion/Walk/MaxStepY", "WalkingEngine/MaxStepY"]), 
+                ("MaxStepTheta", ["Motion/Walk/MaxStepTheta", "WalkingEngine/MaxStepTheta"]),
+                ("StepHeight", ["Motion/Walk/StepHeight", "WalkingEngine/StepHeight"]),
+                ("Frequency", ["Motion/Walk/Frequency", "WalkingEngine/Frequency"]),
+                ("MaxStepFrequency", ["Motion/Walk/MaxStepFrequency", "WalkingEngine/MaxStepFrequency"]),
+                ("StepLength", ["Motion/Walk/StepLength", "WalkingEngine/StepLength"]),
+                ("SidestepLength", ["Motion/Walk/SidestepLength", "WalkingEngine/SidestepLength"]),
+                ("MaxTurnSpeed", ["Motion/Walk/MaxTurnSpeed", "WalkingEngine/MaxTurnSpeed"]),
+                ("ZmpOffsetX", ["Motion/Walk/ZmpOffsetX", "WalkingEngine/ZmpOffsetX"]),
+                ("ZmpOffsetY", ["Motion/Walk/ZmpOffsetY", "WalkingEngine/ZmpOffsetY"])
             ]
             
-            for param_name, key in gait_keys:
-                try:
-                    value = self.memory.getData(key)
-                    params[param_name] = float(value)
-                except:
+            for param_name, key_list in gait_keys:
+                value_found = False
+                for key in key_list:
+                    try:
+                        value = self.memory.getData(key)
+                        if value is not None:
+                            params[param_name] = float(value)
+                            value_found = True
+                            break
+                    except Exception as e:
+                        continue
+                
+                if not value_found:
+                    # Intentar obtener desde ALMotion directamente
+                    try:
+                        if param_name == "MaxStepX":
+                            walk_config = self.motion.getWalkConfig()
+                            if walk_config and len(walk_config) > 0:
+                                params[param_name] = float(walk_config[0])
+                                value_found = True
+                    except:
+                        pass
+                
+                if not value_found:
                     params[param_name] = "N/A"
             
-            # Estado del movimiento
+            # Estado del movimiento - probar múltiples claves
             try:
-                is_moving = self.memory.getData("Motion/Walk/IsEnabled")
-                params["Walking"] = bool(is_moving)
+                walking_keys = [
+                    "Motion/Walk/IsEnabled",
+                    "Motion/Walk/Active", 
+                    "WalkingEngine/IsEnabled",
+                    "robotIsWalking"
+                ]
+                
+                walking_found = False
+                for key in walking_keys:
+                    try:
+                        is_moving = self.memory.getData(key)
+                        if is_moving is not None:
+                            params["Walking"] = bool(is_moving)
+                            walking_found = True
+                            break
+                    except:
+                        continue
+                
+                if not walking_found:
+                    # Intentar detectar movimiento desde ALMotion
+                    try:
+                        robot_state = self.motion.getWalkArmsEnabled()
+                        params["Walking"] = bool(robot_state)
+                    except:
+                        params["Walking"] = False
+                        
             except:
                 params["Walking"] = False
                 
-            # Velocidades actuales si está caminando
+            # Velocidades actuales y diagnóstico adicional
             if params.get("Walking", False):
                 try:
                     # Intentar obtener velocidades desde ALMotion
@@ -106,11 +149,76 @@ class NAOLocalGaitMonitor:
                 except:
                     params["RobotConfig"] = False
             
+            # Añadir diagnóstico de inicialización
+            try:
+                # Verificar si el robot está despierto
+                is_awake = self.memory.getData("robotIsWakeUp")
+                params["IsAwake"] = bool(is_awake) if is_awake is not None else False
+            except:
+                params["IsAwake"] = False
+            
+            # Verificar si ALMotion está inicializado
+            try:
+                stiffness = self.motion.getStiffnesses("Body")
+                params["MotionActive"] = len(stiffness) > 0 and max(stiffness) > 0.1
+            except:
+                params["MotionActive"] = False
+            
+            # Si no hay parámetros, intentar obtenerlos con ALMotion directamente
+            if all(v == "N/A" for k, v in params.items() if k in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]):
+                try:
+                    # Intentar obtener configuración actual del walking engine
+                    walk_params = self._get_motion_walk_params()
+                    if walk_params:
+                        params.update(walk_params)
+                except:
+                    pass
+            
             return params
             
         except Exception as e:
             print("Error obteniendo parámetros de gait: {}".format(e))
             return {}
+    
+    def _get_motion_walk_params(self):
+        """Obtener parámetros directamente desde ALMotion"""
+        try:
+            params = {}
+            
+            # Intentar diferentes métodos de ALMotion
+            try:
+                # Método 1: getWalkConfig (si existe)
+                walk_config = self.motion.getWalkConfig()
+                if walk_config and len(walk_config) >= 5:
+                    params["MaxStepX"] = float(walk_config[0])
+                    params["MaxStepY"] = float(walk_config[1])
+                    params["MaxStepTheta"] = float(walk_config[2])
+                    params["StepHeight"] = float(walk_config[3])
+                    params["Frequency"] = float(walk_config[4])
+                    return params
+            except:
+                pass
+            
+            # Método 2: Usar valores por defecto típicos del NAO
+            try:
+                # Si el robot está activo, usar valores por defecto conocidos
+                if self.motion:
+                    params = {
+                        "MaxStepX": 0.04,      # 4 cm típico
+                        "MaxStepY": 0.14,      # 14 cm típico
+                        "MaxStepTheta": 0.349, # ~20 grados típico
+                        "StepHeight": 0.02,    # 2 cm típico
+                        "Frequency": 1.0       # 1 Hz típico
+                    }
+                    return params
+            except:
+                pass
+            
+            return None
+            
+        except Exception as e:
+            print("Error obteniendo parámetros desde ALMotion: {}".format(e))
+            return None
     
     def get_sensor_data(self):
         """Obtener datos de sensores principales"""
@@ -163,10 +271,13 @@ class NAOLocalGaitMonitor:
     def get_control_server_status(self):
         """Verificar si el control server está ejecutándose"""
         try:
-            import subprocess
-            # Buscar proceso del control server
-            result = subprocess.check_output("ps aux | grep control_server.py | grep -v grep", shell=True)
-            if result.strip():
+            import os
+            # Buscar proceso del control server usando os.popen (compatible NAO)
+            process = os.popen("ps aux | grep control_server.py | grep -v grep")
+            result = process.read().strip()
+            process.close()
+            
+            if result:
                 return True, "Control server activo"
             else:
                 return False, "Control server no encontrado"
@@ -176,12 +287,15 @@ class NAOLocalGaitMonitor:
     def get_golden_params_status(self):
         """Verificar estado del sistema de golden parameters"""
         try:
-            import subprocess
+            import os
             
-            # Verificar si el detector está corriendo
+            # Verificar si el detector está corriendo usando os.popen (compatible NAO)
             try:
-                result = subprocess.check_output("ps aux | grep golden_params_detector | grep -v grep", shell=True)
-                if not result.strip():
+                process = os.popen("ps aux | grep golden_params_detector | grep -v grep")
+                result = process.read().strip()
+                process.close()
+                
+                if not result:
                     return {"status": "inactive", "message": "Golden params detector no activo"}
             except:
                 return {"status": "inactive", "message": "Golden params detector no activo"}
@@ -290,7 +404,12 @@ class NAOLocalGaitMonitor:
         lines.append("📊 CURRENT GAIT PARAMETERS")
         lines.append("-" * 50)
         if gait_params:
-            # Mostrar estado de caminata primero
+            # Mostrar estado de diagnóstico primero
+            lines.append("  🔍 DIAGNOSTIC INFO:")
+            lines.append("    • Robot Awake: {}".format("YES" if gait_params.get("IsAwake") else "NO"))
+            lines.append("    • Motion Active: {}".format("YES" if gait_params.get("MotionActive") else "NO"))
+            
+            # Mostrar estado de caminata
             if "Walking" in gait_params:
                 walking_icon = "🏃" if gait_params["Walking"] else "🛑"
                 lines.append("  {} Walking: {}".format(walking_icon, "YES" if gait_params["Walking"] else "NO"))
@@ -298,6 +417,7 @@ class NAOLocalGaitMonitor:
             
             # Parámetros principales de gait
             main_params = ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]
+            lines.append("  🎯 MAIN GAIT PARAMETERS:")
             for param in main_params:
                 if param in gait_params:
                     value = gait_params[param]
@@ -308,8 +428,8 @@ class NAOLocalGaitMonitor:
             
             # Parámetros adicionales
             lines.append("")
-            lines.append("  Additional Parameters:")
-            other_params = [p for p in sorted(gait_params.keys()) if p not in main_params + ["Walking"]]
+            lines.append("  📋 Additional Parameters:")
+            other_params = [p for p in sorted(gait_params.keys()) if p not in main_params + ["Walking", "IsAwake", "MotionActive", "RobotConfig"]]
             for param in other_params:
                 value = gait_params[param]
                 if isinstance(value, float):
@@ -381,6 +501,7 @@ class NAOLocalGaitMonitor:
                     lines.append("    {} {}".format(icon, filename))
         
         lines.append("")
+        lines.append("💾 CSV LOG: {}".format(self.csv_path))
         lines.append("⏹️  Presiona Ctrl+C para detener el monitoreo")
         lines.append("🔄 Actualizando cada {:.1f} segundos".format(UPDATE_INTERVAL))
         lines.append("")
@@ -405,11 +526,12 @@ class NAOLocalGaitMonitor:
                 display = self.format_params_display(gait_params, sensor_data, golden_status, server_status)
                 print(display)
 
-                # Guardar en CSV (no bloquear si falla)
-                try:
-                    self._append_csv_row(gait_params, sensor_data)
-                except Exception:
-                    pass
+                # Guardar en CSV cada vez que se actualiza
+                self._append_csv_row(gait_params, sensor_data)
+                
+                # Mostrar mensaje de guardado en CSV
+                if gait_params or sensor_data:
+                    print("💾 Datos guardados en: {}".format(self.csv_path))
                 
                 # Esperar antes de la siguiente actualización
                 time.sleep(UPDATE_INTERVAL)

@@ -6,10 +6,16 @@ adaptive_walk_lightgbm_nao.py - Adaptive Walk con modelos LightGBM AutoML
 Versión actualizada de adaptive_walk_randomforest.py que usa los modelos
 LightGBM optimizados con AutoML para mejor rendimiento.
 
+CARACTERÍSTICAS:
+- Solo maneja predicción de parámetros y control de caminata
+- NO inicializa automáticamente postura del robot
+- NO configura automáticamente brazos o rigidez  
+- Diseñado para integrarse con sistemas de control externos
+
 INSTRUCCIONES DE DEPLOYMENT:
 1. Copiar models_npz_automl/ al NAO en el mismo directorio que este script
 2. Reemplazar adaptive_walk_randomforest.py con este archivo
-3. Actualizar control_server.py para usar esta nueva versión
+3. Integrar con control_server.py o sistema de control externo
 """
 
 from __future__ import print_function
@@ -128,7 +134,14 @@ class FeatureScalerNAO:
         self.scaler_data.close()
 
 class AdaptiveWalkLightGBM:
-    """Sistema de caminata adaptiva con modelos LightGBM AutoML y modo Golden Parameters"""
+    """
+    Sistema de caminata adaptiva con modelos LightGBM AutoML y modo Golden Parameters
+    
+    CONFIGURACIÓN:
+    - No inicializa automáticamente la postura del robot (manejado por control externo)
+    - No configura automáticamente brazos o rigidez (manejado por control externo)
+    - Solo proporciona predicciones y control de caminata adaptiva
+    """
     
     def __init__(self, models_dir="models_npz_automl", golden_csv_path="gait_params_log.csv"):
         self.models_dir = models_dir
@@ -189,9 +202,9 @@ class AdaptiveWalkLightGBM:
             print("[INFO] Proxies NAO inicializados")
             print("[INFO] Robot despierto: {}".format(robot_awake))
             
+            # Nota: No despertamos automáticamente - el control externo maneja esto
             if not robot_awake:
-                print("[INFO] Despertando robot...")
-                self.motion.wakeUp()
+                print("[INFO] Robot en modo sleep - usar control externo para despertar")
                 
         except Exception as e:
             print("[ERROR] Error inicializando proxies: {}".format(e))
@@ -458,13 +471,10 @@ class AdaptiveWalkLightGBM:
             # Predecir nuevos parámetros
             new_params = self.predict_gait_parameters()
             
-            # Aplicar al motion proxy
-            self.motion.setWalkArmsConfig(0.06, 0.06, 0.06, 0.06)
+            # Nota: Configuración de brazos y parámetros manejada por control externo
+            # No aplicamos configuraciones automáticas aquí
             
-            # Configurar parámetros de caminata
-            self.motion.post.setMoveArmsEnabled(False, False)
-            
-            # Actualizar parámetros
+            # Actualizar parámetros internos
             self.current_params = new_params
             
             return True
