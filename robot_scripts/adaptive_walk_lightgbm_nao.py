@@ -3,7 +3,19 @@
 """
 adaptive_walk_lightgbm_nao.py - Adaptive Walk con modelos LightGBM AutoML
 
-Versión actualizada de adaptive_walk_randomforest.py que usa los modelos
+Versión actualizada de adaptive_walk_r        # 🌟 SISTEMA DE DOS MODOS
+        self.mode = mode  # "training" o "production"
+        
+        # Parámetros óptimos para pasto sintético (del análisis de logs)
+        self.optimal_grass_params = OPTIMAL_GRASS_PARAMS.copy()
+        
+        # Parámetros específicos por tipo de movimiento
+        self.movement_params = MOVEMENT_SPECIFIC_PARAMS.copy() if MOVEMENT_SPECIFIC_PARAMS else {}
+        
+        # Estado actual de velocidades para detectar tipo de movimiento
+        self.current_velocities = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+        
+        # Configuración de caminata por defecto (fallback)y que usa los modelos
 LightGBM optimizados con AutoML para mejor rendimiento.
 
 CARACTERÍSTICAS:
@@ -36,16 +48,28 @@ except ImportError:
     almath = None
 
 # Configuración de features y targets
-FEATURE_ORDER = [
-    'accel_x','accel_y','accel_z',
-    'gyro_x','gyro_y','gyro_z', 
-    'angle_x','angle_y',
-    'lfoot_fl','lfoot_fr','lfoot_rl','lfoot_rr',
-    'rfoot_fl','rfoot_fr','rfoot_rl','rfoot_rr',
-    'vx','vy','wz','vtotal'
-]
-
-GAIT_TARGETS = ['StepHeight','MaxStepX','MaxStepY','MaxStepTheta','Frequency']
+try:
+    from nao_config import FEATURE_ORDER, GAIT_TARGETS, OPTIMAL_GRASS_PARAMS, MOVEMENT_SPECIFIC_PARAMS
+    print("[INFO] Configuración cargada desde nao_config.py")
+except ImportError:
+    print("[WARN] nao_config.py no disponible, usando configuración embebida")
+    FEATURE_ORDER = [
+        'accel_x','accel_y','accel_z',
+        'gyro_x','gyro_y','gyro_z', 
+        'angle_x','angle_y',
+        'lfoot_fl','lfoot_fr','lfoot_rl','lfoot_rr',
+        'rfoot_fl','rfoot_fr','rfoot_rl','rfoot_rr',
+        'vx','vy','wz','vtotal'
+    ]
+    GAIT_TARGETS = ['StepHeight','MaxStepX','MaxStepY','MaxStepTheta','Frequency']
+    OPTIMAL_GRASS_PARAMS = {
+        'StepHeight': 0.020000,
+        'MaxStepX': 0.040000, 
+        'MaxStepY': 0.140000,
+        'MaxStepTheta': 0.349000,
+        'Frequency': 1.000000
+    }
+    MOVEMENT_SPECIFIC_PARAMS = {}  # Fallback vacío
 
 class LightGBMNAOPredictor:
     """Predictor LightGBM optimizado para NAO usando solo NumPy"""
@@ -135,7 +159,10 @@ class FeatureScalerNAO:
 
 class AdaptiveWalkLightGBM:
     """
-    Sistema de caminata adaptiva con modelos LightGBM AutoML y modo Golden Parameters
+    Sistema de caminata adaptiva con modelos LightGBM AutoML - DOS MODOS:
+    
+    MODO TRAINING: Usa predicciones ML para explorar y optimizar
+    MODO PRODUCTION: Converge hacia parámetros óptimos fijos para pasto sintético
     
     CONFIGURACIÓN:
     - No inicializa automáticamente la postura del robot (manejado por control externo)
@@ -143,7 +170,7 @@ class AdaptiveWalkLightGBM:
     - Solo proporciona predicciones y control de caminata adaptiva
     """
     
-    def __init__(self, models_dir="models_npz_automl", golden_csv_path="gait_params_log.csv"):
+    def __init__(self, models_dir="models_npz_automl", mode="production"):
         self.models_dir = models_dir
         self.models = {}
         self.scaler = None
@@ -151,21 +178,36 @@ class AdaptiveWalkLightGBM:
         self.memory = None
         self.enabled = False
         
-        # 🌟 NUEVO: Configuración de modo híbrido
-        self.mode = "training"  # "training" o "golden"
-        self.golden_csv_path = golden_csv_path
-        self.golden_params = None
-        self.last_csv_load = 0
-        self.csv_reload_interval = 30  # segundos
+        # � SISTEMA DE DOS MODOS
+        self.mode = mode  # "training" o "production"
         
-        # Configuración de caminata
+        # Parámetros óptimos para pasto sintético (del análisis de logs)
+        self.optimal_grass_params = {
+            'StepHeight': 0.020000,
+            'MaxStepX': 0.040000, 
+            'MaxStepY': 0.140000,
+            'MaxStepTheta': 0.349000,
+            'Frequency': 1.000000
+        }
+        
+        # Configuración de caminata por defecto (fallback)
         self.default_params = {
             'StepHeight': 0.02,
             'MaxStepX': 0.04, 
             'MaxStepY': 0.14,
-            'MaxStepTheta': 0.3,
+            'MaxStepTheta': 0.35,
             'Frequency': 1.0
         }
+        
+        # 🎯 PARÁMETROS ESPECÍFICOS POR MOVIMIENTO
+        # Actualizar parámetros óptimos desde configuración
+        self.optimal_grass_params = OPTIMAL_GRASS_PARAMS.copy()
+        
+        # Parámetros específicos por tipo de movimiento
+        self.movement_params = MOVEMENT_SPECIFIC_PARAMS.copy() if MOVEMENT_SPECIFIC_PARAMS else {}
+        
+        # Estado actual de velocidades para detectar tipo de movimiento
+        self.current_velocities = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
         
         self.current_params = self.default_params.copy()
         self.prediction_history = []
@@ -279,6 +321,34 @@ class AdaptiveWalkLightGBM:
         except Exception as e:
             print("[WARN] Error cargando parámetros golden: {}".format(e))
     
+    def set_mode(self, mode):
+        """
+        Cambiar modo de operación del sistema adaptativo
+        
+        Args:
+            mode (str): "training" o "production"
+        """
+        if mode not in ["training", "production"]:
+            print("[ERROR] Modo inválido: {}. Usar 'training' o 'production'".format(mode))
+            return False
+        
+        old_mode = self.mode
+        self.mode = mode
+        
+        print("[INFO] Modo cambiado: {} -> {}".format(old_mode, mode))
+        
+        if mode == "production":
+            print("[INFO] MODO PRODUCTION: Convergiendo hacia parámetros óptimos para pasto sintético")
+            print("[INFO] Parámetros objetivo: {}".format(self.optimal_grass_params))
+        else:
+            print("[INFO] MODO TRAINING: Usando predicciones ML para exploración")
+        
+        return True
+    
+    def get_mode(self):
+        """Obtener modo actual"""
+        return self.mode
+    
     def _get_sensor_data(self):
         """Obtener datos de sensores del NAO"""
         if not self.memory:
@@ -374,13 +444,98 @@ class AdaptiveWalkLightGBM:
         
         return sensor_data
     
-    def predict_gait_parameters(self):
-        """Predecir parámetros de caminata usando LightGBM AutoML"""
+    def _detect_movement_type(self, vx=None, vy=None, wz=None):
+        """
+        Detectar tipo de movimiento basado en velocidades actuales
+        
+        Returns:
+            str: Tipo de movimiento ('forward', 'backward', 'sideways', 'rotation', 'mixed')
+        """
+        # Usar velocidades pasadas como parámetro o las almacenadas
+        if vx is not None:
+            self.current_velocities['vx'] = vx
+        if vy is not None:
+            self.current_velocities['vy'] = vy
+        if wz is not None:
+            self.current_velocities['wz'] = wz
+            
+        vx = abs(self.current_velocities['vx'])
+        vy = abs(self.current_velocities['vy'])
+        wz = abs(self.current_velocities['wz'])
+        
+        # Umbrales para detección
+        forward_threshold = 0.1
+        sideways_threshold = 0.1
+        rotation_threshold = 0.2
+        
+        # Clasificar movimiento
+        is_forward = vx > forward_threshold
+        is_sideways = vy > sideways_threshold
+        is_rotating = wz > rotation_threshold
+        
+        # Determinar tipo principal
+        if is_rotating and not (is_forward or is_sideways):
+            return 'rotation'
+        elif is_forward and not is_sideways and self.current_velocities['vx'] > 0:
+            return 'forward'
+        elif is_forward and not is_sideways and self.current_velocities['vx'] < 0:
+            return 'backward'
+        elif is_sideways and not is_forward:
+            return 'sideways'
+        elif (is_forward or is_sideways) and is_rotating:
+            return 'mixed'
+        else:
+            return 'forward'  # Default para movimiento mínimo
+    
+    def _get_movement_specific_params(self, movement_type):
+        """
+        Obtener parámetros específicos para el tipo de movimiento
+        
+        Args:
+            movement_type (str): Tipo de movimiento detectado
+            
+        Returns:
+            dict: Parámetros optimizados para ese tipo de movimiento
+        """
+        if movement_type in self.movement_params:
+            params = self.movement_params[movement_type].copy()
+            print("[INFO] Usando parámetros específicos para movimiento: {}".format(movement_type))
+            return params
+        else:
+            print("[WARN] Tipo de movimiento '{}' no encontrado, usando parámetros generales".format(movement_type))
+            return self.optimal_grass_params.copy()
+    
+    def predict_gait_parameters(self, vx=None, vy=None, wz=None):
+        """
+        Predecir parámetros de caminata con DOS MODOS:
+        - TRAINING: Usa predicciones ML para explorar
+        - PRODUCTION: Converge hacia parámetros óptimos específicos por movimiento
+        
+        Args:
+            vx, vy, wz: Velocidades actuales para detectar tipo de movimiento (opcional)
+        """
+        
+        # 🎯 MODO PRODUCTION: Retornar parámetros específicos por tipo de movimiento
+        if self.mode == "production":
+            # Detectar tipo de movimiento si se proporcionan velocidades
+            if any(v is not None for v in [vx, vy, wz]):
+                movement_type = self._detect_movement_type(vx, vy, wz)
+                params = self._get_movement_specific_params(movement_type)
+                print("[INFO] Modo PRODUCTION: movimiento '{}' → parámetros específicos".format(movement_type))
+            else:
+                params = self.optimal_grass_params.copy()
+                print("[INFO] Modo PRODUCTION: usando parámetros generales óptimos")
+            
+            return params
+        
+        # 🤖 MODO TRAINING: Usar predicciones ML (comportamiento original)
         if not self.models or not self.scaler:
             print("[WARN] Modelos no disponibles, usando parámetros por defecto")
             return self.default_params.copy()
         
         try:
+            print("[INFO] Modo TRAINING: usando predicciones ML")
+            
             # Obtener datos de sensores
             sensor_data = self._get_sensor_data()
             

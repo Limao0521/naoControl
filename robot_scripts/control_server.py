@@ -72,8 +72,8 @@ except (ImportError, AttributeError) as e:
 # Importar LightGBM AutoML de caminata adaptativa
 try:
     from adaptive_walk_lightgbm_nao import AdaptiveWalkLightGBM
-    adaptive_walker = AdaptiveWalkLightGBM("models_npz_automl")
-    logger.info("LightGBM AutoML de caminata adaptativa inicializada")
+    adaptive_walker = AdaptiveWalkLightGBM("models_npz_automl", mode="production")
+    logger.info("LightGBM AutoML inicializada - MODO PRODUCTION (parámetros óptimos pasto)")
     ADAPTIVE_WALK_ENABLED = True
 except (ImportError, AttributeError, SyntaxError) as e:
     logger.warning("LightGBM AutoML adaptativo no disponible: {}".format(e))
@@ -202,16 +202,16 @@ def _apply_absolute_limits(vx, vy, wz):
     Estos límites se aplican SIEMPRE, independientemente de CAPS o otros sistemas.
     """
     # Limitar vx entre -0.6 y 0.6
-    if vx > 0.6:
-        vx = 0.6
-    elif vx < -0.6:
-        vx = -0.6
+    if vx > 0.5:
+        vx = 0.5
+    elif vx < -0.5:
+        vx = -0.5
     
     # Limitar vy entre -0.45 y 0.45
-    if vy > 0.45:
-        vy = 0.45
-    elif vy < -0.45:
-        vy = -0.45
+    if vy > 0.35:
+        vy = 0.35
+    elif vy < -0.35:
+        vy = -0.35
     
     # wz sin límites adicionales (se deja para CAPS)
     return vx, vy, wz
@@ -786,6 +786,198 @@ class RobotWS(WebSocket):
                 except Exception as e:
                     logger.error("Error logging sample: {}".format(e))
                     self.sendMessage(json.dumps({"logSample": {"success": False, "error": str(e)}}))
+
+            # ── Control de modo adaptativo ────────────────────────────────────
+            elif action == "setAdaptiveMode":
+                try:
+                    mode = msg.get("mode", "")
+                    if adaptive_walker and mode in ["training", "production"]:
+                        adaptive_walker.set_mode(mode)
+                        current_mode = adaptive_walker.get_mode()
+                        logger.info("Modo adaptativo cambiado a: {}".format(current_mode))
+                        self.sendMessage(json.dumps({
+                            "setAdaptiveMode": {
+                                "success": True,
+                                "mode": current_mode
+                            }
+                        }))
+                    elif not adaptive_walker:
+                        self.sendMessage(json.dumps({
+                            "setAdaptiveMode": {
+                                "success": False,
+                                "error": "Adaptive walker no disponible"
+                            }
+                        }))
+                    else:
+                        self.sendMessage(json.dumps({
+                            "setAdaptiveMode": {
+                                "success": False,
+                                "error": "Modo inválido. Use 'training' o 'production'"
+                            }
+                        }))
+                except Exception as e:
+                    logger.error("Error cambiando modo adaptativo: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "setAdaptiveMode": {
+                            "success": False,
+                            "error": str(e)
+                        }
+                    }))
+
+            elif action == "getAdaptiveMode":
+                try:
+                    if adaptive_walker:
+                        current_mode = adaptive_walker.get_mode()
+                        self.sendMessage(json.dumps({
+                            "getAdaptiveMode": {
+                                "success": True,
+                                "mode": current_mode
+                            }
+                        }))
+                    else:
+                        self.sendMessage(json.dumps({
+                            "getAdaptiveMode": {
+                                "success": False,
+                                "error": "Adaptive walker no disponible"
+                            }
+                        }))
+                except Exception as e:
+                    logger.error("Error obteniendo modo adaptativo: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "getAdaptiveMode": {
+                            "success": False,
+                            "error": str(e)
+                        }
+                    }))
+
+            # ── Control Fall Manager ──────────────────────────────────────────
+            elif action == "fallManager":
+                try:
+                    enable = bool(msg.get("enable", True))
+                    
+                    if enable:
+                        # Activar Fall Manager (simple)
+                        motion.setFallManagerEnabled(True)
+                        status = "ENABLED"
+                        logger.info("Fall Manager ENABLED: auto-recovery ON")
+                    else:
+                        # Desactivar Fall Manager requiere pasos especiales
+                        try:
+                            # Paso 1: Habilitar la desactivación del Fall Manager
+                            motion.setFallManagerEnabled(False, True)  # enable=False, allowDisable=True
+                            status = "DISABLED"
+                            logger.info("Fall Manager DISABLED: manual control (safety override)")
+                        except Exception as e1:
+                            try:
+                                # Método alternativo: Usar ALMemory para forzar desactivación
+                                memory.insertData("FallManagerEnabled", False)
+                                status = "DISABLED"
+                                logger.warning("Fall Manager DISABLED via ALMemory fallback")
+                            except Exception as e2:
+                                # Si ambos métodos fallan, reportar error
+                                raise Exception("Cannot disable Fall Manager. NAOqi safety protection active. Error 1: {} Error 2: {}".format(str(e1), str(e2)))
+                    
+                    self.sendMessage(json.dumps({
+                        "fallManager": {
+                            "success": True,
+                            "enabled": enable,
+                            "status": status
+                        }
+                    }))
+                    
+                except Exception as e:
+                    logger.error("Error configurando Fall Manager: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "fallManager": {
+                            "success": False,
+                            "error": str(e),
+                            "help": "Try: motion.setFallManagerEnabled(False, True) or restart NAOqi"
+                        }
+                    }))
+
+            # ── Forzar desactivación Fall Manager (método avanzado) ──────────
+            elif action == "forceDisableFallManager":
+                try:
+                    logger.warning("Intentando forzar desactivación del Fall Manager...")
+                    
+                    methods_tried = []
+                    success = False
+                    
+                    # Método 1: setFallManagerEnabled con allowDisable
+                    try:
+                        motion.setFallManagerEnabled(False, True)
+                        methods_tried.append("setFallManagerEnabled(False, True) - SUCCESS")
+                        success = True
+                    except Exception as e1:
+                        methods_tried.append("setFallManagerEnabled(False, True) - FAILED: {}".format(str(e1)))
+                    
+                    # Método 2: ALMemory directo
+                    if not success:
+                        try:
+                            memory.insertData("FallManagerEnabled", False)
+                            methods_tried.append("ALMemory insertData - SUCCESS")
+                            success = True
+                        except Exception as e2:
+                            methods_tried.append("ALMemory insertData - FAILED: {}".format(str(e2)))
+                    
+                    # Método 3: Configuración de movimiento
+                    if not success:
+                        try:
+                            motion.setMotionConfig([["ENABLE_FALL_MANAGER", False]])
+                            methods_tried.append("setMotionConfig ENABLE_FALL_MANAGER - SUCCESS")
+                            success = True
+                        except Exception as e3:
+                            methods_tried.append("setMotionConfig - FAILED: {}".format(str(e3)))
+                    
+                    if success:
+                        logger.info("Fall Manager forzado a DISABLED")
+                        self.sendMessage(json.dumps({
+                            "forceDisableFallManager": {
+                                "success": True,
+                                "enabled": False,
+                                "status": "FORCE_DISABLED",
+                                "methods_tried": methods_tried
+                            }
+                        }))
+                    else:
+                        logger.error("No se pudo forzar desactivación del Fall Manager")
+                        self.sendMessage(json.dumps({
+                            "forceDisableFallManager": {
+                                "success": False,
+                                "error": "All methods failed",
+                                "methods_tried": methods_tried,
+                                "help": "Fall Manager protection is active. Consider restarting NAOqi or using Choregraphe."
+                            }
+                        }))
+                        
+                except Exception as e:
+                    logger.error("Error en forzar desactivación Fall Manager: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "forceDisableFallManager": {
+                            "success": False,
+                            "error": str(e)
+                        }
+                    }))
+
+            # ── Obtener estado Fall Manager ───────────────────────────────────
+            elif action == "getFallManager":
+                try:
+                    enabled = motion.getFallManagerEnabled()
+                    self.sendMessage(json.dumps({
+                        "getFallManager": {
+                            "success": True,
+                            "enabled": enabled,
+                            "status": "ENABLED" if enabled else "DISABLED"
+                        }
+                    }))
+                except Exception as e:
+                    logger.error("Error obteniendo estado Fall Manager: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "getFallManager": {
+                            "success": False,
+                            "error": str(e)
+                        }
+                    }))
                     
             else:
                 logger.warning("WS: ⚠ Acción desconocida '%s'" % action)

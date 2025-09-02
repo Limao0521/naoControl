@@ -82,7 +82,57 @@ VELOCITY_LIMITS = {
     'wz_min': -3.0
 }
 
-# Parámetros de gait por defecto (conservadores)
+# Parámetros de gait por defecto (OPTIMIZADOS PARA PASTO SINTÉTICO)
+# Extraídos de análisis de 538 registros de caminata exitosa
+OPTIMAL_GRASS_PARAMS = {
+    'MaxStepX': 0.040000,       # Paso máximo adelante/atrás (m)
+    'MaxStepY': 0.140000,       # Paso máximo lateral (m)  
+    'MaxStepTheta': 0.349000,   # Rotación máxima por paso (rad)
+    'StepHeight': 0.020000,     # Altura de paso (m)
+    'Frequency': 1.000000       # Frecuencia de paso (Hz)
+}
+
+# 🎯 PARÁMETROS ESPECÍFICOS POR TIPO DE MOVIMIENTO
+# Para mejorar estabilidad en diferentes direcciones
+MOVEMENT_SPECIFIC_PARAMS = {
+    'forward': {         # Movimiento hacia adelante
+        'MaxStepX': 0.040000,
+        'MaxStepY': 0.140000,
+        'MaxStepTheta': 0.349000,
+        'StepHeight': 0.020000,
+        'Frequency': 1.000000
+    },
+    'backward': {        # Movimiento hacia atrás (más conservador)
+        'MaxStepX': 0.030000,    # Pasos más cortos atrás
+        'MaxStepY': 0.120000,    # Menor paso lateral
+        'MaxStepTheta': 0.250000, # Menor rotación
+        'StepHeight': 0.025000,  # Más altura para clearance
+        'Frequency': 0.800000    # Más lento para estabilidad
+    },
+    'sideways': {        # Movimiento lateral
+        'MaxStepX': 0.025000,    # Pasos cortos adelante/atrás
+        'MaxStepY': 0.100000,    # Pasos laterales más pequeños
+        'MaxStepTheta': 0.200000, # Mínima rotación
+        'StepHeight': 0.025000,  # Mayor altura
+        'Frequency': 0.900000    # Frecuencia reducida
+    },
+    'rotation': {        # Rotación en el lugar
+        'MaxStepX': 0.020000,    # Pasos mínimos
+        'MaxStepY': 0.080000,    # Base estrecha para rotación
+        'MaxStepTheta': 0.400000, # Rotación máxima
+        'StepHeight': 0.030000,  # Alta para clearance
+        'Frequency': 0.800000    # Lento para control
+    },
+    'mixed': {           # Movimiento combinado (conservador)
+        'MaxStepX': 0.035000,
+        'MaxStepY': 0.120000,
+        'MaxStepTheta': 0.300000,
+        'StepHeight': 0.025000,
+        'Frequency': 0.900000
+    }
+}
+
+# Parámetros de gait por defecto (conservadores - fallback)
 DEFAULT_GAIT_PARAMS = {
     'MaxStepX': 0.04,       # Paso máximo adelante/atrás (m)
     'MaxStepY': 0.14,       # Paso máximo lateral (m)  
@@ -168,13 +218,32 @@ MODEL_FILES = {
 # CONFIGURACIÓN ADAPTATIVA
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Modos de operación del sistema adaptativo
+ADAPTIVE_MODES = {
+    'TRAINING': 'training',     # Usa predicciones ML para explorar
+    'PRODUCTION': 'production'  # Converge hacia parámetros óptimos fijos
+}
+
 # Parámetros del sistema adaptativo
 ADAPTIVE_CONFIG = {
     'enabled': True,
+    'mode': ADAPTIVE_MODES['PRODUCTION'],  # Modo por defecto: PRODUCCIÓN
     'update_frequency': 10,    # Hz
     'smoothing_alpha': 0.15,   # Factor de suavizado EMA
     'watchdog_timeout': 3.0,   # Segundos sin comando para parar
-    'stability_threshold': 0.01
+    'stability_threshold': 0.01,
+    
+    # Configuración específica por modo
+    'training': {
+        'use_ml_predictions': True,
+        'target_params': None,  # No hay target fijo
+        'convergence_rate': 0.1
+    },
+    'production': {
+        'use_ml_predictions': False,
+        'target_params': OPTIMAL_GRASS_PARAMS,  # Converge hacia parámetros óptimos
+        'convergence_rate': 0.05  # Más lento para estabilidad
+    }
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -206,6 +275,17 @@ def clamp_velocity(vx, vy, wz):
     vy = max(VELOCITY_LIMITS['vy_min'], min(VELOCITY_LIMITS['vy_max'], vy))
     wz = max(VELOCITY_LIMITS['wz_min'], min(VELOCITY_LIMITS['wz_max'], wz))
     return vx, vy, wz
+
+def get_optimal_grass_gait():
+    """Obtener parámetros óptimos para pasto sintético como lista de pares"""
+    return [[param, value] for param, value in OPTIMAL_GRASS_PARAMS.items()]
+
+def get_adaptive_target_params(mode):
+    """Obtener parámetros objetivo según el modo adaptativo"""
+    if mode == ADAPTIVE_MODES['PRODUCTION']:
+        return OPTIMAL_GRASS_PARAMS.copy()
+    else:
+        return None  # Training mode - sin target fijo
 
 def get_default_gait():
     """Obtener parámetros de gait por defecto como lista de pares"""
