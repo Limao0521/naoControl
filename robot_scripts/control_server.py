@@ -8,7 +8,7 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick,
     volume, getBattery, getAutonomousLife, turnLeft, turnRight,
-    adaptiveGait, adaptiveLightGBM, getLightGBMStats,
+    adaptiveLightGBM, getLightGBMStats,
     startLogging, stopLogging, getLoggingStatus, logSample ← NEW
 
 • Watchdog            elif action == "move":
@@ -752,21 +752,29 @@ class RobotWS(WebSocket):
             elif action == "adaptiveLightGBM":
                 try:
                     enable = msg.get("enabled", True)
+                    mode = str(msg.get("mode", ADAPTIVE["mode"]))  # Soporte para modo
+                    
                     if adaptive_walker:
-                        # No hay enable/disable en LightGBM, simplemente habilitamos el modo adaptativo
+                        # Configurar modo adaptativo
                         ADAPTIVE["enabled"] = enable
+                        if mode in ("auto", "slippery"):
+                            ADAPTIVE["mode"] = mode
+                        ADAPTIVE["last_event"] = 0.0  # reset suave
+                        
                         stats = {}
                         if hasattr(adaptive_walker, 'get_stats'):
                             stats = adaptive_walker.get_stats()
+                        
                         self.sendMessage(json.dumps({
                             "adaptiveLightGBM": {
                                 "enabled": enable,
+                                "mode": ADAPTIVE["mode"],
                                 "available": ADAPTIVE_WALK_ENABLED,
                                 "stats": stats
                             }
                         }))
-                        logger.info("LightGBM AutoML adaptativo {} - Stats: {}".format(
-                            "habilitado" if enable else "deshabilitado", stats))
+                        logger.info("LightGBM AutoML adaptativo {} - Modo: {} - Stats: {}".format(
+                            "habilitado" if enable else "deshabilitado", ADAPTIVE["mode"], stats))
                     else:
                         self.sendMessage(json.dumps({
                             "adaptiveLightGBM": {
