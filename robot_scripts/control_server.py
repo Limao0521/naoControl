@@ -226,22 +226,15 @@ def _apply_absolute_limits(vx, vy, wz):
     # wz sin límites adicionales (se deja para CAPS)
     return vx, vy, wz
 
-# ─── Único Gait + CAPs (por defecto NAOqi) ─────────────────────────────────────
-CURRENT_GAIT = []  # e.g.: [["StepHeight",0.03],["MaxStepX",0.028],["MaxStepY",0.10],["MaxStepTheta",0.22],["Frequency",0.50]]
-CAP_LIMITS  = {"vx": 0.5, "vy": 0.5, "wz": 0.5}
-
-# ─── Estados de Gait y CAPS con suavizado ─────────────────────────────────────
-GAIT_REF = []          # lista de pares [["MaxStepX", val], ...]
-CAPS_REF = {"vx":0.5, "vy":0.5, "wz":0.5}
+# ─── Estados de Gait con suavizado ─────────────────────────────────────────────
+GAIT_TARGET = []       # Objetivo único: manual, adaptativo o golden [["MaxStepX", val], ...]
+GAIT_SOURCE = "none"   # Fuente: "manual", "adaptive", "golden", "none"
 
 # Aplicado (lo que realmente mandamos a moveToward):
 GAIT_APPLIED = []      # lista de pares suavizada
-CAPS_APPLIED = {"vx":0.5, "vy":0.5, "wz":0.5}
 
 # Parámetros de suavizado
 ALPHA_GAIT = 0.15      # 0..1 (más bajo = más suave)
-CAPS_DOWN_RATE = 0.05  # cuánto bajan por ciclo (rápido)
-CAPS_UP_RATE   = 0.02  # cuánto suben por ciclo (lento)
 
 # Modo adaptativo
 ADAPTIVE = {"enabled": False, "mode": "auto", "slip": False, "last_event": 0.0}
@@ -311,16 +304,14 @@ def _check_golden_lock():
         logger.warning("Error verificando golden lock: {}".format(e))
         return False, None
 
-# ─── Bucle adaptativo simplificado con LightGBM AutoML ──────────────────────────
 def adaptive_loop():
-    global GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF, CURRENT_GAIT
+    global GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE
     log("Adapt", "Loop adaptativo iniciado")
     
     # Iniciales
-    GAIT_REF = []
+    GAIT_TARGET = []
+    GAIT_SOURCE = "none"
     GAIT_APPLIED = []
-    CAPS_REF = {"vx":1.0, "vy":1.0, "wz":1.0}
-    CAPS_APPLIED = {"vx":1.0, "vy":1.0, "wz":1.0}
     
     while True:
         try:
@@ -337,7 +328,8 @@ def adaptive_loop():
                         adaptive_gait.append([param, golden_params[param]])
                 
                 if adaptive_gait:
-                    GAIT_REF = adaptive_gait
+                    GAIT_TARGET = adaptive_gait
+                    GAIT_SOURCE = "golden"
                     logger.debug("Aplicando golden parameters: {}".format(golden_params))
                     
                 # Skip el resto del loop adaptativo cuando está locked
@@ -357,33 +349,24 @@ def adaptive_loop():
                                     adaptive_gait.append([param, value])
                             
                             if adaptive_gait:
-                                GAIT_REF = adaptive_gait
+                                GAIT_TARGET = adaptive_gait
+                                GAIT_SOURCE = "adaptive"
                                 logger.debug("LightGBM AutoML adaptativo: {}".format(adaptive_params))
                     except Exception as e:
                         logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
             
-            # Suavizar gait hacia referencia
-            if GAIT_REF:
-                ref_d = pairs_to_dict(GAIT_REF)
-                app_d = pairs_to_dict(GAIT_APPLIED) if GAIT_APPLIED else {}
+            # Suavizar gait hacia objetivo único
+            if GAIT_TARGET:
+                target_d = pairs_to_dict(GAIT_TARGET)
+                applied_d = pairs_to_dict(GAIT_APPLIED) if GAIT_APPLIED else {}
                 
-                all_keys = set(ref_d.keys()) | set(app_d.keys())
-                new_app = {}
+                all_keys = set(target_d.keys()) | set(applied_d.keys())
+                new_applied = {}
                 for k in all_keys:
-                    a = app_d.get(k, ref_d.get(k, 0.0))
-                    b = ref_d.get(k, a)
-                    new_app[k] = lerp(a, b, ALPHA_GAIT)
-                GAIT_APPLIED = dict_to_pairs(new_app)
-            
-            # Suavizar caps
-            for k in ("vx", "vy", "wz"):
-                a = CAPS_APPLIED.get(k, 1.0)
-                b = CAPS_REF.get(k, 1.0)
-                if a > b:
-                    a = max(b, a - CAPS_DOWN_RATE)
-                else:
-                    a = min(b, a + CAPS_UP_RATE)
-                CAPS_APPLIED[k] = clamp(a, 0.0, 1.0)
+                    current = applied_d.get(k, target_d.get(k, 0.0))
+                    target = target_d.get(k, current)
+                    new_applied[k] = lerp(current, target, ALPHA_GAIT)
+                GAIT_APPLIED = dict_to_pairs(new_applied)
         
         except Exception as e:
             log("Adapt", "Error adaptive_loop: %s" % e)
@@ -453,8 +436,7 @@ class RobotWS(WebSocket):
         log("WS", "Conectado %s" % (self.address,))
         # Al conectar, reporta config actual (aplicada) para no romper clientes
         try:
-            self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT,
-                                         "caps": CAPS_APPLIED}))
+            self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET}))
         except Exception:
             pass
 
@@ -462,7 +444,7 @@ class RobotWS(WebSocket):
         log("WS", "Desconectado %s" % (self.address,))
 
     def handleMessage(self):
-        global _last_walk, CURRENT_GAIT, CAP_LIMITS, GAIT_APPLIED, CAPS_APPLIED, GAIT_REF, CAPS_REF
+        global _last_walk, GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE
         global data_logger_instance, sensor_reader_instance, logging_active
         raw = self.data.strip()
         log("WS", "Recibido RAW: %s" % raw)
@@ -475,32 +457,18 @@ class RobotWS(WebSocket):
 
         action = msg.get("action")
         try:
-            # ── Caminar reactivo con gait actual + caps (suavizados) ──────────
+            # ── Caminar reactivo con gait actual (solo límites absolutos) ─────────
             if action == "walk":
                 vx, vy, wz = map(float, (msg.get("vx",0), msg.get("vy",0), msg.get("wz",0)))
                 
-                # 🚨 LÍMITES ABSOLUTOS FORZADOS (aplicados SIEMPRE antes que cualquier otra limitación)
-                # vx: entre -0.6 y 0.6
-                if vx > 0.6:
-                    vx = 0.6
-                elif vx < -0.6:
-                    vx = -0.6
-                
-                # vy: entre -0.45 y 0.45  
-                if vy > 0.45:
-                    vy = 0.45
-                elif vy < -0.45:
-                    vy = -0.45
+                # 🚨 LÍMITES ABSOLUTOS FORZADOS (aplicados SIEMPRE)
+                # Estos son los límites máximos para caminar en pasto
+                vx, vy, wz = _apply_absolute_limits(vx, vy, wz)
                 
                 # Normaliza magnitud del vector (x,y) si excede 1.0
                 norm = math.hypot(vx, vy)
                 if norm > 1.0:
                     vx, vy = vx/norm, vy/norm
-
-                # Aplicar CAPS suavizados (después de límites absolutos)
-                vx = max(-CAPS_APPLIED["vx"], min(CAPS_APPLIED["vx"], vx))
-                vy = max(-CAPS_APPLIED["vy"], min(CAPS_APPLIED["vy"], vy))
-                wz = max(-CAPS_APPLIED["wz"], min(CAPS_APPLIED["wz"], wz))
 
                 # LightGBM AutoML Adaptativo: Predecir parámetros de marcha óptimos
                 adaptive_cfg = None
@@ -514,20 +482,20 @@ class RobotWS(WebSocket):
                         logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
 
                 # Usar configuración adaptativa si está disponible, sino la configuración actual
-                move_cfg = adaptive_cfg if adaptive_cfg else _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                move_cfg = adaptive_cfg if adaptive_cfg else _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                 _apply_moveToward(vx, vy, wz, move_cfg)
                 _last_walk = time.time()
                 
                 cfg_source = "LightGBM" if adaptive_cfg else "Manual"
-                log("Walk", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s caps=%s [%s]" %
-                    (vx, vy, wz, move_cfg, CAPS_APPLIED, cfg_source))
+                log("Walk", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s [%s]" %
+                    (vx, vy, wz, move_cfg, cfg_source))
 
             # ── Caminar a un objetivo (bloqueante) con mismo gait ─────────────
             elif action == "walkTo":
                 x = float(msg.get("x", 0.0))
                 y = float(msg.get("y", 0.0))
                 theta = float(msg.get("theta", 0.0))
-                move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                 try:
                     motion.moveTo(x, y, theta, move_cfg)
                 except Exception as e:
@@ -540,19 +508,18 @@ class RobotWS(WebSocket):
                 angular_speed = float(msg.get("speed", 0.5))
                 duration = float(msg.get("duration", 0.0))
                 
-                # Aplicar límites de caps
-                angular_speed = min(CAPS_APPLIED["wz"], angular_speed)
+                # No hay límites adicionales para wz (el input del front y los límites absolutos lo manejan)
                 
                 if duration > 0:
                     # Giro por tiempo específico
-                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
                     log("Turn", "turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO" % (angular_speed, duration))
                 else:
                     # Giro continuo hasta que se detenga
-                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
                     log("Turn", "turnLeft(speed=%.2f) - CONTINUO" % angular_speed)
@@ -562,19 +529,19 @@ class RobotWS(WebSocket):
                 angular_speed = float(msg.get("speed", 0.5))
                 duration = float(msg.get("duration", 0.0))
                 
-                # Aplicar límites de caps y hacer negativo para giro a la derecha
-                angular_speed = -min(CAPS_APPLIED["wz"], angular_speed)
+                # Hacer negativo para giro a la derecha, sin límites adicionales de caps
+                angular_speed = -angular_speed
                 
                 if duration > 0:
                     # Giro por tiempo específico
-                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
                     log("Turn", "turnRight(speed=%.2f, duration=%.2f) - COMPLETADO" % (abs(angular_speed), duration))
                 else:
                     # Giro continuo hasta que se detenga
-                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT)
+                    move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
                     log("Turn", "turnRight(speed=%.2f) - CONTINUO" % abs(angular_speed))
@@ -585,52 +552,26 @@ class RobotWS(WebSocket):
                 # admite dict {"StepHeight":0.03,...} o lista [["StepHeight",0.03],...]
                 if not isinstance(user_cfg, (dict, list)):
                     raise ValueError("config debe ser dict o lista de pares")
-                CURRENT_GAIT = _config_to_move_list(user_cfg)
-                # si hay adaptativo encendido, consideramos el CURRENT_GAIT como base
-                GAIT_REF = merge_pairs(CURRENT_GAIT, [])
-                self.sendMessage(json.dumps({"gaitApplied": CURRENT_GAIT}))
-                log("Gait", "Nuevo gait config (manual) = %s" % CURRENT_GAIT)
+                GAIT_TARGET = _config_to_move_list(user_cfg)
+                GAIT_SOURCE = "manual"
+                self.sendMessage(json.dumps({"gaitApplied": GAIT_TARGET}))
+                log("Gait", "Nuevo gait config (manual) = %s" % GAIT_TARGET)
 
             elif action == "getGait":
-                self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT}))
-                log("Gait", "getGait → %s" % (GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT))
+                response_data = {
+                    "gait": GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET,
+                    "target": GAIT_TARGET,
+                    "applied": GAIT_APPLIED,
+                    "source": GAIT_SOURCE
+                }
+                self.sendMessage(json.dumps(response_data))
+                log("Gait", "getGait → applied=%s target=%s source=%s" % (GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE))
 
-            # ── Seteo/consulta de CAPs de velocidad ───────────────────────────
-            elif action == "caps":
-                vx = msg.get("vx", None)
-                vy = msg.get("vy", None)
-                wz = msg.get("wz", None)
-                def clamp01(v):
-                    try:
-                        v = float(v)
-                        if v < 0: v = 0.0
-                        if v > 1: v = 1.0
-                        return v
-                    except Exception:
-                        return None
-                updated = {}
-                if vx is not None:
-                    CAP_LIMITS["vx"] = clamp01(vx); updated["vx"] = CAP_LIMITS["vx"]
-                    CAPS_REF["vx"] = min(CAPS_REF.get("vx",1.0), CAP_LIMITS["vx"])
-                if vy is not None:
-                    CAP_LIMITS["vy"] = clamp01(vy); updated["vy"] = CAP_LIMITS["vy"]
-                    CAPS_REF["vy"] = min(CAPS_REF.get("vy",1.0), CAP_LIMITS["vy"])
-                if wz is not None:
-                    CAP_LIMITS["wz"] = clamp01(wz); updated["wz"] = CAP_LIMITS["wz"]
-                    CAPS_REF["wz"] = min(CAPS_REF.get("wz",1.0), CAP_LIMITS["wz"])
-                self.sendMessage(json.dumps({"caps": CAPS_APPLIED, "updated": updated}))
-                log("Caps", "CAP_LIMITS(user) = %s ; caps_applied=%s" % (CAP_LIMITS, CAPS_APPLIED))
-
-            elif action == "getCaps":
-                self.sendMessage(json.dumps({"caps": CAPS_APPLIED}))
-                log("Caps", "getCaps → %s" % CAPS_APPLIED)
-
-            # ── Atajo para leer todo de una ───────────────────────────────────
+            # ── Atajo para leer configuración (sin caps) ──────────────────────
             elif action == "getConfig":
-                self.sendMessage(json.dumps({"gait": (GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT),
-                                             "caps": CAPS_APPLIED,
+                self.sendMessage(json.dumps({"gait": (GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET),
                                              "adaptive": ADAPTIVE}))
-                log("Config", "getConfig → gait=%s caps=%s adaptive=%s" % ((GAIT_APPLIED if GAIT_APPLIED else CURRENT_GAIT), CAPS_APPLIED, ADAPTIVE))
+                log("Config", "getConfig → gait=%s adaptive=%s" % ((GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET), ADAPTIVE))
 
             # ── Protecciones de pie ───────────────────────────────────────────
             elif action == "footProtection":
