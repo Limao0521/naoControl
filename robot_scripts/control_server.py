@@ -15,7 +15,7 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0))
                 motion.setAngles(str(joint), val, 0.1)
-                log("Move", "setAngles(%s, %.2f)" % (joint,val))ne la marcha si no recibe walk en WATCHDOG s
+                logger.info("Move: setAngles(%s, %.2f)" % (joint,val))ne la marcha si no recibe walk en WATCHDOG s
 
 Cambios clave (versión "single-config + adaptive"):
 - Único conjunto de parámetros de marcha (gait) modificable por WS.
@@ -40,6 +40,7 @@ from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 try:
     from logger import create_logger
     logger = create_logger("CONTROL")
+    logger.info("Sistema de logging centralizado conectado")
 except ImportError:
     # Fallback si no está disponible
     class FallbackLogger:
@@ -49,6 +50,7 @@ except ImportError:
         def error(self, msg): print("ERROR [CONTROL] {}".format(msg))
         def critical(self, msg): print("CRITICAL [CONTROL] {}".format(msg))
     logger = FallbackLogger()
+    print("WARNING: Sistema de logging centralizado no disponible, usando fallback")
 
 # — Configuración general —
 IP_NAO     = "127.0.0.1"
@@ -78,22 +80,6 @@ except (ImportError, AttributeError, SyntaxError) as e:
     adaptive_walker = None
     ADAPTIVE_WALK_ENABLED = False
 
-def log(tag, msg):
-    """Función de logging mejorada que usa el sistema centralizado"""
-    ts = datetime.now().strftime("%H:%M:%S")
-    formatted_msg = "{} [{}] {}".format(ts, tag, msg)
-    print(formatted_msg)
-    
-    # Enviar al sistema de logging centralizado
-    if tag == "NAO" or tag == "FallEvt":
-        logger.info("[{}] {}".format(tag, msg))
-    elif "error" in msg.lower() or "fail" in msg.lower():
-        logger.error("[{}] {}".format(tag, msg))
-    elif "warn" in msg.lower():
-        logger.warning("[{}] {}".format(tag, msg))
-    else:
-        logger.info("[{}] {}".format(tag, msg))
-
 # ───── Proxies NAOqi ───────────────────────────────────────────────────────────
 logger.info("Inicializando proxies NAOqi...")
 try:
@@ -111,43 +97,47 @@ except Exception as e:
     logger.critical("Error inicializando proxies NAOqi: {}".format(e))
     sys.exit(1)
 
+# ─── Función auxiliar para operaciones NAO seguras ────────────────────────────
+def safe_nao_call(func, success_msg=None, error_prefix="NAO", *args, **kwargs):
+    """Ejecuta una función NAO con manejo seguro de excepciones"""
+    try:
+        result = func(*args, **kwargs)
+        if success_msg:
+            logger.info("NAO: %s" % success_msg)
+        return result
+    except Exception as e:
+        logger.warning("%s: %s" % (error_prefix, e))
+        return None
+
 # ─── Setup inicial seguro ──────────────────────────────────────────────────────
 # Fall manager ON → auto-recover
 motion.setFallManagerEnabled(True)
-log("NAO", "Fall manager ENABLED → auto-recover ON")
+logger.info("NAO: Fall manager ENABLED → auto-recover ON")
 
 # Mantener Autonomous Life desactivado y rigidez activa para control directo
 life.setState("disabled")
 motion.setStiffnesses("Body", 1.0)
-log("NAO", "AutonomousLife disabled; Body stiffness ON")
+logger.info("NAO: AutonomousLife disabled; Body stiffness ON")
 
 # Activar balanceo de brazos durante el caminar (mejora estabilidad)
-try:
-    motion.setMoveArmsEnabled(True, True)
-    log("NAO", "MoveArmsEnabled(True, True)")
-except Exception as e:
-    log("NAO", "Warn setMoveArmsEnabled: %s" % e)
+safe_nao_call(motion.setMoveArmsEnabled, "MoveArmsEnabled(True, True)", "NAO", True, True)
 
 # Mantener protección de contacto de pie activada por defecto
-try:
-    motion.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", True]])
-    log("NAO", "FootContactProtection = True")
-except Exception as e:
-    log("NAO", "Warn FootContactProtection: %s" % e)
+safe_nao_call(motion.setMotionConfig, "FootContactProtection = True", "NAO", [["ENABLE_FOOT_CONTACT_PROTECTION", True]])
 
 # ─── Callback de caída ─────────────────────────────────────────────────────────
 def onFall(_key, _value, _msg):
-    log("FallEvt", "detected! Recuperando postura...")
+    logger.info("FallEvt: detected! Recuperando postura...")
     try:
         posture.goToPosture("Stand", 0.7)
     except Exception as e:
-        log("FallEvt", "Recover error: %s" % e)
+        logger.error("FallEvt: Recover error: %s" % e)
 
 try:
     memory.subscribeToEvent("RobotHasFallen", __name__, "onFall")
-    log("NAO", "Suscrito a evento RobotHasFallen")
+    logger.info("NAO: Suscrito a evento RobotHasFallen")
 except Exception as e:
-    log("NAO", "Warn subscribe RobotHasFallen: %s" % e)
+    logger.warning("NAO: Warn subscribe RobotHasFallen: %s" % e)
 
 # ─── Funciones auxiliares ─────────────────────────────────────────────────────
 def clamp(v, lo, hi):
@@ -197,7 +187,7 @@ def _apply_moveToward(vx, vy, wz, move_cfg_pairs):
     try:
         motion.moveToward(vx, vy, wz, move_cfg_pairs)
     except Exception as e:
-        log("Walk", "moveToward with config failed: %s → retry no-config" % e)
+        logger.warning("Walk: moveToward with config failed: %s → retry no-config" % e)
         motion.moveToward(vx, vy, wz)
 
 def _apply_absolute_limits(vx, vy, wz):
@@ -250,16 +240,12 @@ logging_active = False
 # ─── Watchdog ──────────────────────────────────────────────────────────────────
 def watchdog():
     global _last_walk
-    log("Watchdog", "Iniciado (%.1fs)" % WATCHDOG)
+    logger.info("Watchdog: Iniciado (%.1fs)" % WATCHDOG)
     while True:
         time.sleep(0.05)
         if time.time() - _last_walk > WATCHDOG:
-            try:
-                motion.stopMove()
-                _last_walk = time.time()
-                log("Watchdog", "stopMove() tras timeout")
-            except Exception as e:
-                log("Watchdog", "stopMove error: %s" % e)
+            safe_nao_call(motion.stopMove, "Watchdog: stopMove() tras timeout", "Watchdog")
+            _last_walk = time.time()
 
 wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
@@ -306,7 +292,7 @@ def _check_golden_lock():
 
 def adaptive_loop():
     global GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE
-    log("Adapt", "Loop adaptativo iniciado")
+    logger.info("Adapt: Loop adaptativo iniciado")
     
     # Iniciales
     GAIT_TARGET = []
@@ -369,7 +355,7 @@ def adaptive_loop():
                 GAIT_APPLIED = dict_to_pairs(new_applied)
         
         except Exception as e:
-            log("Adapt", "Error adaptive_loop: %s" % e)
+            logger.error("Adapt: Error adaptive_loop: %s" % e)
 
 # Lanzar el hilo adaptativo
 adap = threading.Thread(target=adaptive_loop)
@@ -381,7 +367,7 @@ web_proc = None
 
 def cleanup_all_subscriptions():
     try:
-        log("Cleanup", "Limpieza suscripciones NAOqi...")
+        logger.info("Cleanup: Limpieza suscripciones NAOqi...")
         events_to_cleanup = ["RobotHasFallen","TouchChanged","FaceDetected",
                              "WordRecognized","SpeechDetected"]
         for event in events_to_cleanup:
@@ -390,11 +376,11 @@ def cleanup_all_subscriptions():
             except Exception:
                 pass
     except Exception as e:
-        log("Cleanup", "Error limpieza subs: %s" % e)
+        logger.error("Cleanup: Error limpieza subs: %s" % e)
 
 def cleanup(signum, frame=None):
     global web_proc
-    log("Server", "Señal {}, limpiando…".format(signum))
+    logger.info("Server: Señal {}, limpiando…".format(signum))
     
     # Mensaje TTS de cierre
     try:
@@ -406,25 +392,25 @@ def cleanup(signum, frame=None):
     try:
         cleanup_all_subscriptions()
     except Exception as e:
-        log("Cleanup", "Error limpieza completa: {}".format(e))
+        logger.error("Cleanup: Error limpieza completa: {}".format(e))
     
     if web_proc:
         try:
             web_proc.terminate()
             web_proc.wait()
-            log("Cleanup", "HTTP server detenido")
+            logger.info("Cleanup: HTTP server detenido")
         except Exception as e:
-            log("Cleanup", "Error deteniendo HTTP server: {}".format(e))
+            logger.error("Cleanup: Error deteniendo HTTP server: {}".format(e))
     
     try:
-        log("Cleanup", "Liberando NAOqi...")
+        logger.info("Cleanup: Liberando NAOqi...")
         motion.stopMove()
         motion.waitUntilMoveIsFinished()
-        log("Cleanup", "NAOqi OK")
+        logger.info("Cleanup: NAOqi OK")
     except Exception as e:
-        log("Cleanup", "Error liberando NAOqi: {}".format(e))
+        logger.error("Cleanup: Error liberando NAOqi: {}".format(e))
     
-    log("Cleanup", "Bye")
+    logger.info("Cleanup: Bye")
     sys.exit(0)
 
 signal.signal(signal.SIGINT,  cleanup)
@@ -433,7 +419,7 @@ signal.signal(signal.SIGTERM, cleanup)
 # ─── WebSocket handler ─────────────────────────────────────────────────────────
 class RobotWS(WebSocket):
     def handleConnected(self):
-        log("WS", "Conectado %s" % (self.address,))
+        logger.info("WS: Conectado %s" % (self.address,))
         # Al conectar, reporta config actual (aplicada) para no romper clientes
         try:
             self.sendMessage(json.dumps({"gait": GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET}))
@@ -441,18 +427,18 @@ class RobotWS(WebSocket):
             pass
 
     def handleClose(self):
-        log("WS", "Desconectado %s" % (self.address,))
+        logger.info("WS: Desconectado %s" % (self.address,))
 
     def handleMessage(self):
         global _last_walk, GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE
         global data_logger_instance, sensor_reader_instance, logging_active
         raw = self.data.strip()
-        log("WS", "Recibido RAW: %s" % raw)
+        logger.debug("WS: Recibido RAW: %s" % raw)
         
         try:
             msg = json.loads(raw)
         except Exception as e:
-            log("WS", "JSON inválido: %s (%s)" % (raw, e))
+            logger.warning("WS: JSON inválido: %s (%s)" % (raw, e))
             return
 
         action = msg.get("action")
@@ -487,7 +473,7 @@ class RobotWS(WebSocket):
                 _last_walk = time.time()
                 
                 cfg_source = "LightGBM" if adaptive_cfg else "Manual"
-                log("Walk", "moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s [%s]" %
+                logger.info("Walk: moveToward(vx=%.2f, vy=%.2f, wz=%.2f) cfg=%s [%s]" %
                     (vx, vy, wz, move_cfg, cfg_source))
 
             # ── Caminar a un objetivo (bloqueante) con mismo gait ─────────────
@@ -499,9 +485,9 @@ class RobotWS(WebSocket):
                 try:
                     motion.moveTo(x, y, theta, move_cfg)
                 except Exception as e:
-                    log("WalkTo", "moveTo with cfg failed: %s → retry sin cfg" % e)
+                    logger.warning("WalkTo: moveTo with cfg failed: %s → retry sin cfg" % e)
                     motion.moveTo(x, y, theta)
-                log("WalkTo", "moveTo(x=%.2f,y=%.2f,th=%.2f)" % (x,y,theta))
+                logger.info("WalkTo: moveTo(x=%.2f,y=%.2f,th=%.2f)" % (x,y,theta))
 
             # ── Girar sobre su propio eje - Izquierda ─────────────────────────
             elif action == "turnLeft":
@@ -516,13 +502,13 @@ class RobotWS(WebSocket):
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
-                    log("Turn", "turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO" % (angular_speed, duration))
+                    logger.info("Turn: turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO" % (angular_speed, duration))
                 else:
                     # Giro continuo hasta que se detenga
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
-                    log("Turn", "turnLeft(speed=%.2f) - CONTINUO" % angular_speed)
+                    logger.info("Turn: turnLeft(speed=%.2f) - CONTINUO" % angular_speed)
 
             # ── Girar sobre su propio eje - Derecha ───────────────────────────
             elif action == "turnRight":
@@ -538,13 +524,13 @@ class RobotWS(WebSocket):
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
-                    log("Turn", "turnRight(speed=%.2f, duration=%.2f) - COMPLETADO" % (abs(angular_speed), duration))
+                    logger.info("Turn: turnRight(speed=%.2f, duration=%.2f) - COMPLETADO" % (abs(angular_speed), duration))
                 else:
                     # Giro continuo hasta que se detenga
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
-                    log("Turn", "turnRight(speed=%.2f) - CONTINUO" % abs(angular_speed))
+                    logger.info("Turn: turnRight(speed=%.2f) - CONTINUO" % abs(angular_speed))
 
             # ── Seteo de Gait (manual por WS) ─────────────────────────────────
             elif action == "gait":
@@ -555,7 +541,7 @@ class RobotWS(WebSocket):
                 GAIT_TARGET = _config_to_move_list(user_cfg)
                 GAIT_SOURCE = "manual"
                 self.sendMessage(json.dumps({"gaitApplied": GAIT_TARGET}))
-                log("Gait", "Nuevo gait config (manual) = %s" % GAIT_TARGET)
+                logger.info("Gait: Nuevo gait config (manual) = %s" % GAIT_TARGET)
 
             elif action == "getGait":
                 response_data = {
@@ -565,32 +551,32 @@ class RobotWS(WebSocket):
                     "source": GAIT_SOURCE
                 }
                 self.sendMessage(json.dumps(response_data))
-                log("Gait", "getGait → applied=%s target=%s source=%s" % (GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE))
+                logger.info("Gait: getGait → applied=%s target=%s source=%s" % (GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE))
 
             # ── Atajo para leer configuración (sin caps) ──────────────────────
             elif action == "getConfig":
                 self.sendMessage(json.dumps({"gait": (GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET),
                                              "adaptive": ADAPTIVE}))
-                log("Config", "getConfig → gait=%s adaptive=%s" % ((GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET), ADAPTIVE))
+                logger.info("Config: getConfig → gait=%s adaptive=%s" % ((GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET), ADAPTIVE))
 
             # ── Protecciones de pie ───────────────────────────────────────────
             elif action == "footProtection":
                 enable = bool(msg.get("enable", True))
                 motion.setMotionConfig([["ENABLE_FOOT_CONTACT_PROTECTION", enable]])
                 self.sendMessage(json.dumps({"footProtection": enable}))
-                log("FootProt", "FootContactProtection set to %s" % enable)
+                logger.info("FootProt: FootContactProtection set to %s" % enable)
 
             # ── Movimiento articular directo ──────────────────────────────────
             elif action == "move":
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0))
-                log("Move", "setAngles(%s, %.2f)" % (joint,val))
+                logger.info("Move: setAngles(%s, %.2f)" % (joint,val))
 
             # ── Postura ───────────────────────────────────────────────────────
             elif action == "posture":
                 pst = msg.get("value","Stand")
                 posture.goToPosture(str(pst), 0.7)
-                log("Posture", "goToPosture('%s')" % pst)
+                logger.info("Posture: goToPosture('%s')" % pst)
 
             # ── LEDs ──────────────────────────────────────────────────────────
             elif action == "led":
@@ -611,32 +597,32 @@ class RobotWS(WebSocket):
                 if grp in ("LeftEarLeds", "RightEarLeds"):
                     intensity = (rgb_int & 0xFF) / 255.0
                     leds.fade(grp, intensity, duration)
-                    log("LED", "fade('%s',%.2f,%.2f)" % (grp, intensity, duration))
+                    logger.info("LED: fade('%s',%.2f,%.2f)" % (grp, intensity, duration))
                 else:
                     leds.fadeRGB(grp, rgb_int, duration)
-                    log("LED", "fadeRGB('%s',0x%06X,%.2f)" % (grp, rgb_int, duration))
+                    logger.info("LED: fadeRGB('%s',0x%06X,%.2f)" % (grp, rgb_int, duration))
 
             # ── Hablar ────────────────────────────────────────────────────────
             elif action == "say":
                 txt = msg.get("text","")
                 tts.say(str(txt))
-                log("TTS", "say('%s')" % txt)
+                logger.info("TTS: say('%s')" % txt)
 
             # ── Idioma TTS ────────────────────────────────────────────────────
             elif action == "language":
                 lang = msg.get("value","")
                 try:
                     tts.setLanguage(str(lang))
-                    log("TTS", "setLanguage('%s')" % lang)
+                    logger.info("TTS: setLanguage('%s')" % lang)
                 except Exception as e:
-                    log("WS", "Error setLanguage('%s'): %s" % (lang, e))
+                    logger.warning("WS: Error setLanguage('%s'): %s" % (lang, e))
 
             # ── Autonomous Life ───────────────────────────────────────────────
             elif action == "autonomous":
                 enable = bool(msg.get("enable", False))
                 new_state = "interactive" if enable else "disabled"
                 life.setState(new_state)
-                log("Autonomous", "AutonomousLife.setState('%s')" % new_state)
+                logger.info("Autonomous: AutonomousLife.setState('%s')" % new_state)
 
             # ── Kick (ejecuta behavior si existe) ─────────────────────────────
             elif action == "kick":
@@ -646,24 +632,24 @@ class RobotWS(WebSocket):
                         for bhv in behavior.getRunningBehaviors():
                             behavior.stopBehavior(bhv)
                         behavior.runBehavior(behavior_name)
-                        log("Kick", "Ejecutando kick behavior: '%s'" % behavior_name)
+                        logger.info("Kick: Ejecutando kick behavior: '%s'" % behavior_name)
                     else:
-                        log("WS", "⚠ Behavior kick no instalado: '%s'" % behavior_name)
+                        logger.warning("WS: ⚠ Behavior kick no instalado: '%s'" % behavior_name)
                         installed = behavior.getInstalledBehaviors()
                         kicks = [b for b in installed if "kick" in b.lower()]
                         if kicks:
                             behavior.runBehavior(kicks[0])
-                            log("Kick", "Ejecutando kick alternativo: '%s'" % kicks[0])
+                            logger.info("Kick: Ejecutando kick alternativo: '%s'" % kicks[0])
                         else:
-                                log("WS", "⚠ No se encontró behavior de kick")
+                                logger.warning("WS: ⚠ No se encontró behavior de kick")
                 except Exception as e:
-                    log("WS", "Error ejecutando kick: %s" % e)
+                    logger.warning("WS: Error ejecutando kick: %s" % e)
 
             # ── Volumen ─────────────────────────────────────────────────────
             elif action == "volume":
                 vol = float(msg.get("value", 50))
                 audio.setOutputVolume(vol)
-                log("Audio", "AudioDevice.setOutputVolume(%.1f)" % vol)
+                logger.info("Audio: AudioDevice.setOutputVolume(%.1f)" % vol)
 
             # ── Estado de batería ─────────────────────────────────────────────
             elif action == "getBattery":
@@ -676,7 +662,7 @@ class RobotWS(WebSocket):
                 full  = (level >= 95)
                 payload = json.dumps({"battery": level, "low": low, "full": full})
                 self.sendMessage(payload)
-                log("Battery","getBattery → %d%% low=%s full=%s"%(level,low,full))
+                logger.info("Battery: getBattery → %d%% low=%s full=%s"%(level,low,full))
 
             # ── Estado Autonomous Life ────────────────────────────────────────
             elif action == "getAutonomousLife":
@@ -684,9 +670,9 @@ class RobotWS(WebSocket):
                     current_state = life.getState()
                     is_enabled = current_state != "disabled"
                     self.sendMessage(json.dumps({"autonomousLifeEnabled": is_enabled}))
-                    log("Autonomous","getAutonomousLife → enabled=%s"%(is_enabled))
+                    logger.info("Autonomous: getAutonomousLife → enabled=%s"%(is_enabled))
                 except Exception as e:
-                    log("WS", "Error getAutonomousLife: %s" % e)
+                    logger.warning("WS: Error getAutonomousLife: %s" % e)
                     self.sendMessage(json.dumps({"autonomousLifeEnabled": False}))
 
             # ── Control LightGBM AutoML Adaptativo ───────────────────────────────
@@ -783,7 +769,7 @@ class RobotWS(WebSocket):
                                 "frequency": frequency
                             }
                         }
-                        log("DataLogger", "Logging iniciado: {} ({}s @ {}Hz)".format(output_file, duration, frequency))
+                        logger.info("DataLogger: Logging iniciado: {} ({}s @ {}Hz)".format(output_file, duration, frequency))
                     else:
                         response = {"startLogging": {"success": False, "error": "No se pudo iniciar logging"}}
                     
@@ -810,7 +796,7 @@ class RobotWS(WebSocket):
                         }
                     }
                     self.sendMessage(json.dumps(response))
-                    log("DataLogger", "Logging detenido. Muestras: {}".format(samples_written))
+                    logger.info("DataLogger: Logging detenido. Muestras: {}".format(samples_written))
                     
                 except Exception as e:
                     logger.error("Error deteniendo logging: {}".format(e))
@@ -937,14 +923,14 @@ class RobotWS(WebSocket):
                     self.sendMessage(json.dumps({"setGoldenParams": {"success": False, "error": str(e)}}))
 
             else:
-                log("WS", "⚠ Acción desconocida '%s'" % action)
+                logger.warning("WS: ⚠ Acción desconocida '%s'" % action)
 
         except Exception as e:
-            log("WS", "Excepción en %s: %s" % (action, e))
+            logger.warning("WS: Excepción en %s: %s" % (action, e))
 
 # ─── Arranque WS ───────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    log("Server", "Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
+    logger.info("Server: Iniciando WS en ws://0.0.0.0:%d" % WS_PORT)
     srv = None
     try:
         while True:
@@ -953,11 +939,11 @@ if __name__ == "__main__":
                 break
             except socket.error as e:
                 if e.errno == errno.EADDRINUSE:
-                    log("Server", "Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
+                    logger.info("Server: Puerto %d ocupado, reintentando en 3s…" % WS_PORT)
                     time.sleep(3)
                 else:
                     raise
-        log("Server", "Servidor WebSocket iniciado")
+        logger.info("Server: Servidor WebSocket iniciado")
         logger.info("Control server WebSocket activo en puerto {}".format(WS_PORT))
         
         # Mensaje TTS de confirmación
@@ -969,10 +955,10 @@ if __name__ == "__main__":
         
         srv.serveforever()
     except KeyboardInterrupt:
-        log("Server", "Interrupción de teclado detectada")
+        logger.info("Server: Interrupción de teclado detectada")
         cleanup(signal.SIGINT, None)
     except Exception as e:
-        log("Server", "Error fatal: {}".format(e))
+        logger.info("Server: Error fatal: {}".format(e))
         cleanup(signal.SIGTERM, None)
     finally:
         if srv:
