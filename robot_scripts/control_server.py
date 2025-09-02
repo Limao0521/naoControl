@@ -217,8 +217,8 @@ def _apply_absolute_limits(vx, vy, wz):
     return vx, vy, wz
 
 # ─── Estados de Gait con suavizado ─────────────────────────────────────────────
-GAIT_TARGET = []       # Objetivo único: manual, adaptativo o golden [["MaxStepX", val], ...]
-GAIT_SOURCE = "none"   # Fuente: "manual", "adaptive", "golden", "none"
+GAIT_TARGET = []       # Objetivo único: manual o adaptativo [["MaxStepX", val], ...]
+GAIT_SOURCE = "none"   # Fuente: "manual", "adaptive", "none"
 
 # Aplicado (lo que realmente mandamos a moveToward):
 GAIT_APPLIED = []      # lista de pares suavizada
@@ -251,45 +251,6 @@ wd = threading.Thread(target=watchdog)
 wd.setDaemon(True)
 wd.start()
 
-# ─── Función de verificación de Golden Lock ────────────────────────────────────
-def _check_golden_lock():
-    """
-    Verifica si existen parámetros golden bloqueados.
-    Retorna (locked, golden_params) donde:
-    - locked: True si hay parámetros bloqueados válidos
-    - golden_params: dict con los parámetros a aplicar o None
-    """
-    try:
-        lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
-        if not os.path.exists(lock_file):
-            return False, None
-            
-        with open(lock_file, 'r') as f:
-            lock_data = json.load(f)
-        
-        # Verificar que el lock sea válido y no haya expirado
-        if not lock_data.get("locked", False):
-            return False, None
-            
-        # Verificar expiración si está definida
-        expires_at = lock_data.get("expires_at")
-        if expires_at and time.time() > expires_at:
-            logger.info("Golden lock expirado, removiendo...")
-            os.remove(lock_file)
-            return False, None
-            
-        # Extraer parámetros golden
-        golden_params = lock_data.get("locked_parameters")
-        if not golden_params:
-            return False, None
-            
-        logger.debug("Golden parameters activos: {}".format(golden_params))
-        return True, golden_params
-        
-    except Exception as e:
-        logger.warning("Error verificando golden lock: {}".format(e))
-        return False, None
-
 def adaptive_loop():
     global GAIT_APPLIED, GAIT_TARGET, GAIT_SOURCE
     logger.info("Adapt: Loop adaptativo iniciado")
@@ -303,43 +264,24 @@ def adaptive_loop():
         try:
             time.sleep(0.1)  # 10 Hz
             
-            # ✨ VERIFICAR GOLDEN LOCK PRIMERO
-            is_locked, golden_params = _check_golden_lock()
-            
-            if is_locked and golden_params:
-                # Aplicar parámetros golden directamente sin variación
-                adaptive_gait = []
-                for param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
-                    if param in golden_params:
-                        adaptive_gait.append([param, golden_params[param]])
-                
-                if adaptive_gait:
-                    GAIT_TARGET = adaptive_gait
-                    GAIT_SOURCE = "golden"
-                    logger.debug("Aplicando golden parameters: {}".format(golden_params))
-                    
-                # Skip el resto del loop adaptativo cuando está locked
-                
-            else:
-                # Comportamiento adaptativo normal solo si NO está locked
-                # LightGBM AutoML adaptativo si está disponible
-                if ADAPTIVE_WALK_ENABLED and adaptive_walker and ADAPTIVE["enabled"]:
-                    try:
-                        # Predecir parámetros de marcha con LightGBM AutoML
-                        adaptive_params = adaptive_walker.predict_gait_parameters()
-                        if adaptive_params:
-                            # Convertir a formato esperado
-                            adaptive_gait = []
-                            for param, value in adaptive_params.items():
-                                if param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
-                                    adaptive_gait.append([param, value])
-                            
-                            if adaptive_gait:
-                                GAIT_TARGET = adaptive_gait
-                                GAIT_SOURCE = "adaptive"
-                                logger.debug("LightGBM AutoML adaptativo: {}".format(adaptive_params))
-                    except Exception as e:
-                        logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
+            # LightGBM AutoML adaptativo si está disponible
+            if ADAPTIVE_WALK_ENABLED and adaptive_walker and ADAPTIVE["enabled"]:
+                try:
+                    # Predecir parámetros de marcha con LightGBM AutoML
+                    adaptive_params = adaptive_walker.predict_gait_parameters()
+                    if adaptive_params:
+                        # Convertir a formato esperado
+                        adaptive_gait = []
+                        for param, value in adaptive_params.items():
+                            if param in ["MaxStepX", "MaxStepY", "MaxStepTheta", "StepHeight", "Frequency"]:
+                                adaptive_gait.append([param, value])
+                        
+                        if adaptive_gait:
+                            GAIT_TARGET = adaptive_gait
+                            GAIT_SOURCE = "adaptive"
+                            logger.debug("LightGBM AutoML adaptativo: {}".format(adaptive_params))
+                except Exception as e:
+                    logger.warning("Error en LightGBM AutoML adaptativo: {}".format(e))
             
             # Suavizar gait hacia objetivo único
             if GAIT_TARGET:
@@ -845,83 +787,6 @@ class RobotWS(WebSocket):
                     logger.error("Error logging sample: {}".format(e))
                     self.sendMessage(json.dumps({"logSample": {"success": False, "error": str(e)}}))
                     
-            # ── Sistema Golden Parameters ──────────────────────────────────────────
-            elif action == "getGoldenLockStatus":
-                """Obtener estado actual del sistema de golden lock"""
-                try:
-                    is_locked, golden_params = _check_golden_lock()
-                    
-                    response = {
-                        "goldenLockStatus": {
-                            "locked": is_locked,
-                            "parameters": golden_params if is_locked else None,
-                            "lock_file_exists": os.path.exists(os.path.join(os.path.dirname(__file__), "golden_params_lock.json"))
-                        }
-                    }
-                    self.sendMessage(json.dumps(response))
-                    logger.debug("Estado golden lock enviado: locked={}".format(is_locked))
-                    
-                except Exception as e:
-                    logger.error("Error obteniendo estado golden lock: {}".format(e))
-                    self.sendMessage(json.dumps({"goldenLockStatus": {"error": str(e)}}))
-                    
-            elif action == "unlockGoldenParams":
-                """Forzar unlock de parámetros golden"""
-                try:
-                    lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
-                    
-                    if os.path.exists(lock_file):
-                        os.remove(lock_file)
-                        logger.info("Golden parameters lock removido manualmente")
-                        response = {"unlockGoldenParams": {"success": True, "message": "Lock removido"}}
-                    else:
-                        response = {"unlockGoldenParams": {"success": False, "message": "No hay lock activo"}}
-                    
-                    self.sendMessage(json.dumps(response))
-                    
-                except Exception as e:
-                    logger.error("Error removiendo golden lock: {}".format(e))
-                    self.sendMessage(json.dumps({"unlockGoldenParams": {"success": False, "error": str(e)}}))
-                    
-            elif action == "setGoldenParams":
-                """Establecer parámetros golden manualmente"""
-                try:
-                    # Obtener parámetros del mensaje
-                    golden_params = msg.get("parameters", {})
-                    duration_seconds = msg.get("duration", 3600)  # 1 hora por defecto
-                    
-                    if not golden_params:
-                        response = {"setGoldenParams": {"success": False, "error": "No se proporcionaron parámetros"}}
-                    else:
-                        # Crear archivo de lock
-                        lock_data = {
-                            "locked": True,
-                            "locked_parameters": golden_params,
-                            "locked_at": time.time(),
-                            "expires_at": time.time() + duration_seconds,
-                            "source": "manual_websocket",
-                            "force_unlock": False
-                        }
-                        
-                        lock_file = os.path.join(os.path.dirname(__file__), "golden_params_lock.json")
-                        with open(lock_file, 'w') as f:
-                            json.dump(lock_data, f, indent=2)
-                        
-                        logger.info("Golden parameters establecidos manualmente: {}".format(golden_params))
-                        response = {
-                            "setGoldenParams": {
-                                "success": True,
-                                "parameters": golden_params,
-                                "duration": duration_seconds
-                            }
-                        }
-                    
-                    self.sendMessage(json.dumps(response))
-                    
-                except Exception as e:
-                    logger.error("Error estableciendo golden parameters: {}".format(e))
-                    self.sendMessage(json.dumps({"setGoldenParams": {"success": False, "error": str(e)}}))
-
             else:
                 logger.warning("WS: ⚠ Acción desconocida '%s'" % action)
 
