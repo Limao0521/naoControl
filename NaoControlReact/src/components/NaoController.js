@@ -236,13 +236,13 @@ const NaoController = () => {
 
   // Comandos de rotación
   const handleTurnLeft = useCallback(() => {
-    if (sendMessage({ action: 'turnLeft', speed: 0.5, duration: 2.0 })) {
+    if (sendMessage({ action: 'turnLeft', speed: 0.2, duration: 0 })) {
       console.log('[UI] Turn Left enviado');
     }
   }, [sendMessage]);
 
   const handleTurnRight = useCallback(() => {
-    if (sendMessage({ action: 'turnRight', speed: 0.4 })) {
+    if (sendMessage({ action: 'turnRight', speed: 0.2, duration: 0 })) {
       console.log('[UI] Turn Right enviado');
     }
   }, [sendMessage]);
