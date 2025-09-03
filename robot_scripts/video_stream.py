@@ -33,10 +33,23 @@ except ImportError:
         def critical(self, msg): print("CRITICAL [CAMERA] {}".format(msg))
     logger = FallbackLogger()
 
-# Variables globales para el frame JPEG y sincronización\latest_jpeg = None
+# Variables globales para el frame JPEG y sincronización
+latest_jpeg = None
 lock = threading.Lock()
 
 class MJPEGHandler(BaseHTTPRequestHandler):
+    def do_HEAD(self):
+        """Manejar peticiones HEAD para compatibilidad"""
+        if self.path != '/video.mjpeg':
+            self.send_error(404)
+            return
+        self.send_response(200)
+        self.send_header('Content-Type', 'multipart/x-mixed-replace; boundary=--jpgboundary')
+        self.send_header('Cache-Control', 'no-cache, no-store, must-revalidate')
+        self.send_header('Pragma', 'no-cache')
+        self.send_header('Expires', '0')
+        self.end_headers()
+
     def do_GET(self):
         if self.path != '/video.mjpeg':
             self.send_error(404)

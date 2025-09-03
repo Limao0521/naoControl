@@ -83,10 +83,10 @@ VELOCITY_LIMITS = {
 }
 
 # Parámetros de gait por defecto (OPTIMIZADOS PARA PASTO SINTÉTICO)
-# Extraídos de análisis de 538 registros de caminata exitosa
+# Ajustados para reducir comportamiento diagonal
 OPTIMAL_GRASS_PARAMS = {
     'MaxStepX': 0.040000,       # Paso máximo adelante/atrás (m)
-    'MaxStepY': 0.140000,       # Paso máximo lateral (m)  
+    'MaxStepY': 0.080000,       # Paso máximo lateral REDUCIDO (era 0.140000)
     'MaxStepTheta': 0.349000,   # Rotación máxima por paso (rad)
     'StepHeight': 0.020000,     # Altura de paso (m)
     'Frequency': 1.000000       # Frecuencia de paso (Hz)

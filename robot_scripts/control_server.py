@@ -6,7 +6,7 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
 • ws://0.0.0.0:6671
 • JSON actions:
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
-    footProtection, posture, led, say, language, autonomous, kick,
+    footProtection, posture, led, say, language, autonomous, kick, siu,
     volume, getBattery, getAutonomousLife, turnLeft, turnRight,
     adaptiveLightGBM, getLightGBMStats,
     startLogging, stopLogging, getLoggingStatus, logSample ← NEW
@@ -512,6 +512,7 @@ class RobotWS(WebSocket):
             elif action == "move":
                 joint = msg.get("joint","")
                 val   = float(msg.get("value",0))
+                motion.setAngles(str(joint), val, 0.1)
                 logger.info("Move: setAngles(%s, %.2f)" % (joint,val))
 
             # ── Postura ───────────────────────────────────────────────────────
@@ -586,6 +587,35 @@ class RobotWS(WebSocket):
                                 logger.warning("WS: ⚠ No se encontró behavior de kick")
                 except Exception as e:
                     logger.warning("WS: Error ejecutando kick: %s" % e)
+
+            # ── Siu (ejecuta behavior siu-17777b) ─────────────────────────────
+            elif action == "siu":
+                try:
+                    behavior_name = "siu-17777b"
+                    if behavior and behavior.isBehaviorInstalled(behavior_name):
+                        # Detener behaviors en ejecución
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        # Ejecutar behavior siu
+                        behavior.runBehavior(behavior_name)
+                        logger.info("Siu: Ejecutando siu behavior: '%s'" % behavior_name)
+                        self.sendMessage(json.dumps({"siu": {"success": True, "behavior": behavior_name}}))
+                    else:
+                        logger.warning("WS: ⚠ Behavior siu no instalado: '%s'" % behavior_name)
+                        # Listar behaviors disponibles que contengan "siu"
+                        installed = behavior.getInstalledBehaviors()
+                        siu_behaviors = [b for b in installed if "siu" in b.lower()]
+                        if siu_behaviors:
+                            behavior.runBehavior(siu_behaviors[0])
+                            logger.info("Siu: Ejecutando siu alternativo: '%s'" % siu_behaviors[0])
+                            self.sendMessage(json.dumps({"siu": {"success": True, "behavior": siu_behaviors[0]}}))
+                        else:
+                            error_msg = "No se encontró behavior de siu. Disponibles: {}".format(installed[:10])
+                            logger.warning("WS: ⚠ %s" % error_msg)
+                            self.sendMessage(json.dumps({"siu": {"success": False, "error": error_msg}}))
+                except Exception as e:
+                    logger.warning("WS: Error ejecutando siu: %s" % e)
+                    self.sendMessage(json.dumps({"siu": {"success": False, "error": str(e)}}))
 
             # ── Volumen ─────────────────────────────────────────────────────
             elif action == "volume":
