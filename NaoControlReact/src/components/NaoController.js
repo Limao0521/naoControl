@@ -288,7 +288,13 @@ const NaoController = () => {
   const handleUIChange = useCallback((uiMode) => {
     setCurrentUI(uiMode);
     console.log('[UI] Cambiado a modo:', uiMode);
-  }, []);
+    
+    // Enviar comando de modo fútbol al backend
+    const isFutbolMode = uiMode === 'futbol';
+    if (sendMessage({ action: 'modoFutbol', enable: isFutbolMode })) {
+      console.log('[UI] Comando modoFutbol enviado:', isFutbolMode ? 'activado' : 'desactivado');
+    }
+  }, [sendMessage]);
 
   // Solicitar estadísticas del robot
   const handleRequestStats = useCallback(() => {

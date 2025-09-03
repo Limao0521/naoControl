@@ -42,22 +42,22 @@ const useJoystick = (onMove, mode = 'walk') => {
     const rect = baseRef.current.getBoundingClientRect();
     const { R, LIM } = dimensionsRef.current;
     
-    let dx = clientX - rect.left - R;
+    // Solo permitir movimiento vertical (adelante/atrás)
+    let dx = 0; // Restringir movimiento horizontal
     let dy = clientY - rect.top - R;
     
-    const distance = Math.hypot(dx, dy);
-    const factor = distance > LIM ? LIM / distance : 1;
-    
-    dx *= factor;
-    dy *= factor;
+    // Limitar el movimiento vertical al área permitida
+    if (Math.abs(dy) > LIM) {
+      dy = dy > 0 ? LIM : -LIM;
+    }
     
     setKnobPosition(dx, dy);
     
-    const nx = dx / LIM;
-    const ny = -dy / LIM;
+    const nx = 0; // Sin movimiento horizontal
+    const ny = -dy / LIM; // Solo movimiento vertical
     
     // Usar el mismo umbral que el código original (0.05)
-    const vx = Math.abs(nx) > 0.05 ? nx : 0;
+    const vx = 0; // Sin velocidad horizontal
     const vy = Math.abs(ny) > 0.05 ? ny : 0;
     
     setPosition({ x: vx, y: vy });
