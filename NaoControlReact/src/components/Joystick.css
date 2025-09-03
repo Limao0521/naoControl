@@ -39,8 +39,9 @@
 
 /* ─── TURN BUTTONS ─── */
 .turn-btn {
-  background: var(--btn-bg, #2196F3);
-  border: 2px solid var(--btn-border, #1976D2);
+  /* Usar el mismo color rojo del mando del joystick */
+  background: var(--joy-knob, #cf2626);
+  border: 2px solid var(--joy-knob-border, #9f1e1e);
   border-radius: 50%;
   width: clamp(26px, 4.5vw, 38px);
   height: clamp(26px, 4.5vw, 38px);
@@ -59,7 +60,7 @@
 }
 
 .turn-btn:hover {
-  background: var(--btn-hover, #1976D2);
+  background: var(--joy-knob-hover, #b32121);
   transform: translateY(-2px);
   box-shadow: 0 6px 12px rgba(0,0,0,0.4);
 }
