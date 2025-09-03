@@ -8,7 +8,7 @@ control_server.py – WebSocket → NAOqi dispatcher + Head‐Touch Web‐Launch
     walk, walkTo, move, gait, getGait, caps, getCaps, getConfig,
     footProtection, posture, led, say, language, autonomous, kick, siu,
     volume, getBattery, getAutonomousLife, turnLeft, turnRight,
-    adaptiveLightGBM, getLightGBMStats,
+    adaptiveLightGBM, getLightGBMStats, modoFutbol,
     startLogging, stopLogging, getLoggingStatus, logSample ← NEW
 
 • Watchdog            elif action == "move":
@@ -245,6 +245,13 @@ def watchdog():
         time.sleep(0.05)
         if time.time() - _last_walk > WATCHDOG:
             safe_nao_call(motion.stopMove, "Watchdog: stopMove() tras timeout", "Watchdog")
+            # Ir a postura Stand después de detener el movimiento
+            try:
+                time.sleep(0.3)  # Pequeña pausa para estabilizar
+                posture.goToPosture("Stand", 0.7)
+                logger.info("Watchdog: Robot en postura Stand tras timeout de movimiento")
+            except Exception as e:
+                logger.warning("Watchdog: Error aplicando postura Stand: %s" % e)
             _last_walk = time.time()
 
 wd = threading.Thread(target=watchdog)
@@ -445,14 +452,15 @@ class RobotWS(WebSocket):
                     time.sleep(duration)
                     motion.stopMove()
                     # Volver a postura Stand normal después de completar la rotación
+                    time.sleep(0.5)  # Pequeña pausa para estabilizar
                     posture.goToPosture("Stand", 0.7)
                     logger.info("Turn: turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO - Volviendo a Stand" % (angular_speed, duration))
                 else:
-                    # Giro continuo hasta que se detenga
+                    # Giro continuo - el watchdog se encargará de ir a Stand cuando pare
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
-                    logger.info("Turn: turnLeft(speed=%.2f) - CONTINUO" % angular_speed)
+                    logger.info("Turn: turnLeft(speed=%.2f) - CONTINUO (Watchdog irá a Stand cuando pare)" % angular_speed)
 
             # ── Girar sobre su propio eje - Derecha ───────────────────────────
             elif action == "turnRight":
@@ -469,14 +477,15 @@ class RobotWS(WebSocket):
                     time.sleep(duration)
                     motion.stopMove()
                     # Volver a postura Stand normal después de completar la rotación
+                    time.sleep(0.5)  # Pequeña pausa para estabilizar
                     posture.goToPosture("Stand", 0.7)
                     logger.info("Turn: turnRight(speed=%.2f, duration=%.2f) - COMPLETADO - Volviendo a Stand" % (abs(angular_speed), duration))
                 else:
-                    # Giro continuo hasta que se detenga
+                    # Giro continuo - el watchdog se encargará de ir a Stand cuando pare
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     _last_walk = time.time()
-                    logger.info("Turn: turnRight(speed=%.2f) - CONTINUO" % abs(angular_speed))
+                    logger.info("Turn: turnRight(speed=%.2f) - CONTINUO (Watchdog irá a Stand cuando pare)" % abs(angular_speed))
 
             # ── Seteo de Gait (manual por WS) ─────────────────────────────────
             elif action == "gait":
@@ -1010,6 +1019,182 @@ class RobotWS(WebSocket):
                         "getFallManager": {
                             "success": False,
                             "error": str(e)
+                        }
+                    }))
+
+            # ── Modo Fútbol (desactiva Fall Manager para permitir caídas) ─────
+            elif action == "modoFutbol":
+                try:
+                    enable = bool(msg.get("enable", True))
+                    
+                    if enable:
+                        # Activar modo fútbol: Desactivar Fall Manager
+                        logger.info("Activando modo fútbol - Desactivando Fall Manager...")
+                        
+                        # Intentar múltiples métodos para desactivar Fall Manager
+                        success = False
+                        methods_tried = []
+                        
+                        # Método 1: Habilitar desactivación y luego desactivar Fall Manager
+                        try:
+                            # Primero habilitar la desactivación del Fall Manager
+                            motion.setEnableBalanceConstraint(False)  # Desactivar restricciones de balance
+                            time.sleep(0.1)  # Pequeña pausa
+                            # Luego desactivar el Fall Manager
+                            motion.setFallManagerEnabled(False)
+                            methods_tried.append("setEnableBalanceConstraint(False) + setFallManagerEnabled(False) - SUCCESS")
+                            success = True
+                            logger.info("Fall Manager desactivado via setEnableBalanceConstraint + setFallManagerEnabled")
+                        except Exception as e1:
+                            methods_tried.append("setEnableBalanceConstraint + setFallManagerEnabled - FAILED: {}".format(str(e1)))
+                            
+                            # Método alternativo 1a: Usar setMotionConfig para habilitar desactivación
+                            try:
+                                motion.setMotionConfig([["ENABLE_FALL_MANAGER_PROTECTION", False]])
+                                time.sleep(0.1)
+                                motion.setFallManagerEnabled(False)
+                                methods_tried.append("setMotionConfig PROTECTION + setFallManagerEnabled - SUCCESS")
+                                success = True
+                                logger.info("Fall Manager desactivado via setMotionConfig + setFallManagerEnabled")
+                            except Exception as e1a:
+                                methods_tried.append("setMotionConfig PROTECTION + setFallManagerEnabled - FAILED: {}".format(str(e1a)))
+                        
+                        # Método 2: ALMemory directo con múltiples intentos
+                        if not success:
+                            try:
+                                # Insertar múltiples keys relacionados con Fall Manager
+                                memory.insertData("FallManagerEnabled", False)
+                                memory.insertData("MotionConfig/FallManager/Enabled", False)
+                                memory.insertData("ALMotion/FallManager/Enabled", False)
+                                time.sleep(0.2)  # Dar tiempo para que se aplique
+                                methods_tried.append("ALMemory insertData (múltiples keys) - SUCCESS")
+                                success = True
+                                logger.info("Fall Manager desactivado via ALMemory múltiples keys")
+                            except Exception as e2:
+                                methods_tried.append("ALMemory insertData - FAILED: {}".format(str(e2)))
+                        
+                        # Método 3: setMotionConfig con diferentes parámetros
+                        if not success:
+                            try:
+                                # Intentar diferentes configuraciones
+                                motion.setMotionConfig([["ENABLE_FALL_MANAGER", False]])
+                                time.sleep(0.1)
+                                motion.setMotionConfig([["FALL_MANAGER_ENABLED", False]])
+                                time.sleep(0.1)
+                                methods_tried.append("setMotionConfig múltiples parámetros - SUCCESS")
+                                success = True
+                                logger.info("Fall Manager desactivado via setMotionConfig múltiples")
+                            except Exception as e3:
+                                methods_tried.append("setMotionConfig múltiples - FAILED: {}".format(str(e3)))
+                        
+                        # Método 4: Desactivar rigidez del cuerpo temporalmente
+                        if not success:
+                            try:
+                                # Guardar rigidez actual
+                                current_stiffness = motion.getStiffnesses("Body")
+                                # Desactivar rigidez temporalmente
+                                motion.setStiffnesses("Body", 0.0)
+                                time.sleep(0.2)
+                                # Intentar desactivar Fall Manager con rigidez baja
+                                memory.insertData("FallManagerEnabled", False)
+                                time.sleep(0.2)
+                                # Restaurar rigidez
+                                motion.setStiffnesses("Body", 1.0)
+                                methods_tried.append("Método rigidez temporal - SUCCESS")
+                                success = True
+                                logger.info("Fall Manager desactivado via método rigidez temporal")
+                            except Exception as e4:
+                                methods_tried.append("Método rigidez temporal - FAILED: {}".format(str(e4)))
+                                # Asegurar que la rigidez se restaure en caso de error
+                                try:
+                                    motion.setStiffnesses("Body", 1.0)
+                                except:
+                                    pass
+                        
+                        if success:
+                            # Verificar que realmente esté desactivado con múltiples métodos
+                            time.sleep(0.5)  # Dar más tiempo para que se aplique
+                            fall_manager_disabled = False
+                            verification_methods = []
+                            
+                            try:
+                                # Método 1: getFallManagerEnabled
+                                is_enabled_motion = motion.getFallManagerEnabled()
+                                verification_methods.append("motion.getFallManagerEnabled(): {}".format(is_enabled_motion))
+                                if not is_enabled_motion:
+                                    fall_manager_disabled = True
+                            except Exception as verify_e1:
+                                verification_methods.append("motion.getFallManagerEnabled() FAILED: {}".format(str(verify_e1)))
+                            
+                            try:
+                                # Método 2: ALMemory check
+                                is_enabled_memory = memory.getData("FallManagerEnabled")
+                                verification_methods.append("memory.getData('FallManagerEnabled'): {}".format(is_enabled_memory))
+                                if not is_enabled_memory:
+                                    fall_manager_disabled = True
+                            except Exception as verify_e2:
+                                verification_methods.append("memory.getData() FAILED: {}".format(str(verify_e2)))
+                            
+                            if fall_manager_disabled:
+                                status_msg = "MODO FÚTBOL ACTIVADO - Fall Manager DESACTIVADO"
+                                logger.info("Modo fútbol: {}".format(status_msg))
+                                self.sendMessage(json.dumps({
+                                    "modoFutbol": {
+                                        "success": True,
+                                        "enabled": True,
+                                        "fallManager": False,
+                                        "status": status_msg,
+                                        "methods_tried": methods_tried,
+                                        "verification": verification_methods
+                                    }
+                                }))
+                            else:
+                                # Si ningún método de verificación confirma la desactivación
+                                logger.warning("Fall Manager posiblemente aún activo después de intentos de desactivación")
+                                self.sendMessage(json.dumps({
+                                    "modoFutbol": {
+                                        "success": True,  # Marcar como éxito parcial
+                                        "enabled": True,
+                                        "fallManager": "uncertain",
+                                        "status": "MODO FÚTBOL ACTIVADO - Estado Fall Manager incierto",
+                                        "methods_tried": methods_tried,
+                                        "verification": verification_methods,
+                                        "warning": "No se pudo verificar completamente la desactivación del Fall Manager"
+                                    }
+                                }))
+                        else:
+                            error_msg = "No se pudo desactivar Fall Manager con ningún método"
+                            logger.error("Modo fútbol: {}".format(error_msg))
+                            self.sendMessage(json.dumps({
+                                "modoFutbol": {
+                                    "success": False,
+                                    "error": error_msg,
+                                    "methods_tried": methods_tried,
+                                    "help": "Fall Manager está protegido por NAOqi. Considere reiniciar NAOqi o usar Choregraphe."
+                                }
+                            }))
+                    
+                    else:
+                        # Desactivar modo fútbol: Reactivar Fall Manager
+                        motion.setFallManagerEnabled(True)
+                        status_msg = "MODO FÚTBOL DESACTIVADO - Fall Manager REACTIVADO"
+                        logger.info("Modo fútbol: {}".format(status_msg))
+                        self.sendMessage(json.dumps({
+                            "modoFutbol": {
+                                "success": True,
+                                "enabled": False,
+                                "fallManager": True,
+                                "status": status_msg
+                            }
+                        }))
+                        
+                except Exception as e:
+                    logger.error("Error configurando modo fútbol: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "modoFutbol": {
+                            "success": False,
+                            "error": str(e),
+                            "help": "Error en configuración de modo fútbol"
                         }
                     }))
                     
