@@ -444,7 +444,9 @@ class RobotWS(WebSocket):
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
-                    logger.info("Turn: turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO" % (angular_speed, duration))
+                    # Volver a postura Stand normal después de completar la rotación
+                    posture.goToPosture("Stand", 0.7)
+                    logger.info("Turn: turnLeft(speed=%.2f, duration=%.2f) - COMPLETADO - Volviendo a Stand" % (angular_speed, duration))
                 else:
                     # Giro continuo hasta que se detenga
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
@@ -466,7 +468,9 @@ class RobotWS(WebSocket):
                     _apply_moveToward(0.0, 0.0, angular_speed, move_cfg)
                     time.sleep(duration)
                     motion.stopMove()
-                    logger.info("Turn: turnRight(speed=%.2f, duration=%.2f) - COMPLETADO" % (abs(angular_speed), duration))
+                    # Volver a postura Stand normal después de completar la rotación
+                    posture.goToPosture("Stand", 0.7)
+                    logger.info("Turn: turnRight(speed=%.2f, duration=%.2f) - COMPLETADO - Volviendo a Stand" % (abs(angular_speed), duration))
                 else:
                     # Giro continuo hasta que se detenga
                     move_cfg = _config_to_move_list(GAIT_APPLIED if GAIT_APPLIED else GAIT_TARGET)
