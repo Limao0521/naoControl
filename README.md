@@ -1,231 +1,215 @@
+# Sistema NAO Modular v2.0
 
-Pensado durante un par de segundos
+## Descripción general
 
-# Control-NAO Remote Control Suite
+Sistema de control para robot NAO refactorizado con arquitectura modular. Proporciona control del robot incluyendo:
 
-> Tele-operación completa de NAO a través de navegador web y WebSocket
-> Compatible con Python 2.7 + NAOqi 2.8
+- Caminata adaptiva mediante modelos ML
+- API WebSocket para control remoto
+- Activación por sensores táctiles
+- Streaming de video
+- Logging centralizado
+- Configuración centralizada
 
----
+## Arquitectura modular
 
-## 📖 Descripción
+### Principios de diseño
 
-Control-NAO es un sistema de control remoto para robots NAO desde cualquier navegador (móvil o PC), sin dependencias adicionales más allá de Python 2.7 y NAOqi. Permite:
+1. Separación de responsabilidades: cada módulo tiene una responsabilidad única.
+2. Interfaces y contratos explícitos entre componentes.
+3. Dependencia invertida: los módulos consumen abstracciones en lugar de implementaciones concretas.
+4. Configuración centralizada en un único archivo de parámetros.
+5. Logging estructurado y streaming de eventos.
+6. Manejo explícito de errores y modos de simulación.
 
-* **Tele-operar** la locomoción (caminata) con joystick virtual.
-* **Mover** brazos (izquierdo/derecho) y cabeza con el mismo joystick.
-* **Posturas** básicas: Stand / Sit.
-* **Control de LEDs** por grupos (pecho, cara, ojos) y color vía selector.
-* **Síntesis de voz** (“say”).
-* **Watchdog** de parada de emergencia si no llegan comandos de walk.
-* **Reconexión automática** WebSocket en caso de desconexión.
-
----
-
-## 🚀 Características Principales
-
-* **Interfaz web** responsive y ligera (HTML5 + CSS3 + JavaScript puro).
-* **WebSocket server** en Python 2.7: despacha mensajes a NAOqi.
-* **Joystick táctil** con cálculos en \[-1,1], corrección de orientación.
-* **Control granular de LEDs**: seleccionar uno o varios grupos, ajustar color.
-* **Voice** y **MJPEG camera feed** integrados (cámara sin servidor extra).
-* **Logs detallados** en consola NAO y navegador.
-* **Watchdog** que detiene la marcha automáticamente si no hay comandos de walk en 0.6 s.
-* **AutonomousLife** desactivado, stiffness en Body al iniciar.
-
----
-
-## 🏗️ Estructura del Proyecto
+### Estructura del sistema
 
 ```
-remote_control/
-├─ index.html               # UI principal
-├─ styles.css               # Estilos y layout responsive
-├─ logic.js                 # Lógica de cliente (WebSocket, joystick, menús)
-├─ SimpleWebSocketServer.py # Biblioteca WS pura Python
-└─ control_server.py        # Servidor WS → NAOqi (Python 2.7)
+nao_system/
+├── core/
+│   ├── config.py
+│   └── system_manager.py
+├── interfaces/
+│   └── base_interfaces.py
+├── services/
+│   ├── logging_service.py
+│   ├── adaptive_walk_service.py
+│   ├── websocket_service.py
+│   ├── launcher_service.py
+│   └── video_service.py
+├── adapters/
+│   └── nao_adapter.py
+├── utils/
+│   └── math_utils.py
+└── models/
+    └── __init__.py
+
+nao_main.py
+test_system.py
+migrate_to_modular.py
 ```
 
----
+## Migración desde el sistema legacy
 
-## 🔧 Requisitos
+### Comparación funcional
 
-* **Robot NAO** con NAOqi 2.8 instalado.
-* **Python 2.7** en NAO (incluye `pip2`).
-* Navegador moderno con soporte WebSocket (Chrome, Firefox, Edge, Safari).
+| Funcionalidad | Sistema legacy | Sistema modular v2.0 | Mejoras |
+|---------------|----------------|----------------------|---------|
+| Caminata adaptiva | `adaptive_walk_lightgbm_nao.py` | `services/adaptive_walk_service.py` | Modular, testeable, con límites de seguridad |
+| Servidor WebSocket | `control_server.py` | `services/websocket_service.py` | Separación de responsabilidades, API clara |
+| Control táctil | `launcher.py` | `services/launcher_service.py` | Servicio independiente, más robusto |
+| Logging | `logger.py` | `services/logging_service.py` | Centralizado y con streaming opcional |
+| Video streaming | `video_stream.py` | `services/video_service.py` | Configurable, encapsulado |
+| Comunicación NAO | Código disperso | `adapters/nao_adapter.py` | Encapsulado y con modo simulación |
+| Configuración | Hardcode | `core/config.py` | Centralizado |
+| Coordinación | Manual | `core/system_manager.py` | Orquestación centralizada |
 
----
+## Funcionalidades principales
 
-## 📑 Uso
+### Caminata adaptiva
 
-* **Modos de control**: elije “Caminata”, “Brazo Izq.”, “Brazo Der.” o “Cabeza”.
-* **Joystick**: arrastra para generar vectores `vx`, `vy`; se ha corregido la orientación de ejes.
-* **Stand / Sit**: botones para cambiar postura.
-* **LEDs**: abre menú 💡, selecciona grupo, color y “Encender” / “Apagar”.
-* **Voz**: abre menú 🎤, escribe texto y pulsa “Hablar”.
-* **Cámara**: menú 📷 muestra stream MJPEG nativo (no requiere script extra).
+- Modelos LightGBM para predicción de parámetros de marcha.
+- Modos: `production` (parámetros optimizados) y `training` (ajuste con ML).
+- Adaptación según tipo de movimiento: avance, retroceso, lateral, giro.
+- Límites de seguridad aplicados antes de ejecutar cualquier comando.
+- Parámetros por tipo de superficie configurables.
 
-> **Reconnect** automático si pierdes conexión WS: la UI reintenta en 3 s.
+Uso básico:
 
----
-
-## 🛠️ Estructura y Puntos Clave de los Scripts
-
-### control_server.py
-
-* **Imports y configuración** de NAOqi (`ALMotion`, `ALLeds`, `ALTextToSpeech`, `ALAutonomousLife`).
-* **Clase `RobotWS`** extiende `WebSocket`:
-
-  * `handleMessage` parsea JSON y despacha a NAOqi.
-* **Watchdog thread**: llama `motion.stopMove()` cada 0.6 s sin comandos `walk`.
-* **Puerto WebSocket** con reintentos y `SO_REUSEADDR` para evitar “Address in use”.
-
-### logic.js
-
-* **Conexión WS** dinámica con reconexión en 3 s.
-* **Joystick**: cálculo de radio, knob, normalización, corrección de ejes para que “adelante” sea arrastrar knob hacia arriba.
-* **sendCmd()**: despacho de JSON con `{action, vx, vy, ...}` según modo.
-* **Menús**: toggle de clases `.active`.
-* **LEDs**: selector de grupo + color HEX → valores `[0–1]`.
-* **Voz** y **Cámara MJPEG** integrados.
-
----
-
-## 🔎 Solución de Problemas
-
-* **“Address already in use”**: asegúrate de que no haya instancias previas; el script reintenta por ti.
-* **WS desconectado constantemente**: verifica IP de NAO y habilita puertos en tu red.
-* **Joystick girado**: corregido intercambiando `vx` y `vy` en `sendCmd()`.
-* **getInfo / Stats**: deshabilitado temporalmente en UI. Puedes reactivar `handleWS` y mostrar `<div id="stats">…`.
-
----
-
-## 1 · Arquitectura general
-
-```
-[ Navegador ]  index.html + styles.css + logic.js
-        │  WebSocket ws://<NAO_IP>:6671
-        ▼
-[ control_server.py ]  WebSocket → ALMotion.moveToward
-        │  (Python 2.7 + NAOqi 2.8, puerto 9559)
-        ▼
-[   NAO real   ]  motores y desplazamiento
+```python
+adaptive_walk = system.get_service('adaptive_walk')
+adaptive_walk.set_mode('production')
+adaptive_walk.start_adaptive_walk(x=0.02, y=0.0, theta=0.0)
 ```
 
-### Flujo de datos
+### API WebSocket
 
-| Nº | Emisor (WS)            | Receptor            | Formato         | Descripción                               |
-| -- | ---------------------- | ------------------- | --------------- | ----------------------------------------- |
-| ①  | `logic.js` (browser)   | `control_server.py` | WebSocket texto | “walk vx vy wz” \~15 Hz                   |
-| ②  | `control_server.py`    | `ALMotion`          | API NAOqi       | `moveToward(vx, vy, wz)`                  |
-| ③  | `watchdog_loop` (hilo) | `ALMotion`          | API NAOqi       | `stopMove()` tras WATCHDOG s sin comandos |
+- Puerto por defecto: configurado en `core/config.py` (por ejemplo 6671).
+- Comandos JSON soportados: `walk`, `stop`, `posture`, `say`, `adaptiveWalk`, `getSensorData`, `getStatus`.
 
----
+Ejemplo de cliente JavaScript (esquemático):
 
-## 2 · Archivos y responsabilidades
+```javascript
+const ws = new WebSocket('ws://nao_ip:6671');
+ws.send(JSON.stringify({ action: 'walk', x: 0.1, y: 0.0, theta: 0.0 }));
+```
 
-| Archivo                      | Lenguaje   | Rol                                                         |
-| ---------------------------- | ---------- | ----------------------------------------------------------- |
-| **index.html**               | HTML       | Estructura del mando (cruceta NES + joystick táctil)        |
-| **styles.css**               | CSS        | Responsividad y animaciones de botones/joystick             |
-| **logic.js**                 | JavaScript | Captura toques/teclas, normaliza e invoca WS dinámico       |
-| **SimpleWebSocketServer.py** | Python 2   | Implementación pura Python del protocolo WebSocket          |
-| **control_server.py**        | Python 2.7 | Servidor WS + watchdog → `ALMotion.moveToward`/`stopMove()` |
+### Control por sensores táctiles
 
-*Coloca `SimpleWebSocketServer.py` y `walk_ws_server.py` en la misma carpeta `/home/nao/remote_control`.*
+- Detección de presión prolongada (configurable, por defecto 3 segundos) en el sensor medio de la cabeza.
+- Alternancia entre modo de control remoto y modo Choregraphe: el servicio pausará o reanudará los servicios necesarios.
+- Retroalimentación mediante síntesis de voz (TTS) cuando esté disponible.
 
----
+### Streaming de video
 
-## 3 · Instalación en NAO real (manteniendo Python 2.7)
+- Integración con `ALVideoDevice` cuando NAOqi está disponible.
+- Soporta streaming MJPEG para navegadores y envío por UDP para consumidores remotos.
+- Configuración de resolución y FPS en `core/config.py`.
 
-1. **Copiar ficheros**
+### Sistema de logging
 
-   ```bash
-   # en tu PC:
-   scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
-   ```
-2. **Crear carpeta de dependencias** (si no están presentes)
+- Streaming de logs opcional vía WebSocket (puerto configurable).
+- Persistencia local en archivo de logs.
+- Buffer circular en memoria para las entradas recientes.
+- Clasificación por módulo y niveles estándar (DEBUG/INFO/WARNING/ERROR/CRITICAL).
 
-   ```bash
-   ssh nao@<IP_NAO>
-   mkdir /home/nao/libs/SimpleWebSocketServer-0.1.2
-   ```
-3. **Instalar dependencias Py2** (si no están presentes)
+### Configuración
 
-   ```bash
-   ssh nao@<IP_NAO>
-   pip2 install --user /home/nao/libs/SimpleWebSocketServer-0.1.2
-   ```
-4. **Servir la web**
+Configuración centralizada en `core/config.py`. Ejemplo de parámetros relevantes:
 
-   ```bash
-   cd ~/remote_control
-   python2 -m SimpleHTTPServer 8000 &   # HTTP en 8000
-   ```
-5. **Lanzar servidor WebSocket**
+```python
+NAO_IP = '127.0.0.1'
+WEBSOCKET_PORT = 6671
+LOG_WEBSOCKET_PORT = 6672
+SAFETY_LIMITS = {
+    'max_velocity': { 'vx': 0.3, 'vy': 0.3, 'wz': 1.0 }
+}
+OPTIMAL_GRASS_PARAMS = { 'StepHeight': 0.025, 'MaxStepX': 0.045 }
+```
 
-   ```bash
-   cd ~/remote_control
-   python2 walk_ws_server.py &
-   ```
-6. **Conectar y probar**
+## Componentes principales
 
-   * Desde el móvil/PC: `http://<IP_NAO>:8000`.
-   * Abrir consola SSH en el NAO para ver logs de conexiones, peticiones y watchdog.
+### SystemManager (`core/system_manager.py`)
 
----
+Responsabilidad: orquestar el ciclo de vida de los servicios y proveer una API unificada para operaciones comunes.
 
-## 4 · Seguridad y buenas prácticas
+Características principales:
+- Inicio/parada coordinada de servicios.
+- API de alto nivel: `walk`, `stop_walk`, `set_posture`, `say`, `get_system_status`.
+- Modo simulación cuando NAOqi no está disponible.
 
-* **Zona despejada** (≥1 × 1 m) sin obstáculos.
-* **Superficie antideslizante**.
-* **Batería** ≥30 % para evitar fallos de tensión.
-* **Watchdog interno**: frena en 0.6 s sin datos.
-* **Stiffness** ON solo al tele-operar; OFF para manipular a mano.
-* **AutonomousLife** desactivado por `walk_ws_server.py`.
-* **No ejecutar** simultáneamente otros clientes que usen ALMotion.
+### Interfaces (`interfaces/base_interfaces.py`)
 
----
+Definición de contratos para `ILogger`, `IMotionService`, `IAdaptiveWalk`, `ISensorReader`, `IWebSocketServer` y `ISystemManager`.
 
-## 5 · Explicación detallada de `walk_ws_server.py`
+### Servicios destacados
 
-1. **Imports y path**: añade la carpeta local para importar `SimpleWebSocketServer.py`.
-2. **Configurables**: IP, puertos y WATCHDOG al inicio.
-3. **Inicialización NAOqi**:
+- `AdaptiveWalkService`: encapsula la lógica de predicción y aplicación de parámetros de marcha.
+- `WebSocketService`: expone la API JSON para control remoto y consulta de estado.
+- `LoggingService`: gestor de logs, persistencia y streaming.
+- `LauncherService`: monitor de sensores táctiles para alternancia de modos.
+- `VideoService`: captura y distribución de video desde NAO.
 
-   * `ALMotion`, `ALAutonomousLife`, `ALRobotPosture`.
-   * Apaga gestos automáticos y fija postura de pie.
-4. **Clase WalkWS**:
+### Adaptadores
 
-   * `handleConnected`/`handleClose`: logs de conexión.
-   * `handleMessage`: parseo de “walk vx vy wz”, validación, normalización, llamada a `moveToward`, log de envío.
-5. **Watchdog**:
+- `NAOAdapter`: gestión segura de proxies NAOqi, reconexión y modo simulación.
 
-   * Hilo demonio via `threading.Thread` + `setDaemon(True)`.
-   * Cada 50 ms comprueba si `time()-last_cmd > WATCHDOG` → `stopMove()`.
-6. **Arranque de servidor**:
+### Utilidades
 
-   * `SimpleWebSocketServer("", WS_PORT, WalkWS).serveforever()`.
-   * `KeyboardInterrupt` → frena motores y sale.
+- `math_utils.py` proporciona funciones de uso común como `clamp`, `lerp` y validadores de velocidad.
 
----
-## ⚖️ Licencia & Créditos
+## Uso
 
-* **Proyecto Open Source** para investigación y educación.
-* Desarrollado por Semillero de Robotica Aplicada de Universidad de La Sabana.
-* Desarrollador principal: Luis Mario Ramirez Muñoz, estudiante de Ingenieria Informatica.
----
+### Inicio rápido en desarrollo
 
-¡Disfruta pilotar a tu NAO! 🤖🚀
-=======
-# Control‑NAO — Documentación definitiva (junio 2025)
+```
+cd scripts
+python nao_main.py       # Ejecuta el sistema principal en modo desarrollo
+python test_system.py    # Ejecuta la suite de pruebas integrada
+python migrate_to_modular.py  # Script de migración y verificación
+```
 
-## Changelog de mejoras
+### Uso programático
 
-* **V1**: Prototipo inicial con puente UDP (`ws2udp.py`) y servidor UDP (`walk_server.py`).
-* **V2**: Eliminación de puente. Introducción de servidor WebSocket directo en Python 2.7 (`walk_ws_server.py`).
-* **V3**: Añadidos *prints* para trazabilidad: conexiones, peticiones, normalizaciones y watchdog.
-* **V4**: Correcciones de compatibilidad Py2.7: eliminación de f‑strings, uso de `.format()`, hilos demonio con `setDaemon()`.
-* **V5**: Mejoras de interfaz y manejo del robot.
----
-© 2025 Control‑NAO Project — Universidad de La Sabana
+```python
+from nao_system.core.system_manager import get_system_manager
+system = get_system_manager()
+system.walk(0.1, 0.0, 0.0)
+system.stop_walk()
+system.set_posture('Stand')
+system.say('Hola mundo')
+```
+
+### Ejecución en robot real
+
+1. Ajustar `NAO_IP` en `core/config.py`.
+2. Verificar que NAOqi esté disponible en el entorno Python.
+3. Ejecutar `python nao_main.py` en la máquina que controle el robot.
+
+## Migración y compatibilidad
+
+- Los archivos originales fueron respaldados en `backup_YYYYMMDD_HHMMSS/` antes de eliminar el código legacy.
+- La API WebSocket mantiene compatibilidad con clientes existentes mediante los mismos comandos JSON principales.
+- La carpeta `nao_system/models/` se utiliza para modelos LightGBM; si no hay modelos presentes, el servicio de caminata adaptiva funciona con parámetros por defecto.
+
+## Diagnóstico y debugging
+
+Pasos recomendados:
+
+1. Ejecutar `python test_system.py`.
+2. Consultar `get_system_status()` para estado de servicios.
+3. Revisar logs en consola o el archivo local configurado.
+4. Verificar `core/config.py` para parámetros de red y límites de seguridad.
+
+## Recomendaciones y próximos pasos
+
+- Probar en robot real con NAOqi para validar captura de video y control físico.
+- Copiar modelos LightGBM a `nao_system/models/` si están disponibles.
+- Sustituir los stubs de WebSocket por una implementación de servidor en producción si se requiere mayor rendimiento o características.
+- Añadir tests unitarios adicionales y una integración continua para validación automática.
+
+## Créditos y cierre
+
+Sistema desarrollado y migrado para proporcionar una base modular, testable y mantenible para control de robots NAO.
+
+Hecho con amor por andres azcona
