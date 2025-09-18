@@ -15,6 +15,9 @@ Versión actualizada de adaptive_walk_r        # 🌟 SISTEMA DE DOS MODOS
         # Estado actual de velocidades para detectar tipo de movimiento
         self.current_velocities = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
         
+        # Ruta para parámetros golden (CSV con parámetros optimizados)
+        self.golden_csv_path = os.path.join(self.models_dir, "golden_parameters.csv")
+        
         # Configuración de caminata por defecto (fallback)y que usa los modelos
 LightGBM optimizados con AutoML para mejor rendimiento.
 
@@ -208,6 +211,9 @@ class AdaptiveWalkLightGBM:
         
         # Estado actual de velocidades para detectar tipo de movimiento
         self.current_velocities = {'vx': 0.0, 'vy': 0.0, 'wz': 0.0}
+        
+        # Ruta para parámetros golden (CSV con parámetros optimizados)
+        self.golden_csv_path = os.path.join(self.models_dir, "golden_parameters.csv")
         
         self.current_params = self.default_params.copy()
         self.prediction_history = []

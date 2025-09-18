@@ -570,7 +570,7 @@ class RobotWS(WebSocket):
             # ── Kick (ejecuta behavior si existe) ─────────────────────────────
             elif action == "kick":
                 try:
-                    behavior_name = "kicknao-f6eb94/behavior_1"
+                    behavior_name = "naokickfield-155741/behavior_1"
                     if behavior and behavior.isBehaviorInstalled(behavior_name):
                         for bhv in behavior.getRunningBehaviors():
                             behavior.stopBehavior(bhv)
