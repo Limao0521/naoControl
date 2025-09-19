@@ -1,0 +1,5 @@
+numpy>=1.16.0
+requests>=2.20.0
+flask==1.1.4
+# opcionales (instalar solo si es necesario y compatible):
+# lightgbm (raro en NAO), scikit-learn
