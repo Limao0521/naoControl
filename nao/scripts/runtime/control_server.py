@@ -69,6 +69,15 @@ except (ImportError, AttributeError) as e:
     logger.warning("Data logger no disponible: {}".format(e))
     DATA_LOGGER_AVAILABLE = False
 
+# Importar sistema de grabación
+try:
+    from record_system import get_record_system, toggle_record_mode, get_record_status, cleanup_record_system
+    RECORD_SYSTEM_AVAILABLE = True
+    logger.info("Sistema de grabación disponible")
+except (ImportError, AttributeError) as e:
+    logger.warning("Sistema de grabación no disponible: {}".format(e))
+    RECORD_SYSTEM_AVAILABLE = False
+
 # Importar LightGBM AutoML de caminata adaptativa
 try:
     from adaptive_walk_lightgbm_nao import AdaptiveWalkLightGBM
@@ -331,6 +340,14 @@ def cleanup(signum, frame=None):
     except Exception as e:
         logger.warning("No se pudo enviar mensaje TTS de cierre: {}".format(e))
     
+    # Limpiar sistema de grabación
+    try:
+        if RECORD_SYSTEM_AVAILABLE:
+            cleanup_record_system()
+            logger.info("Cleanup: Sistema de grabación limpiado")
+    except Exception as e:
+        logger.error("Cleanup: Error limpiando sistema grabación: {}".format(e))
+    
     try:
         cleanup_all_subscriptions()
     except Exception as e:
@@ -526,8 +543,10 @@ class RobotWS(WebSocket):
                 grp = msg.get("group", "ChestLeds")
                 # Python 2/3 compatibility para unicode
                 try:
+                    # Python 2
                     unicode_type = unicode
                 except NameError:
+                    # Python 3
                     unicode_type = str
                 if isinstance(grp, unicode_type):
                     try:
@@ -1005,6 +1024,78 @@ class RobotWS(WebSocket):
                     self.sendMessage(json.dumps({
                         "getFallManager": {
                             "success": False,
+                            "error": str(e)
+                        }
+                    }))
+
+            # ── Control Sistema de Grabación ──────────────────────────────────
+            elif action == "recordMode":
+                try:
+                    if not RECORD_SYSTEM_AVAILABLE:
+                        self.sendMessage(json.dumps({
+                            "recordMode": {
+                                "success": False,
+                                "error": "Sistema de grabación no disponible"
+                            }
+                        }))
+                        return
+                    
+                    # Alternar modo de grabación
+                    success = toggle_record_mode()
+                    status = get_record_status()
+                    
+                    self.sendMessage(json.dumps({
+                        "recordMode": {
+                            "success": success,
+                            "mode_active": status["mode_active"],
+                            "recording": status["recording"],
+                            "current_file": status.get("current_file"),
+                            "recordings_dir": status.get("recordings_dir"),
+                            "help": "Presione bumper derecho del pie para grabar (mantener presionado)"
+                        }
+                    }))
+                    
+                    mode_str = "ACTIVADO" if status["mode_active"] else "DESACTIVADO"
+                    logger.info("RecordMode: Modo de grabación {} - Recording: {}".format(
+                        mode_str, status["recording"]))
+                    
+                except Exception as e:
+                    logger.error("Error controlando modo grabación: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "recordMode": {
+                            "success": False,
+                            "error": str(e)
+                        }
+                    }))
+
+            # ── Obtener estado Sistema de Grabación ───────────────────────────
+            elif action == "getRecordStatus":
+                try:
+                    if not RECORD_SYSTEM_AVAILABLE:
+                        self.sendMessage(json.dumps({
+                            "getRecordStatus": {
+                                "available": False,
+                                "error": "Sistema de grabación no disponible"
+                            }
+                        }))
+                        return
+                    
+                    status = get_record_status()
+                    self.sendMessage(json.dumps({
+                        "getRecordStatus": {
+                            "available": True,
+                            "mode_active": status["mode_active"],
+                            "recording": status["recording"],
+                            "current_file": status.get("current_file"),
+                            "recordings_dir": status.get("recordings_dir")
+                        }
+                    }))
+                    
+                except Exception as e:
+                    logger.error("Error obteniendo estado grabación: {}".format(e))
+                    self.sendMessage(json.dumps({
+                        "getRecordStatus": {
+                            "available": False,
                             "error": str(e)
                         }
                     }))

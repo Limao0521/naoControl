@@ -1,0 +1,117 @@
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+.Spotlight-V100
+.Trashes
+
+# Archivos de log y temporales
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Entornos virtuales / dependencias
+env/
+venv/
+.venv/
+ENV/
+env.bak/
+venv.bak/
+pip-wheel-metadata/
+node_modules/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pym
+.Python
+*.egg-info/
+.eggs/
+build/
+dist/
+*.egg
+htmlcov/
+.coverage
+.coverage.*
+.cache
+.mypy_cache/
+.pytest_cache/
+ipynb_checkpoints/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# IDEs y editores
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
+
+# Visual Studio / Windows build
+*.suo
+*.user
+*.userprefs
+*.pidb
+*.sln
+*.vcxproj*
+*.pdb
+
+# Compilados y binarios
+*.o
+*.obj
+*.so
+*.dll
+*.exe
+*.out
+*.class
+*.jar
+
+# Certificados, claves y credenciales
+*.pem
+*.key
+*.crt
+*.p12
+*.env
+.env.*
+secrets.yml
+credentials.json
+
+# Contenedores / empaquetadores
+docker-compose.override.yml
+Dockerfile.*.local
+
+# Documentación generada / distribución
+site/
+docs/_build/
+dist/
+build/
+
+# CMake / build systems
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+build-*/
+
+# ROS / Catkin (si aplica)
+devel/
+install/
+build/
+
+# Archivos específicos de proyecto (ajusta según necesites)
+# Por ejemplo datos grandes, modelos entrenados, binarios robot, etc.
+data/
+models/
+*.h5
+*.pt
+*.pth
+
+# Otros
+*.bak
+*.orig
+*.~*
