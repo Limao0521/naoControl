@@ -1099,6 +1099,71 @@ class RobotWS(WebSocket):
                             "error": str(e)
                         }
                     }))
+
+            # ── Nuevos Comportamientos Animados ──────────────────────────────
+            elif action == "elephant":
+                try:
+                    # Movimiento de elefante - brazos balanceando
+                    behavior_name = "elephant-692231/behavior_1"
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        behavior.runBehavior(behavior_name)
+                        logger.info("Behavior: Ejecutando movimiento de elefante: '{}'".format(behavior_name))
+                    else:
+                        logger.warning("Behavior elephant no instalado: '{}'".format(behavior_name))
+                        installed = behavior.getInstalledBehaviors()
+                        logger.debug("Behaviors disponibles: {}".format(installed))
+                except Exception as e:
+                    logger.error("Error ejecutando comportamiento elephant: {}".format(e))
+
+            elif action == "disco":
+                try:
+                    # Baile disco - movimientos rítmicos
+                    behavior_name = "disco-8c59b8/behavior_1"
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        behavior.runBehavior(behavior_name)
+                        logger.info("Behavior: Ejecutando baile disco: '{}'".format(behavior_name))
+                    else:
+                        logger.warning("Behavior disco no instalado: '{}'".format(behavior_name))
+                        installed = behavior.getInstalledBehaviors()
+                        logger.debug("Behaviors disponibles: {}".format(installed))
+                except Exception as e:
+                    logger.error("Error ejecutando comportamiento disco: {}".format(e))
+
+            elif action == "saxophone":
+                try:
+                    # Simulación de tocar saxofón
+                    behavior_name = "saxophone-f56d02/behavior_1"
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        behavior.runBehavior(behavior_name)
+                        logger.info("Behavior: Ejecutando simulación de saxofón: '{}'".format(behavior_name))
+                    else:
+                        logger.warning("Behavior saxophone no instalado: '{}'".format(behavior_name))
+                        installed = behavior.getInstalledBehaviors()
+                        logger.debug("Behaviors disponibles: {}".format(installed))
+                except Exception as e:
+                    logger.error("Error ejecutando comportamiento saxophone: {}".format(e))
+
+            elif action == "taiChiChuan":
+                try:
+                    # Movimientos de Tai Chi - fluidos y lentos
+                    behavior_name = "taichichuan-a22a25/behavior_1"
+                    if behavior.isBehaviorInstalled(behavior_name):
+                        for bhv in behavior.getRunningBehaviors():
+                            behavior.stopBehavior(bhv)
+                        behavior.runBehavior(behavior_name)
+                        logger.info("Behavior: Ejecutando movimientos de Tai Chi: '{}'".format(behavior_name))
+                    else:
+                        logger.warning("Behavior taichichuan no instalado: '{}'".format(behavior_name))
+                        installed = behavior.getInstalledBehaviors()
+                        logger.debug("Behaviors disponibles: {}".format(installed))
+                except Exception as e:
+                    logger.error("Error ejecutando comportamiento taiChiChuan: {}".format(e))
                     
             else:
                 logger.warning("WS: ⚠ Acción desconocida '%s'" % action)
