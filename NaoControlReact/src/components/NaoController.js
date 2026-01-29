@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FaCircle, FaBatteryFull, FaBatteryHalf, FaBatteryQuarter, FaBatteryEmpty, FaFutbol, FaGrinStars } from 'react-icons/fa';
 import useWebSocket from '../hooks/useWebSocket';
 import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
@@ -11,11 +12,9 @@ const NaoController = () => {
   const [currentMode, setCurrentMode] = useState('walk');
   const [activeMenu, setActiveMenu] = useState(null);
   const [robotStats, setRobotStats] = useState({
-    ip: '',
     battery: 0,
     batteryLow: false,
-    batteryFull: false,
-    joints: []
+    batteryFull: false
   });
   const [hostIP, setHostIP] = useState('');
   const [autonomousEnabled, setAutonomousEnabled] = useState(false);
@@ -46,23 +45,6 @@ const NaoController = () => {
         }));
         console.log('[BATTERY] Actualizado:', lastMessage.battery + '%', 
                    'Low:', lastMessage.low, 'Full:', lastMessage.full);
-      }
-      
-      // Otros mensajes del robot
-      if (lastMessage.type === 'stats') {
-        setRobotStats(prev => ({ ...prev, ...lastMessage.data }));
-      }
-      
-      // Procesar datos de estadísticas directas (temperatures, angles)
-      if (lastMessage.temperatures && lastMessage.angles) {
-        setRobotStats(prev => ({
-          ...prev,
-          temperatures: lastMessage.temperatures,
-          angles: lastMessage.angles
-        }));
-        console.log('[STATS] Recibidas temperaturas y ángulos:', 
-                   Object.keys(lastMessage.temperatures).length, 'sensores,',
-                   Object.keys(lastMessage.angles).length, 'articulaciones');
       }
       
       // Procesar estado de Autonomous Life
@@ -234,6 +216,13 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Comando Emote (acciones dinámicas)
+  const handleEmote = useCallback((action) => {
+    if (sendMessage({ action })) {
+      console.log('[UI] Emote enviado:', action);
+    }
+  }, [sendMessage]);
+
   // Comandos de rotación
   const handleTurnLeft = useCallback(() => {
     if (sendMessage({ action: 'turnLeft', speed: 0.2, duration: 0 })) {
@@ -293,13 +282,6 @@ const NaoController = () => {
     const isFutbolMode = uiMode === 'futbol';
     if (sendMessage({ action: 'modoFutbol', enable: isFutbolMode })) {
       console.log('[UI] Comando modoFutbol enviado:', isFutbolMode ? 'activado' : 'desactivado');
-    }
-  }, [sendMessage]);
-
-  // Solicitar estadísticas del robot
-  const handleRequestStats = useCallback(() => {
-    if (sendMessage({ action: 'stats' })) {
-      console.log('[UI] stats solicitadas');
     }
   }, [sendMessage]);
 
@@ -376,17 +358,17 @@ const NaoController = () => {
     const { battery, batteryLow, batteryFull } = robotStats;
     
     if (batteryFull) {
-      return '🔋'; // Batería llena (95%+)
+      return <FaBatteryFull color="#4CAF50" size={16} />; // Batería llena (95%+)
     } else if (batteryLow) {
-      return '🪫'; // Batería baja (<20%)
+      return <FaBatteryEmpty color="#FF5722" size={16} />; // Batería baja (<20%)
     } else if (battery >= 60) {
-      return '🔋'; // Batería alta (60%+)
+      return <FaBatteryFull color="#4CAF50" size={16} />; // Batería alta (60%+)
     } else if (battery >= 40) {
-      return '🔋'; // Batería media (40-59%)
+      return <FaBatteryHalf color="#FFC107" size={16} />; // Batería media (40-59%)
     } else if (battery >= 20) {
-      return '🔋'; // Batería media-baja (20-39%)
+      return <FaBatteryQuarter color="#FF9800" size={16} />; // Batería media-baja (20-39%)
     } else {
-      return '🪫'; // Batería muy baja (<20%)
+      return <FaBatteryEmpty color="#FF5722" size={16} />; // Batería muy baja (<20%)
     }
   }, [robotStats]);
 
@@ -415,15 +397,10 @@ const NaoController = () => {
         onSendVoice={handleSendVoice}
         onSetLed={handleSetLed}
         onLedOff={handleLedOff}
-        stats={{
-          ...robotStats,
-          batteryIcon: getBatteryIcon(),
-          batteryColor: getBatteryColor()
-        }}
         onLanguageChange={handleLanguageChange}
         onVolumeChange={handleVolumeChange}
-        onRequestStats={handleRequestStats}
         onUIChange={handleUIChange}
+        onEmote={handleEmote}
         currentUI={currentUI}
       />
 
@@ -436,10 +413,14 @@ const NaoController = () => {
               IP: {hostIP || 'N/A'}
             </div>
             <div className="status-connection">
-              {isConnected ? '🟢 Conectado' : '🔴 Desconectado'}
+              <FaCircle color={isConnected ? '#4CAF50' : '#FF5722'} size={14} />
+              <span style={{ marginLeft: '0.5rem' }}>
+                {isConnected ? 'Conectado' : 'Desconectado'}
+              </span>
             </div>
             <div className="status-battery" style={{ color: getBatteryColor() }}>
-              {getBatteryIcon()} {robotStats.battery || 'N/A'}%
+              {getBatteryIcon()}
+              <span style={{ marginLeft: '0.5rem' }}>{robotStats.battery || 'N/A'}%</span>
             </div>
           </div>
 
@@ -470,6 +451,7 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode={currentMode}
+                  uiMode={currentUI}
                   onTurnLeft={handleTurnLeft}
                   onTurnRight={handleTurnRight}
                 />
@@ -486,7 +468,7 @@ const NaoController = () => {
                   disabled={kickCooldown > 0}
                   title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
                 >
-                  {kickCooldown > 0 ? kickCooldown : 'KICK'}
+                  {kickCooldown > 0 ? kickCooldown : <FaFutbol size={32} color="#000000" />}
                 </button>
 
                 {/* SIU Button (circular, bottom-right of kick) */}
@@ -495,7 +477,7 @@ const NaoController = () => {
                   onClick={handleSiu}
                   title="SIU"
                 >
-                  SIU
+                  <FaGrinStars size={24} color="#FFFFFF" />
                 </button>
               </div>
 
@@ -514,6 +496,7 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode="walk"
+                  uiMode={currentUI}
                   onTurnLeft={handleTurnLeft}
                   onTurnRight={handleTurnRight}
                 />

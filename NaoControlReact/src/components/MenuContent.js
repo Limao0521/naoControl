@@ -2,9 +2,9 @@ import React from 'react';
 import VoiceMenu from './VoiceMenu';
 import CameraMenu from './CameraMenu';
 import LedsMenu from './LedsMenu';
-import StatsMenu from './StatsMenu';
 import SettingsMenu from './LanguageMenu';
 import UIMenu from './UIMenu';
+import EmotesMenu from './EmotesMenu';
 import './MenuContent.css';
 
 const MenuContent = ({ 
@@ -12,11 +12,10 @@ const MenuContent = ({
   onSendVoice, 
   onSetLed, 
   onLedOff, 
-  stats, 
   onLanguageChange,
   onVolumeChange,
-  onRequestStats,
   onUIChange,
+  onEmote,
   currentUI 
 }) => {
   if (!activeMenu) return null;
@@ -50,21 +49,20 @@ const MenuContent = ({
             isEmbedded={true}
           />
         );
-      case 'stats':
-        return (
-          <StatsMenu 
-            isOpen={true}
-            onClose={() => {}}
-            stats={stats}
-            onRequestStats={onRequestStats}
-            isEmbedded={true}
-          />
-        );
       case 'ui':
         return (
           <UIMenu 
             onUIChange={onUIChange}
             currentUI={currentUI}
+          />
+        );
+      case 'emotes':
+        return (
+          <EmotesMenu 
+            isOpen={true}
+            onClose={() => {}}
+            onEmote={onEmote}
+            isEmbedded={true}
           />
         );
       case 'lang':

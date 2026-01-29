@@ -3,13 +3,13 @@ import PropTypes from 'prop-types';
 import useJoystick from '../hooks/useJoystick';
 import './Joystick.css';
 
-const Joystick = ({ onMove, mode, onTurnLeft, onTurnRight }) => {
+const Joystick = ({ onMove, mode, uiMode, onTurnLeft, onTurnRight }) => {
   const {
     baseRef,
     knobRef,
     handleMouseDown,
     handleTouchStart
-  } = useJoystick(onMove, mode);
+  } = useJoystick(onMove, mode, uiMode);
 
   const turnLeftIntervalRef = useRef(null);
   const turnRightIntervalRef = useRef(null);
@@ -63,24 +63,28 @@ const Joystick = ({ onMove, mode, onTurnLeft, onTurnRight }) => {
     };
   }, []);
 
+  const isFutbolMode = uiMode === 'futbol';
+
   return (
     <div className="joy-wrapper">
-      {/* Botón de rotación izquierda */}
-      <button 
-        className="turn-btn turn-left"
-        onMouseDown={startTurnLeft}
-        onMouseUp={stopTurnLeft}
-        onMouseLeave={stopTurnLeft}
-        onTouchStart={startTurnLeft}
-        onTouchEnd={stopTurnLeft}
-        onTouchCancel={stopTurnLeft}
-        title="Rotar Izquierda"
-      >
-        ←
-      </button>
+      {/* Botón de rotación izquierda (solo fútbol) */}
+      {isFutbolMode && (
+        <button 
+          className="turn-btn turn-left"
+          onMouseDown={startTurnLeft}
+          onMouseUp={stopTurnLeft}
+          onMouseLeave={stopTurnLeft}
+          onTouchStart={startTurnLeft}
+          onTouchEnd={stopTurnLeft}
+          onTouchCancel={stopTurnLeft}
+          title="Rotar Izquierda"
+        >
+          ←
+        </button>
+      )}
 
       <div 
-        className="joy-base"
+        className={`joy-base ${isFutbolMode ? 'joy-base--futbol' : 'joy-base--classic'}`}
         ref={baseRef}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
@@ -88,19 +92,21 @@ const Joystick = ({ onMove, mode, onTurnLeft, onTurnRight }) => {
         <div className="joy-knob" ref={knobRef}></div>
       </div>
 
-      {/* Botón de rotación derecha */}
-      <button 
-        className="turn-btn turn-right"
-        onMouseDown={startTurnRight}
-        onMouseUp={stopTurnRight}
-        onMouseLeave={stopTurnRight}
-        onTouchStart={startTurnRight}
-        onTouchEnd={stopTurnRight}
-        onTouchCancel={stopTurnRight}
-        title="Rotar Derecha"
-      >
-        →
-      </button>
+      {/* Botón de rotación derecha (solo fútbol) */}
+      {isFutbolMode && (
+        <button 
+          className="turn-btn turn-right"
+          onMouseDown={startTurnRight}
+          onMouseUp={stopTurnRight}
+          onMouseLeave={stopTurnRight}
+          onTouchStart={startTurnRight}
+          onTouchEnd={stopTurnRight}
+          onTouchCancel={stopTurnRight}
+          title="Rotar Derecha"
+        >
+          →
+        </button>
+      )}
     </div>
   );
 };
@@ -108,6 +114,7 @@ const Joystick = ({ onMove, mode, onTurnLeft, onTurnRight }) => {
 Joystick.propTypes = {
   onMove: PropTypes.func.isRequired,
   mode: PropTypes.string.isRequired,
+  uiMode: PropTypes.string,
   onTurnLeft: PropTypes.func,
   onTurnRight: PropTypes.func
 };
