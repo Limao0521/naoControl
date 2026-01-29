@@ -1,0 +1,246 @@
+{
+  "info": {
+    "name": "NAO Control WebSocket Behaviors",
+    "description": "Colección para controlar behaviors del robot NAO via WebSocket",
+    "version": "1.0.0"
+  },
+  "item": [
+    {
+      "name": "🐘 Elephant Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"elephant\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Ejecuta movimiento de elefante con brazos balanceando"
+      }
+    },
+    {
+      "name": "🕺 Disco Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"disco\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Ejecuta baile disco con movimientos rítmicos"
+      }
+    },
+    {
+      "name": "🎷 Saxophone Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"saxophone\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Simula tocar saxofón"
+      }
+    },
+    {
+      "name": "🥋 Tai Chi Chuan Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"taiChiChuan\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Ejecuta movimientos de Tai Chi fluidos y lentos"
+      }
+    },
+    {
+      "name": "⚽ Kick Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"kick\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Ejecuta patada de fútbol"
+      }
+    },
+    {
+      "name": "🎉 Siu Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"siu\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Ejecuta celebración Siu"
+      }
+    },
+    {
+      "name": "🚶 Walk Behavior",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"walk\",\n  \"vx\": 0.5,\n  \"vy\": 0.0,\n  \"wz\": 0.0\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Caminar hacia adelante"
+      }
+    },
+    {
+      "name": "🗣️ Say Text",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"say\",\n  \"text\": \"Hola, soy NAO\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Hacer que el NAO hable"
+      }
+    },
+    {
+      "name": "🔋 Get Battery",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"getBattery\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Obtener nivel de batería"
+      }
+    },
+    {
+      "name": "🤖 Get Autonomous Life Status",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"action\": \"getAutonomousLife\"\n}"
+        },
+        "url": {
+          "raw": "ws://{{nao_ip}}:6671",
+          "protocol": "ws",
+          "host": ["{{nao_ip}}"],
+          "port": "6671"
+        },
+        "description": "Verificar si Autonomous Life está encendido"
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "nao_ip",
+      "value": "192.168.1.100",
+      "description": "IP address of the NAO robot"
+    }
+  ]
+}
