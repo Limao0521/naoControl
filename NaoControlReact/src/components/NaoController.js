@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { FaCircle, FaBatteryFull, FaBatteryHalf, FaBatteryQuarter, FaBatteryEmpty, FaFootballBall, FaGrinStars } from 'react-icons/fa';
+import { FaCircle, FaBatteryFull, FaBatteryHalf, FaBatteryQuarter, FaBatteryEmpty, FaFutbol, FaGrinStars } from 'react-icons/fa';
 import useWebSocket from '../hooks/useWebSocket';
 import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
@@ -468,7 +468,7 @@ const NaoController = () => {
                   disabled={kickCooldown > 0}
                   title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
                 >
-                  {kickCooldown > 0 ? kickCooldown : <FaFootballBall size={32} color="#000000" />}
+                  {kickCooldown > 0 ? kickCooldown : <FaFutbol size={32} color="#000000" />}
                 </button>
 
                 {/* SIU Button (circular, bottom-right of kick) */}

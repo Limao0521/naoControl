@@ -1,11 +1,11 @@
 import React from 'react';
-import { FaGamepad, FaFootballBall } from 'react-icons/fa';
+import { FaGamepad, FaFutbol } from 'react-icons/fa';
 import './UIMenu.css';
 
 const UIMenu = ({ onUIChange, currentUI }) => {
   const uiModes = [
     { id: 'normal', name: 'NORMAL', icon: FaGamepad, description: 'Control completo con selectores' },
-    { id: 'futbol', name: 'FÚTBOL', icon: FaFootballBall, description: 'Modo fútbol con joystick y kick' }
+    { id: 'futbol', name: 'FÚTBOL', icon: FaFutbol, description: 'Modo fútbol con joystick y kick' }
   ];
 
   return (
