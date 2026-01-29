@@ -470,6 +470,7 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode={currentMode}
+                  uiMode={currentUI}
                   onTurnLeft={handleTurnLeft}
                   onTurnRight={handleTurnRight}
                 />
@@ -514,6 +515,7 @@ const NaoController = () => {
                 <Joystick 
                   onMove={handleJoystickMove} 
                   mode="walk"
+                  uiMode={currentUI}
                   onTurnLeft={handleTurnLeft}
                   onTurnRight={handleTurnRight}
                 />

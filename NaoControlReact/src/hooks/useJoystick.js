@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 
-const useJoystick = (onMove, mode = 'walk') => {
+const useJoystick = (onMove, mode = 'walk', uiMode = 'normal') => {
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isActive, setIsActive] = useState(false);
   const baseRef = useRef(null);
@@ -41,31 +41,43 @@ const useJoystick = (onMove, mode = 'walk') => {
 
     const rect = baseRef.current.getBoundingClientRect();
     const { R, LIM } = dimensionsRef.current;
-    
-    // Solo permitir movimiento vertical (adelante/atrás)
-    let dx = 0; // Restringir movimiento horizontal
+
+    const isFutbolMode = uiMode === 'futbol';
+
+    let dx = clientX - rect.left - R;
     let dy = clientY - rect.top - R;
-    
-    // Limitar el movimiento vertical al área permitida
-    if (Math.abs(dy) > LIM) {
-      dy = dy > 0 ? LIM : -LIM;
+
+    if (isFutbolMode) {
+      // Solo permitir movimiento vertical (adelante/atrás)
+      dx = 0;
+      if (Math.abs(dy) > LIM) {
+        dy = dy > 0 ? LIM : -LIM;
+      }
+    } else {
+      // Joystick clásico: movimiento libre en círculo
+      const distance = Math.hypot(dx, dy);
+      if (distance > LIM) {
+        const scale = LIM / distance;
+        dx *= scale;
+        dy *= scale;
+      }
     }
-    
+
     setKnobPosition(dx, dy);
-    
-    const nx = 0; // Sin movimiento horizontal
-    const ny = -dy / LIM; // Solo movimiento vertical
-    
-    // Usar el mismo umbral que el código original (0.05)
-    const vx = 0; // Sin velocidad horizontal
+
+    const nx = isFutbolMode ? 0 : dx / LIM;
+    const ny = -dy / LIM;
+
+    // Umbral para evitar ruido
+    const vx = isFutbolMode ? 0 : (Math.abs(nx) > 0.05 ? nx : 0);
     const vy = Math.abs(ny) > 0.05 ? ny : 0;
-    
+
     setPosition({ x: vx, y: vy });
-    
+
     if (onMove) {
       onMove({ x: vx, y: vy, mode });
     }
-  }, [isActive, onMove, mode, setKnobPosition]);
+  }, [isActive, onMove, mode, uiMode, setKnobPosition]);
 
   const startMove = useCallback((clientX, clientY, touchId = null) => {
     setIsActive(true);
