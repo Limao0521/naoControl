@@ -41,13 +41,13 @@ const CameraMenu = ({ isOpen, onClose, cameraUrl, isEmbedded = false }) => {
         />
       ) : (
         <div className="camera-error">
-          <p>❌ No se puede conectar a la cámara</p>
+          <p>No se puede conectar a la cámara</p>
           <p>Verifique que el robot esté encendido y conectado</p>
           <button 
             className="retry-btn" 
             onClick={() => setImageError(false)}
           >
-            🔄 Reintentar
+            Reintentar
           </button>
         </div>
       )}
