@@ -11,11 +11,9 @@ const NaoController = () => {
   const [currentMode, setCurrentMode] = useState('walk');
   const [activeMenu, setActiveMenu] = useState(null);
   const [robotStats, setRobotStats] = useState({
-    ip: '',
     battery: 0,
     batteryLow: false,
-    batteryFull: false,
-    joints: []
+    batteryFull: false
   });
   const [hostIP, setHostIP] = useState('');
   const [autonomousEnabled, setAutonomousEnabled] = useState(false);
@@ -46,23 +44,6 @@ const NaoController = () => {
         }));
         console.log('[BATTERY] Actualizado:', lastMessage.battery + '%', 
                    'Low:', lastMessage.low, 'Full:', lastMessage.full);
-      }
-      
-      // Otros mensajes del robot
-      if (lastMessage.type === 'stats') {
-        setRobotStats(prev => ({ ...prev, ...lastMessage.data }));
-      }
-      
-      // Procesar datos de estadísticas directas (temperatures, angles)
-      if (lastMessage.temperatures && lastMessage.angles) {
-        setRobotStats(prev => ({
-          ...prev,
-          temperatures: lastMessage.temperatures,
-          angles: lastMessage.angles
-        }));
-        console.log('[STATS] Recibidas temperaturas y ángulos:', 
-                   Object.keys(lastMessage.temperatures).length, 'sensores,',
-                   Object.keys(lastMessage.angles).length, 'articulaciones');
       }
       
       // Procesar estado de Autonomous Life
@@ -234,6 +215,13 @@ const NaoController = () => {
     }
   }, [sendMessage]);
 
+  // Comando Emote (acciones dinámicas)
+  const handleEmote = useCallback((action) => {
+    if (sendMessage({ action })) {
+      console.log('[UI] Emote enviado:', action);
+    }
+  }, [sendMessage]);
+
   // Comandos de rotación
   const handleTurnLeft = useCallback(() => {
     if (sendMessage({ action: 'turnLeft', speed: 0.2, duration: 0 })) {
@@ -293,13 +281,6 @@ const NaoController = () => {
     const isFutbolMode = uiMode === 'futbol';
     if (sendMessage({ action: 'modoFutbol', enable: isFutbolMode })) {
       console.log('[UI] Comando modoFutbol enviado:', isFutbolMode ? 'activado' : 'desactivado');
-    }
-  }, [sendMessage]);
-
-  // Solicitar estadísticas del robot
-  const handleRequestStats = useCallback(() => {
-    if (sendMessage({ action: 'stats' })) {
-      console.log('[UI] stats solicitadas');
     }
   }, [sendMessage]);
 
@@ -415,15 +396,10 @@ const NaoController = () => {
         onSendVoice={handleSendVoice}
         onSetLed={handleSetLed}
         onLedOff={handleLedOff}
-        stats={{
-          ...robotStats,
-          batteryIcon: getBatteryIcon(),
-          batteryColor: getBatteryColor()
-        }}
         onLanguageChange={handleLanguageChange}
         onVolumeChange={handleVolumeChange}
-        onRequestStats={handleRequestStats}
         onUIChange={handleUIChange}
+        onEmote={handleEmote}
         currentUI={currentUI}
       />
 
