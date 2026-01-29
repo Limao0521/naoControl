@@ -77,7 +77,7 @@
 /* Tablets */
 @media (max-width: 1024px) {
   .side-panel {
-    height: 300px;
+    height: auto;
   }
   
   .side-panel-content {
@@ -88,7 +88,7 @@
 /* Pantallas pequeñas en landscape */
 @media (max-width: 768px) and (orientation: landscape) {
   .side-panel {
-    height: 250px;
+    height: auto;
   }
   
   .side-panel-content {
@@ -105,7 +105,7 @@
 /* Mobile en landscape */
 @media (max-width: 480px) and (orientation: landscape) {
   .side-panel {
-    height: 200px;
+    height: auto;
   }
   
   .side-panel-nav {
@@ -124,9 +124,28 @@
   }
 }
 
-/* Ocultar en portrait */
-@media (orientation: portrait) and (max-height: 768px) {
+/* Mobile en portrait */
+@media (orientation: portrait) {
   .side-panel {
-    display: none;
+    height: auto;
+  }
+  
+  .side-panel-nav {
+    width: 50px;
+    padding: 0.5rem 0;
+  }
+  
+  .side-nav-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 1rem;
+  }
+  
+  .side-panel-content {
+    width: 200px;
+  }
+  
+  .menu-content-container {
+    padding: 0.8rem;
   }
 }
