@@ -215,6 +215,7 @@
   cursor: pointer;
   box-shadow: 0 6px 12px rgba(0,0,0,0.22);
   transition: transform .12s ease, background .12s ease;
+  padding: 0;
 }
 
 .siu-btn:hover { background: #1e40af; transform: translateY(-3px); }
@@ -241,6 +242,9 @@
   font-size: 0.8rem;
   font-weight: bold;
   backdrop-filter: blur(5px);
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
 }
 
 .status-battery {

@@ -7,14 +7,14 @@ const LedsMenu = ({ isOpen, onClose, onSetLed, onLedOff, isEmbedded = false }) =
 
   // Colores predefinidos para acceso rápido
   const presetColors = [
-    { color: '#ff0000', label: '🔴 Rojo' },
-    { color: '#00ff00', label: '🟢 Verde' },
-    { color: '#0000ff', label: '🔵 Azul' },
-    { color: '#ffff00', label: '🟡 Amarillo' },
-    { color: '#ff00ff', label: '🟣 Magenta' },
-    { color: '#00ffff', label: '🔵 Cian' },
-    { color: '#ffffff', label: '⚪ Blanco' },
-    { color: '#ffa500', label: '🟠 Naranja' }
+    { color: '#ff0000', label: 'Rojo' },
+    { color: '#00ff00', label: 'Verde' },
+    { color: '#0000ff', label: 'Azul' },
+    { color: '#ffff00', label: 'Amarillo' },
+    { color: '#ff00ff', label: 'Magenta' },
+    { color: '#00ffff', label: 'Cian' },
+    { color: '#ffffff', label: 'Blanco' },
+    { color: '#ffa500', label: 'Naranja' }
   ];
 
   const ledGroups = [

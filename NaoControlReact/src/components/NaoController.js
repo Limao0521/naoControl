@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { FaCircle, FaBatteryFull, FaBatteryHalf, FaBatteryQuarter, FaBatteryEmpty, FaFootballBall, FaGrinStars } from 'react-icons/fa';
 import useWebSocket from '../hooks/useWebSocket';
 import ModePanel from './ModePanel';
 import ControlButtons from './ControlButtons';
@@ -357,17 +358,17 @@ const NaoController = () => {
     const { battery, batteryLow, batteryFull } = robotStats;
     
     if (batteryFull) {
-      return '🔋'; // Batería llena (95%+)
+      return <FaBatteryFull color="#4CAF50" size={16} />; // Batería llena (95%+)
     } else if (batteryLow) {
-      return '🪫'; // Batería baja (<20%)
+      return <FaBatteryEmpty color="#FF5722" size={16} />; // Batería baja (<20%)
     } else if (battery >= 60) {
-      return '🔋'; // Batería alta (60%+)
+      return <FaBatteryFull color="#4CAF50" size={16} />; // Batería alta (60%+)
     } else if (battery >= 40) {
-      return '🔋'; // Batería media (40-59%)
+      return <FaBatteryHalf color="#FFC107" size={16} />; // Batería media (40-59%)
     } else if (battery >= 20) {
-      return '🔋'; // Batería media-baja (20-39%)
+      return <FaBatteryQuarter color="#FF9800" size={16} />; // Batería media-baja (20-39%)
     } else {
-      return '🪫'; // Batería muy baja (<20%)
+      return <FaBatteryEmpty color="#FF5722" size={16} />; // Batería muy baja (<20%)
     }
   }, [robotStats]);
 
@@ -412,10 +413,14 @@ const NaoController = () => {
               IP: {hostIP || 'N/A'}
             </div>
             <div className="status-connection">
-              {isConnected ? '🟢 Conectado' : '🔴 Desconectado'}
+              <FaCircle color={isConnected ? '#4CAF50' : '#FF5722'} size={14} />
+              <span style={{ marginLeft: '0.5rem' }}>
+                {isConnected ? 'Conectado' : 'Desconectado'}
+              </span>
             </div>
             <div className="status-battery" style={{ color: getBatteryColor() }}>
-              {getBatteryIcon()} {robotStats.battery || 'N/A'}%
+              {getBatteryIcon()}
+              <span style={{ marginLeft: '0.5rem' }}>{robotStats.battery || 'N/A'}%</span>
             </div>
           </div>
 
@@ -463,7 +468,7 @@ const NaoController = () => {
                   disabled={kickCooldown > 0}
                   title={kickCooldown > 0 ? `Cooldown: ${kickCooldown}s` : "Kick"}
                 >
-                  {kickCooldown > 0 ? kickCooldown : 'KICK'}
+                  {kickCooldown > 0 ? kickCooldown : <FaFootballBall size={32} color="#000000" />}
                 </button>
 
                 {/* SIU Button (circular, bottom-right of kick) */}
@@ -472,7 +477,7 @@ const NaoController = () => {
                   onClick={handleSiu}
                   title="SIU"
                 >
-                  SIU
+                  <FaGrinStars size={24} color="#FFFFFF" />
                 </button>
               </div>
 
