@@ -1,34 +1,156 @@
-# NAO: instrucciones rápidas de despliegue
+# NAO Robot - Guía de Despliegue
 
-Resumen corto para desplegar todo el runtime en la cabeza del NAO (modo autónomo):
+Esta carpeta contiene todo lo necesario para ejecutar el sistema de control en el robot NAO.
 
-1. Copiar la carpeta `nao/` al robot en `/home/nao/nao_control/` (o copiar su contenido a `/home/nao/scripts/` para mantener compatibilidad con `launcher.py`).
+---
 
-2. Instalar dependencias (si `pip2` está disponible):
+## 📁 Contenido de esta Carpeta
 
+```
+nao/
+├── assets/Behaivors/      # Behaviors para instalar en Choregraphe
+├── data/                  # Datos (análisis, grabaciones, walks)
+├── deploy/                # Scripts de despliegue automático
+├── models/                # Modelos ML (LightGBM)
+└── scripts/               # Código Python para el robot
+    ├── runtime/           # Sistema principal
+    │   ├── launcher.py    # Punto de entrada
+    │   ├── logger.py      # Logging WebSocket/UDP
+    │   ├── video_stream.py# Streaming MJPEG
+    │   └── control_server/# Backend modular
+    ├── diagnostics/       # Herramientas de diagnóstico
+    └── ml/                # Scripts ML
+```
+
+---
+
+## 🚀 Instalación Rápida (Manual)
+
+### 1. Conectar al Robot
 ```bash
 ssh nao@<NAO_IP>
-cd /home/nao/nao_control
-pip2 install --user -r nao/requirements-robot.txt
+# Password: nao
 ```
 
-3. Iniciar el `launcher` para arrancar `control_server`, `logger` y `video_stream`:
-
+### 2. Crear Directorios
 ```bash
-cd /home/nao/nao_control/nao/scripts
-# opción (directa):
-nohup python2 launcher.py > /home/nao/launcher.log 2>&1 &
-# o arrancar scripts individualmente
-nohup python2 control_server.py > control_server.log 2>&1 &
-nohup python2 video_stream.py > video_stream.log 2>&1 &
-nohup python2 logger.py > logger.log 2>&1 &
+mkdir -p /home/nao/scripts/runtime/control_server/commands
+mkdir -p /home/nao/scripts/runtime/control_server/facades
+mkdir -p /home/nao/scripts/runtime/control_server/strategies
+mkdir -p /home/nao/models
 ```
 
-4. Verificar que los procesos corren y que `control_server` atiende web sockets y `video_stream` sirve MJPEG.
+### 3. Instalar SimpleWebSocketServer
+```bash
+cd /home/nao
+wget https://github.com/dpallot/simple-websocket-server/archive/refs/heads/master.zip
+unzip master.zip
+mv simple-websocket-server-master SimpleWebSocketServer-0.1.2
+rm master.zip
+```
 
-5. Si quieres inferencia ML en el NAO: copia `nao/models/` a `/home/nao/nao_control/models/` y asegúrate de que `adaptive_walk_lightgbm_nao.py` apunte al directorio correspondiente.
+### 4. Copiar Archivos (desde PC)
+```bash
+scp -r nao/scripts/runtime/* nao@<NAO_IP>:/home/nao/scripts/runtime/
+scp -r nao/models/* nao@<NAO_IP>:/home/nao/models/
+scp nao/scripts/nao_config.py nao@<NAO_IP>:/home/nao/scripts/
+```
 
-6. Consideraciones:
-- Preservar `#!/usr/bin/env python2` en todos los scripts.
-- Evitar instalar paquetes compilados (LightGBM) en el NAO si no existen ruedas compatibles.
-- Para reinicio automático usa `crontab` o el `rc.local`/service incluido en `nao/installer/payload_scripts/`.
+### 5. Instalar Behaviors
+Usar Choregraphe para instalar cada behavior de `assets/Behaivors/`
+
+### 6. Ejecutar
+```bash
+cd /home/nao/scripts/runtime
+python2 launcher.py
+```
+
+---
+
+## 📋 Archivos del Runtime
+
+| Archivo | Descripción |
+|---------|-------------|
+| `launcher.py` | Punto de entrada principal. Gestiona servicios y sensor táctil |
+| `logger.py` | Servidor de logging (WS:6672, UDP:6673) |
+| `video_stream.py` | Streaming de cámara (HTTP:8080) |
+| `data_logger.py` | Logger de datos para entrenamiento ML |
+| `control_server/server.py` | Servidor WebSocket de control (WS:6671) |
+| `control_server/command_factory.py` | Factory de comandos |
+| `control_server/base_command.py` | Clase base para comandos |
+| `control_server/commands/*.py` | Implementaciones de comandos |
+| `control_server/facades/nao_facade.py` | Abstracción de NAOqi |
+| `control_server/strategies/movement_strategies.py` | Estrategias de movimiento |
+
+---
+
+## 🎮 Uso del Launcher
+
+El launcher (`launcher.py`) es el punto de entrada recomendado:
+
+1. **Inicia automáticamente** todos los servicios (logger, control, video)
+2. **Escucha sensor táctil** de la cabeza para alternar modos:
+   - **Presión larga (3+ seg)** en sensor medio → Alterna modo
+   - **Modo Control**: Servicios activos, listo para WebSocket
+   - **Modo Choregraphe**: Servicios detenidos, listo para Choregraphe
+
+### Ejecución Normal
+```bash
+python2 /home/nao/scripts/runtime/launcher.py
+```
+
+### Ejecución en Background
+```bash
+nohup python2 /home/nao/scripts/runtime/launcher.py > /tmp/nao.log 2>&1 &
+```
+
+### Auto-inicio
+```bash
+# Añadir a crontab
+crontab -e
+@reboot sleep 30 && python2 /home/nao/scripts/runtime/launcher.py > /tmp/nao.log 2>&1
+```
+
+---
+
+## 🔌 Puertos
+
+| Puerto | Servicio |
+|--------|----------|
+| 6671 | Control Server (WebSocket) |
+| 6672 | Logger (WebSocket) |
+| 6673 | Logger (UDP) |
+| 8080 | Video Stream (HTTP MJPEG) |
+
+---
+
+## 🛠️ Solución de Problemas
+
+### Procesos duplicados
+```bash
+pkill -f "python2.*launcher.py"
+pkill -f "python2.*server.py"
+pkill -f "python2.*logger.py"
+```
+
+### Ver logs
+```bash
+tail -f /tmp/nao_system.log
+```
+
+### Verificar procesos
+```bash
+ps aux | grep python2
+```
+
+---
+
+## 📄 Requisitos del Robot
+
+- NAO V6 con NAOqi 2.8
+- Python 2.7 (preinstalado)
+- SimpleWebSocketServer (ver instalación arriba)
+
+---
+
+© 2025 Universidad de La Sabana - Semillero de Robótica

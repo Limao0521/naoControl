@@ -110,6 +110,9 @@ class NAOFacade(object):
         except Exception as e:
             self.logger.error("Error configurando estado inicial: {}".format(e))
     
+    # Sentinel value para indicar error en safe_call (diferente de None)
+    _SAFE_CALL_ERROR = object()
+    
     def safe_call(self, func, *args, **kwargs):
         """
         Ejecutar llamada a NAOqi de forma segura con manejo de errores.
@@ -120,14 +123,20 @@ class NAOFacade(object):
             **kwargs: Argumentos nombrados
             
         Returns:
-            Resultado de la función o None si hay error
+            Resultado de la función, None si la función retorna None,
+            o _SAFE_CALL_ERROR si hay excepción
         """
         try:
-            return func(*args, **kwargs)
+            result = func(*args, **kwargs)
+            return result  # Puede ser None si la función NAOqi retorna None (éxito)
         except Exception as e:
             func_name = getattr(func, '__name__', str(func))
             self.logger.warning("Error en {}: {}".format(func_name, e))
-            return None
+            return self._SAFE_CALL_ERROR
+    
+    def _call_succeeded(self, result):
+        """Verificar si safe_call tuvo éxito (resultado no es error sentinel)."""
+        return result is not self._SAFE_CALL_ERROR
     
     # === MOTION METHODS ===
     def move_toward(self, vx, vy, wz, config=None):
@@ -167,26 +176,26 @@ class NAOFacade(object):
     
     def stop_move(self):
         """Detener movimiento del robot."""
-        return self.safe_call(self.motion.stopMove) is not None
+        return self._call_succeeded(self.safe_call(self.motion.stopMove))
     
     def set_angles(self, joint, angle, speed=0.1):
         """Configurar ángulo de articulación."""
         if not self.motion:
             return False
-        return self.safe_call(self.motion.setAngles, str(joint), angle, speed) is not None
+        return self._call_succeeded(self.safe_call(self.motion.setAngles, str(joint), angle, speed))
     
     def set_stiffnesses(self, names, stiffness):
         """Configurar rigidez de articulaciones."""
         if not self.motion:
             return False
-        return self.safe_call(self.motion.setStiffnesses, names, stiffness) is not None
+        return self._call_succeeded(self.safe_call(self.motion.setStiffnesses, names, stiffness))
     
     # === POSTURE METHODS ===
     def go_to_posture(self, posture_name, speed=0.7):
         """Ir a postura específica."""
         if not self.posture:
             return False
-        return self.safe_call(self.posture.goToPosture, str(posture_name), speed) is not None
+        return self._call_succeeded(self.safe_call(self.posture.goToPosture, str(posture_name), speed))
     
     # === LED METHODS ===
     def set_led_rgb(self, group, r, g, b, duration=0.3):
@@ -198,22 +207,22 @@ class NAOFacade(object):
         
         if group in ("LeftEarLeds", "RightEarLeds"):
             intensity = (rgb_int & 0xFF) / 255.0
-            return self.safe_call(self.leds.fade, group, intensity, duration) is not None
+            return self._call_succeeded(self.safe_call(self.leds.fade, group, intensity, duration))
         else:
-            return self.safe_call(self.leds.fadeRGB, group, rgb_int, duration) is not None
+            return self._call_succeeded(self.safe_call(self.leds.fadeRGB, group, rgb_int, duration))
     
     # === TTS METHODS ===
     def say(self, text):
         """Hacer hablar al robot."""
         if not self.tts:
             return False
-        return self.safe_call(self.tts.say, str(text)) is not None
+        return self._call_succeeded(self.safe_call(self.tts.say, str(text)))
     
     def set_language(self, language):
         """Configurar idioma TTS."""
         if not self.tts:
             return False
-        return self.safe_call(self.tts.setLanguage, str(language)) is not None
+        return self._call_succeeded(self.safe_call(self.tts.setLanguage, str(language)))
     
     # === AUTONOMOUS LIFE METHODS ===
     def set_autonomous_life(self, enable):
@@ -221,7 +230,7 @@ class NAOFacade(object):
         if not self.life:
             return False
         state = "interactive" if enable else "disabled"
-        return self.safe_call(self.life.setState, state) is not None
+        return self._call_succeeded(self.safe_call(self.life.setState, state))
     
     def get_autonomous_life_state(self):
         """Obtener estado de Autonomous Life."""
@@ -257,7 +266,7 @@ class NAOFacade(object):
         """Configurar volumen de audio."""
         if not self.audio:
             return False
-        return self.safe_call(self.audio.setOutputVolume, volume) is not None
+        return self._call_succeeded(self.safe_call(self.audio.setOutputVolume, volume))
     
     # === BATTERY METHODS ===
     def get_battery_level(self):
@@ -277,13 +286,13 @@ class NAOFacade(object):
         """Suscribirse a evento de memoria."""
         if not self.memory:
             return False
-        return self.safe_call(self.memory.subscribeToEvent, event, subscriber, callback) is not None
+        return self._call_succeeded(self.safe_call(self.memory.subscribeToEvent, event, subscriber, callback))
     
     def unsubscribe_from_event(self, event, subscriber):
         """Desuscribirse de evento de memoria."""
         if not self.memory:
             return False
-        return self.safe_call(self.memory.unsubscribeToEvent, event, subscriber) is not None
+        return self._call_succeeded(self.safe_call(self.memory.unsubscribeToEvent, event, subscriber))
     
     # === UTILITY METHODS ===
     def is_proxy_available(self, proxy_name):
@@ -308,3 +317,167 @@ class NAOFacade(object):
             "total_proxies": total,
             "is_healthy": health_score >= 80
         }
+    
+    # === BEHAVIOR EXTENDED METHODS ===
+    def is_behavior_installed(self, behavior_name):
+        """Verificar si un behavior está instalado."""
+        if not self.behavior:
+            return False
+        try:
+            return self.behavior.isBehaviorInstalled(behavior_name)
+        except Exception:
+            return False
+    
+    def find_behavior(self, search_term):
+        """
+        Buscar un behavior por término de búsqueda.
+        
+        Args:
+            search_term: Término a buscar en nombres de behaviors
+            
+        Returns:
+            str: Nombre del primer behavior encontrado o None
+        """
+        if not self.behavior:
+            return None
+        try:
+            installed = self.behavior.getInstalledBehaviors()
+            for bhv in installed:
+                if search_term.lower() in bhv.lower():
+                    return bhv
+            return None
+        except Exception:
+            return None
+    
+    def stop_behavior(self, behavior_name):
+        """Detener un behavior específico."""
+        if not self.behavior:
+            return False
+        return self._call_succeeded(self.safe_call(self.behavior.stopBehavior, behavior_name))
+    
+    def stop_all_behaviors(self):
+        """Detener todos los behaviors en ejecución."""
+        if not self.behavior:
+            return False
+        try:
+            running = self.behavior.getRunningBehaviors()
+            for bhv in running:
+                self.behavior.stopBehavior(bhv)
+            return True
+        except Exception as e:
+            self.logger.error("Error deteniendo behaviors: {}".format(e))
+            return False
+    
+    def get_installed_behaviors(self):
+        """Obtener lista de behaviors instalados."""
+        if not self.behavior:
+            return []
+        return self.safe_call(self.behavior.getInstalledBehaviors) or []
+    
+    def get_running_behaviors(self):
+        """Obtener lista de behaviors en ejecución."""
+        if not self.behavior:
+            return []
+        return self.safe_call(self.behavior.getRunningBehaviors) or []
+    
+    # === BATTERY EXTENDED METHODS ===
+    def get_battery_info(self):
+        """Obtener información completa de batería."""
+        level = self.get_battery_level()
+        return {
+            "level": level,
+            "low": level < 20,
+            "full": level >= 95,
+            "charging": False
+        }
+    
+    # === SAFETY METHODS ===
+    def set_foot_contact_protection(self, enable):
+        """Configurar protección de contacto de pie."""
+        if not self.motion:
+            return False
+        return self._call_succeeded(self.safe_call(self.motion.setMotionConfig, 
+                             [["ENABLE_FOOT_CONTACT_PROTECTION", enable]]))
+    
+    def set_fall_manager(self, enable):
+        """Configurar fall manager."""
+        if not self.motion:
+            return False
+        return self._call_succeeded(self.safe_call(self.motion.setFallManagerEnabled, enable))
+    
+    def get_fall_manager_state(self):
+        """Obtener estado del fall manager."""
+        if not self.motion:
+            return False
+        return self.safe_call(self.motion.getFallManagerEnabled) or False
+    
+    def force_disable_fall_manager(self):
+        """Forzar desactivación del fall manager usando métodos alternativos."""
+        # Método 1: setFallManagerEnabled con allowDisable
+        try:
+            self.motion.setFallManagerEnabled(False, True)
+            return True
+        except Exception:
+            pass
+        
+        # Método 2: ALMemory
+        try:
+            if self.memory:
+                self.memory.insertData("FallManagerEnabled", False)
+                return True
+        except Exception:
+            pass
+        
+        # Método 3: setMotionConfig
+        try:
+            self.motion.setMotionConfig([["ENABLE_FALL_MANAGER", False]])
+            return True
+        except Exception:
+            pass
+        
+        return False
+    
+    # === AUTONOMOUS LIFE EXTENDED ===
+    def get_autonomous_life_enabled(self):
+        """Verificar si autonomous life está habilitado."""
+        state = self.get_autonomous_life_state()
+        return state != "disabled" and state != "unknown"
+    
+    # === MOTION EXTENDED ===
+    def get_stiffnesses(self, names):
+        """Obtener rigidez de articulaciones."""
+        if not self.motion:
+            return []
+        return self.safe_call(self.motion.getStiffnesses, names) or []
+    
+    def get_robot_name(self):
+        """Obtener nombre del robot."""
+        if not self.memory:
+            return "NAO"
+        return self.safe_call(self.memory.getData, "Device/DeviceList/ChestBoard/BodyId") or "NAO"
+    
+    def get_naoqi_version(self):
+        """Obtener versión de NAOqi."""
+        try:
+            from naoqi import ALProxy
+            system = ALProxy("ALSystem", self.ip, self.port)
+            return system.systemVersion()
+        except Exception:
+            return "Unknown"
+    
+    # === BLINK LEDS ===
+    def blink_leds(self, group, r, g, b, duration, times):
+        """Hacer parpadear LEDs."""
+        if not self.leds:
+            return False
+        try:
+            rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
+            for _ in range(times):
+                self.leds.fadeRGB(group, rgb_int, duration/2)
+                time.sleep(duration/2)
+                self.leds.fadeRGB(group, 0, duration/2)
+                time.sleep(duration/2)
+            return True
+        except Exception as e:
+            self.logger.error("Error en blink_leds: {}".format(e))
+            return False

@@ -17,15 +17,25 @@ from __future__ import print_function
 import sys, os, time, threading, json, socket, errno, signal
 from datetime import datetime
 
-# Rutas
-sys.path.insert(0, os.path.dirname(__file__))
+# Rutas - agregar directorio actual para imports locales
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+if _current_dir not in sys.path:
+    sys.path.insert(0, _current_dir)
+
+# Agregar subdirectorios al path para imports
+_facades_dir = os.path.join(_current_dir, "facades")
+_strategies_dir = os.path.join(_current_dir, "strategies")
+for _subdir in [_facades_dir, _strategies_dir]:
+    if _subdir not in sys.path:
+        sys.path.insert(0, _subdir)
+
 sys.path.insert(0, "/home/nao/SimpleWebSocketServer-0.1.2")
 from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 
 # Importar componentes modulares
-from facades.nao_facade import NAOFacade
+from nao_facade import NAOFacade
 from command_factory import CommandFactory
-from strategies.movement_strategies import MovementContext
+from movement_strategies import MovementContext
 
 # Importar sistema de logging
 try:
@@ -97,9 +107,9 @@ class ModularControlServer(object):
             logger.info("Inicializando Movement Context...")
             self.movement_context = MovementContext(self.nao_facade, logger, self.adaptive_walker)
             
-            # 4. Inicializar factory de comandos
+            # 4. Inicializar factory de comandos (pasando movement_context para comandos de walk)
             logger.info("Inicializando Command Factory...")
-            self.command_factory = CommandFactory(self.nao_facade, logger)
+            self.command_factory = CommandFactory(self.nao_facade, logger, self.movement_context)
             
             # 5. Inicializar watchdog
             self._start_watchdog()

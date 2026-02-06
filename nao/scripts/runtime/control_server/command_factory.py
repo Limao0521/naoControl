@@ -8,16 +8,37 @@ Permite fácil extensión y mantenimiento de nuevos comandos.
 """
 
 from __future__ import print_function
-from .commands.movement_commands import WalkCommand, WalkToCommand, TurnLeftCommand, TurnRightCommand, PostureCommand
-from .commands.basic_commands import MoveCommand, SayCommand, LanguageCommand, VolumeCommand
-from .commands.led_commands import LedCommand
-from .commands.system_commands import BatteryCommand, AutonomousLifeCommand, GetConfigCommand
-from .commands.behavior_commands import KickCommand, SiuCommand
-from .commands.gait_commands import GaitCommand, GetGaitCommand
-from .commands.adaptive_commands import AdaptiveLightGBMCommand, GetLightGBMStatsCommand
-from .commands.logging_commands import StartLoggingCommand, StopLoggingCommand, GetLoggingStatusCommand, LogSampleCommand
-from .commands.record_commands import RecordModeCommand, GetRecordStatusCommand
-from .commands.safety_commands import FootProtectionCommand, FallManagerCommand, GetFallManagerCommand
+import sys
+import os
+
+# Agregar path del directorio actual y subdirectorios para imports
+_current_dir = os.path.dirname(os.path.abspath(__file__))
+_commands_dir = os.path.join(_current_dir, "commands")
+for _path in [_current_dir, _commands_dir]:
+    if _path not in sys.path:
+        sys.path.insert(0, _path)
+
+# Imports de comandos (directamente por nombre de archivo)
+from movement_commands import WalkCommand, WalkToCommand, TurnLeftCommand, TurnRightCommand, PostureCommand
+from basic_commands import MoveCommand, SayCommand, LanguageCommand, VolumeCommand
+from led_commands import LedCommand
+from system_commands import BatteryCommand, AutonomousLifeCommand, GetConfigCommand
+from behavior_commands import (
+    KickCommand, SiuCommand, SaxophoneCommand, TaichichuaCommand,
+    KissCommand, GangnamstyleCommand, ElephantCommand, MacarenaCommand,
+    DiscoCommand, StopBehaviorCommand, ListBehaviorsCommand
+)
+from gait_commands import GaitCommand, GetGaitCommand, ResetGaitCommand, GaitPresetsCommand
+from adaptive_commands import (
+    AdaptiveLightGBMCommand, GetLightGBMStatsCommand,
+    SetAdaptiveModeCommand, GetAdaptiveModeCommand, PredictGaitCommand
+)
+from logging_commands import StartLoggingCommand, StopLoggingCommand, GetLoggingStatusCommand, LogSampleCommand
+from record_commands import RecordModeCommand, GetRecordStatusCommand
+from safety_commands import (
+    FootProtectionCommand, FallManagerCommand, GetFallManagerCommand,
+    ForceDisableFallManagerCommand, SetStiffnessCommand, EmergencyStopCommand
+)
 
 class CommandFactory(object):
     """
@@ -25,16 +46,18 @@ class CommandFactory(object):
     Implementa el Factory Pattern para centralizar la creación de comandos.
     """
     
-    def __init__(self, nao_facade, logger):
+    def __init__(self, nao_facade, logger, movement_context=None):
         """
         Inicializar factory con dependencias.
         
         Args:
             nao_facade: Instancia del facade NAO
             logger: Logger para registro de eventos
+            movement_context: Contexto de movimiento para comandos de walk
         """
         self.nao_facade = nao_facade
         self.logger = logger
+        self.movement_context = movement_context
         
         # Mapeo de actions a clases de comando
         self.command_classes = {
@@ -63,14 +86,28 @@ class CommandFactory(object):
             # Behaviors
             'kick': KickCommand,
             'siu': SiuCommand,
+            'saxophone': SaxophoneCommand,
+            'taichichua': TaichichuaCommand,
+            'kiss': KissCommand,
+            'gangnamstyle': GangnamstyleCommand,
+            'elephant': ElephantCommand,
+            'macarena': MacarenaCommand,
+            'disco': DiscoCommand,
+            'stopBehavior': StopBehaviorCommand,
+            'listBehaviors': ListBehaviorsCommand,
             
             # Gait
             'gait': GaitCommand,
             'getGait': GetGaitCommand,
+            'resetGait': ResetGaitCommand,
+            'gaitPreset': GaitPresetsCommand,
             
             # Adaptativo
             'adaptiveLightGBM': AdaptiveLightGBMCommand,
             'getLightGBMStats': GetLightGBMStatsCommand,
+            'setAdaptiveMode': SetAdaptiveModeCommand,
+            'getAdaptiveMode': GetAdaptiveModeCommand,
+            'predictGait': PredictGaitCommand,
             
             # Logging
             'startLogging': StartLoggingCommand,
@@ -86,7 +123,9 @@ class CommandFactory(object):
             'footProtection': FootProtectionCommand,
             'fallManager': FallManagerCommand,
             'getFallManager': GetFallManagerCommand,
-            'forceDisableFallManager': GetFallManagerCommand,  # Maneja múltiples acciones
+            'forceDisableFallManager': ForceDisableFallManagerCommand,
+            'setStiffness': SetStiffnessCommand,
+            'emergencyStop': EmergencyStopCommand,
         }
     
     def create_command(self, action):
@@ -103,7 +142,11 @@ class CommandFactory(object):
         
         if command_class:
             try:
-                command = command_class(self.nao_facade, self.logger)
+                # Comandos de movimiento necesitan el movement_context
+                if action in ('walk', 'walkTo', 'turnLeft', 'turnRight'):
+                    command = command_class(self.nao_facade, self.logger, self.movement_context)
+                else:
+                    command = command_class(self.nao_facade, self.logger)
                 self.logger.debug("Comando creado para action: {}".format(action))
                 return command
             except Exception as e:

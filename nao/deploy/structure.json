@@ -1,0 +1,207 @@
+{
+    "name": "nao-control-deploy",
+    "version": "2.0.0",
+    "description": "NAO Control Backend - Modular Architecture",
+    "structure": {
+        "description": "Mapeo de archivos locales a rutas en el robot NAO",
+        "robot_base_path": "/home/nao"
+    },
+    "directories": {
+        "scripts/runtime": "Archivos principales del servidor",
+        "scripts/runtime/control_server": "Arquitectura modular",
+        "scripts/runtime/control_server/commands": "Comandos (Command Pattern)",
+        "scripts/runtime/control_server/facades": "Facades NAOqi",
+        "scripts/runtime/control_server/strategies": "Estrategias de movimiento",
+        "scripts/runtime/control_server/libs": "Librerías utilitarias",
+        "models": "Modelos ML (LightGBM)",
+        "logs": "Logs CSV generados",
+        "Webs": "Frontend web controller"
+    },
+    "files": {
+        "runtime": [
+            {
+                "local": "scripts/runtime/control_server.py",
+                "remote": "/home/nao/scripts/runtime/control_server.py",
+                "description": "Servidor monolítico (legacy, aún funcional)"
+            },
+            {
+                "local": "scripts/runtime/launcher.py",
+                "remote": "/home/nao/scripts/runtime/launcher.py",
+                "description": "Launcher con sensor táctil de cabeza"
+            },
+            {
+                "local": "scripts/runtime/logger.py",
+                "remote": "/home/nao/scripts/runtime/logger.py",
+                "description": "Sistema de logging"
+            },
+            {
+                "local": "scripts/runtime/data_logger.py",
+                "remote": "/home/nao/scripts/runtime/data_logger.py",
+                "description": "Data logger para CSV"
+            },
+            {
+                "local": "scripts/runtime/record_system.py",
+                "remote": "/home/nao/scripts/runtime/record_system.py",
+                "description": "Sistema de grabación de movimientos"
+            },
+            {
+                "local": "scripts/runtime/video_stream.py",
+                "remote": "/home/nao/scripts/runtime/video_stream.py",
+                "description": "Streaming de video"
+            }
+        ],
+        "control_server": [
+            {
+                "local": "scripts/runtime/control_server/__init__.py",
+                "remote": "/home/nao/scripts/runtime/control_server/__init__.py",
+                "description": "Inicialización del paquete"
+            },
+            {
+                "local": "scripts/runtime/control_server/base_command.py",
+                "remote": "/home/nao/scripts/runtime/control_server/base_command.py",
+                "description": "Clase base Command Pattern"
+            },
+            {
+                "local": "scripts/runtime/control_server/command_factory.py",
+                "remote": "/home/nao/scripts/runtime/control_server/command_factory.py",
+                "description": "Factory para crear comandos"
+            },
+            {
+                "local": "scripts/runtime/control_server/server.py",
+                "remote": "/home/nao/scripts/runtime/control_server/server.py",
+                "description": "Servidor WebSocket modular"
+            }
+        ],
+        "facades": [
+            {
+                "local": "scripts/runtime/control_server/facades/nao_facade.py",
+                "remote": "/home/nao/scripts/runtime/control_server/facades/nao_facade.py",
+                "description": "Facade para acceso a NAOqi"
+            }
+        ],
+        "strategies": [
+            {
+                "local": "scripts/runtime/control_server/strategies/movement_strategies.py",
+                "remote": "/home/nao/scripts/runtime/control_server/strategies/movement_strategies.py",
+                "description": "Estrategias de movimiento"
+            }
+        ],
+        "commands": [
+            {
+                "local": "scripts/runtime/control_server/commands/movement_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/movement_commands.py",
+                "description": "Comandos de movimiento: walk, walkTo, turn"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/basic_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/basic_commands.py",
+                "description": "Comandos básicos: move, say, volume, language"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/led_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/led_commands.py",
+                "description": "Control de LEDs"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/system_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/system_commands.py",
+                "description": "Sistema: batería, autonomous life, config"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/behavior_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/behavior_commands.py",
+                "description": "Behaviors: kick, siu, saxophone, etc."
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/gait_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/gait_commands.py",
+                "description": "Configuración de gait"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/adaptive_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/adaptive_commands.py",
+                "description": "IA adaptativa LightGBM"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/logging_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/logging_commands.py",
+                "description": "Control de logging CSV"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/record_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/record_commands.py",
+                "description": "Sistema de grabación"
+            },
+            {
+                "local": "scripts/runtime/control_server/commands/safety_commands.py",
+                "remote": "/home/nao/scripts/runtime/control_server/commands/safety_commands.py",
+                "description": "Seguridad: fall manager, emergency stop"
+            }
+        ],
+        "libs": [
+            {
+                "local": "scripts/runtime/control_server/libs/sensor_reader.py",
+                "remote": "/home/nao/scripts/runtime/control_server/libs/sensor_reader.py",
+                "description": "Lectura de sensores FSR, IMU, touch"
+            },
+            {
+                "local": "scripts/runtime/control_server/libs/gait_utils.py",
+                "remote": "/home/nao/scripts/runtime/control_server/libs/gait_utils.py",
+                "description": "Utilidades de gait y presets"
+            },
+            {
+                "local": "scripts/runtime/control_server/libs/motion_helpers.py",
+                "remote": "/home/nao/scripts/runtime/control_server/libs/motion_helpers.py",
+                "description": "Helpers de motion seguros"
+            }
+        ],
+        "models": [
+            {
+                "local": "models/feature_scaler.npz",
+                "remote": "/home/nao/models/feature_scaler.npz",
+                "description": "Scaler para features ML"
+            },
+            {
+                "local": "models/golden_parameters.csv",
+                "remote": "/home/nao/models/golden_parameters.csv",
+                "description": "Parámetros golden de referencia"
+            },
+            {
+                "local": "models/lightgbm_model_*.npz",
+                "remote": "/home/nao/models/",
+                "description": "Modelos LightGBM para cada parámetro"
+            }
+        ]
+    },
+    "dependencies": {
+        "robot": [
+            "NAOqi 2.8 (incluido en el robot)",
+            "Python 2.7 (incluido en el robot)",
+            "SimpleWebSocketServer (copiar manualmente)"
+        ],
+        "external": {
+            "SimpleWebSocketServer": {
+                "url": "https://github.com/dpallot/simple-websocket-server",
+                "install_path": "/home/nao/SimpleWebSocketServer-0.1.2",
+                "note": "Descargar y copiar al robot"
+            }
+        }
+    },
+    "ports": {
+        "websocket": 6671,
+        "video_stream": 8081,
+        "http_server": 8080
+    },
+    "commands_reference": {
+        "movement": ["walk", "walkTo", "turn", "move", "stopMove"],
+        "posture": ["stand", "sit", "crouch", "rest", "posture"],
+        "speech": ["say", "setLanguage", "setVolume", "getLanguages"],
+        "leds": ["led", "blinkLeds", "setAllLeds"],
+        "behaviors": ["kick", "siu", "saxophone", "arms", "stopBehavior"],
+        "gait": ["setGait", "setGaitPreset", "resetGait", "getGaitConfig"],
+        "adaptive": ["setAdaptiveMode", "getAdaptiveStats", "setAdaptiveEnabled"],
+        "logging": ["startLogging", "stopLogging", "getLoggingStatus"],
+        "system": ["getBattery", "setAutonomousLife", "getConfig"],
+        "safety": ["setFallManager", "emergencyStop", "setFootProtection"]
+    }
+}

@@ -102,11 +102,17 @@ def log(level, message, module="LAUNCHER"):
 IP_NAO     = "127.0.0.1"
 PORT_NAO   = 9559
 PRESS_HOLD = 3.0            # segundos mínimos de pulsación (3 o más)
-# Ajusta estas rutas según dónde tengas los scripts
-CONTROL_PY = "/home/nao/scripts/control_server.py"
-LOGGER_PY  = "/home/nao/scripts/logger.py"        # Nuevo: ruta del logger
+
+# === RUTAS DEL BACKEND MODULAR ===
+# Todo el backend vive dentro de control_server/
+BACKEND_DIR = "/home/nao/scripts/runtime/control_server"
+CONTROL_PY  = BACKEND_DIR + "/server.py"          # Servidor WebSocket modular
+LOGGER_PY   = BACKEND_DIR + "/logger.py"          # Sistema de logging
+CAMERA_PY   = BACKEND_DIR + "/video_stream.py"    # Streaming de video
+DATA_LOGGER = BACKEND_DIR + "/data_logger.py"     # Data logger CSV
+
+# Frontend y configuración HTTP
 WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
-CAMERA_PY  = "/home/nao/scripts/video_stream.py"
 HTTP_PORT  = "8000"
 
 def get_server_ip():

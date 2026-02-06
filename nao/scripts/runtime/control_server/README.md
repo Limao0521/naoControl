@@ -18,25 +18,38 @@ El Control Server v2.0 es una refactorización completa del servidor WebSocket m
 
 ```
 control_server/
-├── __init__.py                 # Información del paquete
+├── __init__.py                 # Información del paquete v2.0
 ├── base_command.py             # Interfaz base para comandos (Command Pattern)
-├── command_factory.py          # Factory para crear comandos
+├── command_factory.py          # Factory para crear comandos (45+ comandos)
 ├── server.py                   # Servidor principal refactorizado
+├── README.md                   # Esta documentación
+│
 ├── facades/
-│   └── nao_facade.py          # Facade para NAOqi (simplifica acceso)
+│   ├── __init__.py             # Exports del paquete
+│   └── nao_facade.py           # Facade para NAOqi (simplifica acceso)
+│
 ├── strategies/
+│   ├── __init__.py             # Exports del paquete
 │   └── movement_strategies.py  # Strategy Pattern para movimiento
-└── commands/
-    ├── movement_commands.py    # Comandos de movimiento
-    ├── basic_commands.py       # Comandos básicos (TTS, articulaciones)
-    ├── led_commands.py         # Comandos de LEDs
-    ├── system_commands.py      # Comandos de sistema
-    ├── behavior_commands.py    # Comandos de behaviors
-    ├── gait_commands.py        # Comandos de configuración de marcha
-    ├── adaptive_commands.py    # Comandos adaptativos LightGBM
-    ├── logging_commands.py     # Comandos de data logging
-    ├── record_commands.py      # Comandos de grabación
-    └── safety_commands.py      # Comandos de seguridad
+│
+├── commands/                   # Comandos individuales
+│   ├── __init__.py             # Exports de todos los comandos
+│   ├── movement_commands.py    # walk, walkTo, turn, stopMove
+│   ├── basic_commands.py       # move, say, setVolume, setLanguage
+│   ├── led_commands.py         # led, blinkLeds, setAllLeds
+│   ├── system_commands.py      # getBattery, setAutonomousLife, getConfig
+│   ├── behavior_commands.py    # kick, siu, saxophone, arms (GenericBehavior)
+│   ├── gait_commands.py        # setGait, setGaitPreset, resetGait
+│   ├── adaptive_commands.py    # setAdaptiveMode, getAdaptiveStats
+│   ├── logging_commands.py     # startLogging, stopLogging, getLoggingStatus
+│   ├── record_commands.py      # startRecording, stopRecording
+│   └── safety_commands.py      # setFallManager, emergencyStop
+│
+└── libs/                       # Librerías utilitarias
+    ├── __init__.py             # Exports del paquete
+    ├── sensor_reader.py        # Lectura FSR, IMU, touch, batería
+    ├── gait_utils.py           # Presets de gait, smoothers, helpers
+    └── motion_helpers.py       # MotionHelper, FallRecovery, Watchdog
 ```
 
 ## Ventajas de la Nueva Arquitectura
