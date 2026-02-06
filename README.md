@@ -1,231 +1,544 @@
+# NAO Control Suite v2.0
 
-Pensado durante un par de segundos
-
-# Control-NAO Remote Control Suite
-
-> Tele-operación completa de NAO a través de navegador web y WebSocket
+> Sistema de tele-operación y control remoto para robots NAO
 > Compatible con Python 2.7 + NAOqi 2.8
 
 ---
 
 ## 📖 Descripción
 
-Control-NAO es un sistema de control remoto para robots NAO desde cualquier navegador (móvil o PC), sin dependencias adicionales más allá de Python 2.7 y NAOqi. Permite:
+NAO Control Suite es un sistema completo de control remoto para robots NAO V6 desde cualquier navegador web (móvil o PC). El sistema incluye:
 
-* **Tele-operar** la locomoción (caminata) con joystick virtual.
-* **Mover** brazos (izquierdo/derecho) y cabeza con el mismo joystick.
-* **Posturas** básicas: Stand / Sit.
-* **Control de LEDs** por grupos (pecho, cara, ojos) y color vía selector.
-* **Síntesis de voz** (“say”).
-* **Watchdog** de parada de emergencia si no llegan comandos de walk.
-* **Reconexión automática** WebSocket en caso de desconexión.
-
----
-
-## 🚀 Características Principales
-
-* **Interfaz web** responsive y ligera (HTML5 + CSS3 + JavaScript puro).
-* **WebSocket server** en Python 2.7: despacha mensajes a NAOqi.
-* **Joystick táctil** con cálculos en \[-1,1], corrección de orientación.
-* **Control granular de LEDs**: seleccionar uno o varios grupos, ajustar color.
-* **Voice** y **MJPEG camera feed** integrados (cámara sin servidor extra).
-* **Logs detallados** en consola NAO y navegador.
-* **Watchdog** que detiene la marcha automáticamente si no hay comandos de walk en 0.6 s.
-* **AutonomousLife** desactivado, stiffness en Body al iniciar.
+- **Tele-operación** de locomoción con joystick virtual
+- **Control articular** de brazos y cabeza
+- **Behaviors/Danzas**: kick, siu, saxophone, taichichua, gangnamstyle, elephant, disco, macarena
+- **Control de LEDs** RGB por grupos
+- **Síntesis de voz** (TTS)
+- **Video streaming** en tiempo real
+- **Sistema adaptativo** de marcha con Machine Learning (LightGBM)
+- **Logging centralizado** vía WebSocket
 
 ---
 
 ## 🏗️ Estructura del Proyecto
 
 ```
-remote_control/
-├─ index.html               # UI principal
-├─ styles.css               # Estilos y layout responsive
-├─ logic.js                 # Lógica de cliente (WebSocket, joystick, menús)
-├─ SimpleWebSocketServer.py # Biblioteca WS pura Python
-└─ control_server.py        # Servidor WS → NAOqi (Python 2.7)
+naoControl/
+├── README.md                     # Este archivo
+├── requirements.txt              # Dependencias PC (desarrollo)
+│
+├── Frontend/
+│   ├── ControllerWebServer/      # Build de producción (servir directamente)
+│   └── NaoControlReact/          # Código fuente React
+│
+├── nao/                          # TODO LO QUE VA AL ROBOT
+│   ├── README_NAO.md             # Instrucciones específicas NAO
+│   ├── requirements-robot.txt   # Dependencias robot
+│   │
+│   ├── assets/
+│   │   └── Behaivors/            # Behaviors Choregraphe (.pml)
+│   │       ├── disco/
+│   │       ├── Elephant/
+│   │       ├── GangnamStyle/
+│   │       ├── nao-kick/
+│   │       ├── Saxophone/
+│   │       ├── siu/
+│   │       └── taichichua/
+│   │
+│   ├── data/
+│   │   ├── analysis/             # Reportes de análisis de marcha
+│   │   ├── records/              # Grabaciones de audio
+│   │   └── walks/                # Datasets de caminata (.csv)
+│   │
+│   ├── deploy/                   # Scripts de despliegue automático
+│   │   ├── deploy.py
+│   │   ├── install.ps1
+│   │   ├── install.sh
+│   │   └── structure.json
+│   │
+│   ├── models/                   # Modelos ML para marcha adaptativa
+│   │   ├── lightgbm_model_*.npz
+│   │   ├── feature_scaler.npz
+│   │   └── golden_parameters.csv
+│   │
+│   └── scripts/
+│       ├── nao_config.py         # Configuración global
+│       ├── nao_connection_test.py
+│       │
+│       ├── runtime/              # ⭐ SISTEMA PRINCIPAL
+│       │   ├── launcher.py       # Punto de entrada (sensor táctil)
+│       │   ├── logger.py         # Sistema de logging WebSocket/UDP
+│       │   ├── video_stream.py   # Streaming MJPEG
+│       │   ├── data_logger.py    # Logger de datos para ML
+│       │   │
+│       │   └── control_server/   # ⭐ BACKEND MODULAR
+│       │       ├── server.py     # Servidor WebSocket principal
+│       │       ├── command_factory.py
+│       │       ├── base_command.py
+│       │       │
+│       │       ├── commands/     # Comandos (Command Pattern)
+│       │       │   ├── movement_commands.py
+│       │       │   ├── basic_commands.py
+│       │       │   ├── led_commands.py
+│       │       │   ├── system_commands.py
+│       │       │   ├── behavior_commands.py
+│       │       │   ├── gait_commands.py
+│       │       │   ├── adaptive_commands.py
+│       │       │   ├── logging_commands.py
+│       │       │   ├── record_commands.py
+│       │       │   └── safety_commands.py
+│       │       │
+│       │       ├── facades/      # Abstracciones NAOqi
+│       │       │   └── nao_facade.py
+│       │       │
+│       │       └── strategies/   # Estrategias de movimiento
+│       │           └── movement_strategies.py
+│       │
+│       ├── diagnostics/          # Herramientas de diagnóstico
+│       └── ml/                   # Scripts ML para robot
+│
+├── models_automl/                # Resultados AutoML
+└── tools/                        # Herramientas de desarrollo (PC)
 ```
-
 ---
 
 ## 🔧 Requisitos
 
-* **Robot NAO** con NAOqi 2.8 instalado.
-* **Python 2.7** en NAO (incluye `pip2`).
-* Navegador moderno con soporte WebSocket (Chrome, Firefox, Edge, Safari).
+### En el Robot NAO
+- **NAO V6** con NAOqi 2.8
+- **Python 2.7** (preinstalado)
+- **SimpleWebSocketServer** (se instala manualmente)
+
+### En el PC de Desarrollo
+- **Node.js 18+** (para el frontend React)
+- **Python 3.8+** (para herramientas de desarrollo)
 
 ---
 
-## 📑 Uso
+## 📦 Setup Manual en el Robot NAO
 
-* **Modos de control**: elije “Caminata”, “Brazo Izq.”, “Brazo Der.” o “Cabeza”.
-* **Joystick**: arrastra para generar vectores `vx`, `vy`; se ha corregido la orientación de ejes.
-* **Stand / Sit**: botones para cambiar postura.
-* **LEDs**: abre menú 💡, selecciona grupo, color y “Encender” / “Apagar”.
-* **Voz**: abre menú 🎤, escribe texto y pulsa “Hablar”.
-* **Cámara**: menú 📷 muestra stream MJPEG nativo (no requiere script extra).
+### Paso 1: Conectar al Robot
 
-> **Reconnect** automático si pierdes conexión WS: la UI reintenta en 3 s.
-
----
-
-## 🛠️ Estructura y Puntos Clave de los Scripts
-
-### control_server.py
-
-* **Imports y configuración** de NAOqi (`ALMotion`, `ALLeds`, `ALTextToSpeech`, `ALAutonomousLife`).
-* **Clase `RobotWS`** extiende `WebSocket`:
-
-  * `handleMessage` parsea JSON y despacha a NAOqi.
-* **Watchdog thread**: llama `motion.stopMove()` cada 0.6 s sin comandos `walk`.
-* **Puerto WebSocket** con reintentos y `SO_REUSEADDR` para evitar “Address in use”.
-
-### logic.js
-
-* **Conexión WS** dinámica con reconexión en 3 s.
-* **Joystick**: cálculo de radio, knob, normalización, corrección de ejes para que “adelante” sea arrastrar knob hacia arriba.
-* **sendCmd()**: despacho de JSON con `{action, vx, vy, ...}` según modo.
-* **Menús**: toggle de clases `.active`.
-* **LEDs**: selector de grupo + color HEX → valores `[0–1]`.
-* **Voz** y **Cámara MJPEG** integrados.
-
----
-
-## 🔎 Solución de Problemas
-
-* **“Address already in use”**: asegúrate de que no haya instancias previas; el script reintenta por ti.
-* **WS desconectado constantemente**: verifica IP de NAO y habilita puertos en tu red.
-* **Joystick girado**: corregido intercambiando `vx` y `vy` en `sendCmd()`.
-* **getInfo / Stats**: deshabilitado temporalmente en UI. Puedes reactivar `handleWS` y mostrar `<div id="stats">…`.
-
----
-
-## 1 · Arquitectura general
-
-```
-[ Navegador ]  index.html + styles.css + logic.js
-        │  WebSocket ws://<NAO_IP>:6671
-        ▼
-[ control_server.py ]  WebSocket → ALMotion.moveToward
-        │  (Python 2.7 + NAOqi 2.8, puerto 9559)
-        ▼
-[   NAO real   ]  motores y desplazamiento
+```bash
+ssh nao@<NAO_IP>
+# Password por defecto: nao
 ```
 
-### Flujo de datos
+### Paso 2: Crear Estructura de Directorios
 
-| Nº | Emisor (WS)            | Receptor            | Formato         | Descripción                               |
-| -- | ---------------------- | ------------------- | --------------- | ----------------------------------------- |
-| ①  | `logic.js` (browser)   | `control_server.py` | WebSocket texto | “walk vx vy wz” \~15 Hz                   |
-| ②  | `control_server.py`    | `ALMotion`          | API NAOqi       | `moveToward(vx, vy, wz)`                  |
-| ③  | `watchdog_loop` (hilo) | `ALMotion`          | API NAOqi       | `stopMove()` tras WATCHDOG s sin comandos |
+```bash
+mkdir -p /home/nao/scripts/runtime/control_server/commands
+mkdir -p /home/nao/scripts/runtime/control_server/facades
+mkdir -p /home/nao/scripts/runtime/control_server/strategies
+mkdir -p /home/nao/models
+mkdir -p /home/nao/datasets/records
+mkdir -p /home/nao/datasets/walks
+```
 
----
+### Paso 3: Instalar SimpleWebSocketServer
 
-## 2 · Archivos y responsabilidades
+```bash
+cd /home/nao
+wget https://github.com/dpallot/simple-websocket-server/archive/refs/heads/master.zip
+unzip master.zip
+mv simple-websocket-server-master SimpleWebSocketServer-0.1.2
+rm master.zip
+```
 
-| Archivo                      | Lenguaje   | Rol                                                         |
-| ---------------------------- | ---------- | ----------------------------------------------------------- |
-| **index.html**               | HTML       | Estructura del mando (cruceta NES + joystick táctil)        |
-| **styles.css**               | CSS        | Responsividad y animaciones de botones/joystick             |
-| **logic.js**                 | JavaScript | Captura toques/teclas, normaliza e invoca WS dinámico       |
-| **SimpleWebSocketServer.py** | Python 2   | Implementación pura Python del protocolo WebSocket          |
-| **control_server.py**        | Python 2.7 | Servidor WS + watchdog → `ALMotion.moveToward`/`stopMove()` |
+### Paso 4: Copiar Archivos desde PC
 
-*Coloca `SimpleWebSocketServer.py` y `walk_ws_server.py` en la misma carpeta `/home/nao/remote_control`.*
+Desde tu PC (en la raíz del proyecto):
 
----
+```bash
+# Copiar todo el runtime
+scp -r nao/scripts/runtime/* nao@<NAO_IP>:/home/nao/scripts/runtime/
 
-## 3 · Instalación en NAO real (manteniendo Python 2.7)
+# Copiar modelos ML
+scp -r nao/models/* nao@<NAO_IP>:/home/nao/models/
 
-1. **Copiar ficheros**
+# Copiar configuración
+scp nao/scripts/nao_config.py nao@<NAO_IP>:/home/nao/scripts/
+```
 
+### Paso 5: Instalar Behaviors desde Choregraphe
+
+⚠️ **IMPORTANTE**: Los behaviors **NO funcionan** simplemente copiando archivos al robot. **DEBEN** ser instalados a través de Choregraphe para que se registren en el PackageManager del robot.
+
+#### Behaviors Incluidos
+
+La carpeta `nao/assets/Behaivors/` contiene proyectos de Choregraphe con las siguientes animaciones:
+
+| Carpeta | Acción WebSocket | Descripción |
+|---------|------------------|-------------|
+| `disco/` | `{"action": "disco"}` | Baile disco |
+| `Elephant/` | `{"action": "elephant"}` | Movimiento de elefante |
+| `GangnamStyle/` | `{"action": "gangnamstyle"}` | Baile Gangnam Style |
+| `macarena-original/` | `{"action": "macarena"}` | Baile Macarena |
+| `nao-kick/` | `{"action": "kick"}` | Patada de fútbol |
+| `Saxophone/` | `{"action": "saxophone"}` | Tocar saxofón |
+| `siu/` | `{"action": "siu"}` | Celebración Cristiano Ronaldo |
+| `taichichua/` | `{"action": "taichichua"}` | Movimientos de Tai Chi |
+
+#### Proceso de Instalación
+
+1. **Abrir Choregraphe** y conectar al robot (Connection → Connect to...)
+
+2. **Para cada behavior**:
+   - File → **Open Project** → Seleccionar la carpeta del behavior (ej: `nao/assets/Behaivors/disco/`)
+   - Robot → **Upload to robot and Install current project**
+   - Esperar a que aparezca "Installation successful"
+
+3. **Verificar instalación**:
    ```bash
-   # en tu PC:
-   scp -r remote_control/ nao@<IP_NAO>:/home/nao/remote_control
+   ssh nao@<NAO_IP>
+   python2 -c "from naoqi import ALProxy; b=ALProxy('ALBehaviorManager','127.0.0.1',9559); print(b.getInstalledBehaviors())"
    ```
-2. **Crear carpeta de dependencias** (si no están presentes)
 
+#### Nomenclatura de Behaviors
+
+Cuando Choregraphe instala un behavior, le asigna un nombre con un **hash único**. Por ejemplo:
+- `disco-8c59b8/behavior_1`
+- `kicknao-f6eb94/behavior_1`
+- `siu-17777b/behavior_1`
+
+El archivo `behavior_commands.py` del control server debe tener los nombres **exactos** que muestra `getInstalledBehaviors()`. Si instalas los behaviors en otro robot, los hashes serán diferentes y deberás actualizar los nombres en el código.
+
+#### Cómo Actualizar Nombres de Behaviors
+
+1. Listar behaviors instalados en el robot:
    ```bash
-   ssh nao@<IP_NAO>
-   mkdir /home/nao/libs/SimpleWebSocketServer-0.1.2
+   ls /home/nao/.local/share/PackageManager/apps/
    ```
-3. **Instalar dependencias Py2** (si no están presentes)
 
+2. Editar `nao/scripts/runtime/control_server/commands/behavior_commands.py`
+
+3. Actualizar el `behavior_name` de cada comando con el nombre correcto:
+   ```python
+   class DiscoCommand(BehaviorCommand):
+       def __init__(self):
+           self.behavior_name = "disco-XXXXXX/behavior_1"  # Reemplazar XXXXXX con tu hash
+   ```
+
+4. Re-copiar el archivo al robot:
    ```bash
-   ssh nao@<IP_NAO>
-   pip2 install --user /home/nao/libs/SimpleWebSocketServer-0.1.2
+   scp nao/scripts/runtime/control_server/commands/behavior_commands.py nao@<NAO_IP>:/home/nao/scripts/runtime/control_server/commands/
    ```
-4. **Servir la web**
 
+### Paso 6: Verificar Estructura Final en Robot
+
+```bash
+ssh nao@<NAO_IP>
+find /home/nao/scripts/runtime -type f -name "*.py" | head -20
+```
+
+---
+
+## 🚀 Ejecución
+
+### Iniciar Sistema Completo (Recomendado)
+
+```bash
+ssh nao@<NAO_IP>
+cd /home/nao/scripts/runtime
+python2 launcher.py
+```
+
+El launcher:
+1. Inicia el **Logger** (WebSocket puerto 6672, UDP puerto 6673)
+2. Inicia el **Control Server** (WebSocket puerto 6671)
+3. Inicia el **Video Stream** (HTTP puerto 8080)
+4. Escucha **sensor táctil** de la cabeza para alternar modos
+
+**Control por sensor táctil:**
+- **Presión larga (3+ segundos)** en sensor medio: Alterna entre modo Control y modo Choregraphe
+- El modo Choregraphe desactiva los servicios para permitir uso de Choregraphe
+
+### Iniciar Componentes Individuales
+
+```bash
+# Solo Control Server
+cd /home/nao/scripts/runtime/control_server
+python2 server.py
+
+# Solo Logger
+cd /home/nao/scripts/runtime
+python2 logger.py
+
+# Solo Video
+cd /home/nao/scripts/runtime
+python2 video_stream.py
+```
+
+### Ejecución en Background
+
+```bash
+nohup python2 /home/nao/scripts/runtime/launcher.py > /tmp/nao_launcher.log 2>&1 &
+```
+
+### Auto-inicio al Encender
+
+Añadir a `/home/nao/naoqi/preferences/autoload.ini`:
+```ini
+[user]
+/home/nao/scripts/runtime/launcher.py
+```
+
+O crear un cron job:
+```bash
+crontab -e
+# Añadir:
+@reboot sleep 30 && python2 /home/nao/scripts/runtime/launcher.py > /tmp/nao_launcher.log 2>&1
+```
+
+---
+
+## 🎮 Comandos WebSocket Disponibles
+
+Conectar a `ws://<NAO_IP>:6671`
+
+### Movimiento
+| Acción | Ejemplo JSON |
+|--------|--------------|
+| Caminar | `{"action": "walk", "vx": 0.5, "vy": 0, "wz": 0}` |
+| Caminar a punto | `{"action": "walkTo", "x": 1.0, "y": 0, "theta": 0}` |
+| Girar izquierda | `{"action": "turnLeft"}` |
+| Girar derecha | `{"action": "turnRight"}` |
+| Postura | `{"action": "posture", "value": "Stand"}` |
+
+### Articulaciones
+```json
+{"action": "move", "joint": "HeadYaw", "value": 0.5, "speed": 0.1}
+```
+
+Articulaciones disponibles: `HeadYaw`, `HeadPitch`, `LShoulderPitch`, `LShoulderRoll`, `LElbowYaw`, `LElbowRoll`, `LWristYaw`, `RShoulderPitch`, `RShoulderRoll`, `RElbowYaw`, `RElbowRoll`, `RWristYaw`, `LHipYawPitch`, `LHipRoll`, `LHipPitch`, `LKneePitch`, `LAnklePitch`, `LAnkleRoll`, `RHipRoll`, `RHipPitch`, `RKneePitch`, `RAnklePitch`, `RAnkleRoll`
+
+### Behaviors (Danzas)
+| Acción | Descripción |
+|--------|-------------|
+| `{"action": "kick"}` | Patada de fútbol |
+| `{"action": "siu"}` | Celebración Cristiano Ronaldo |
+| `{"action": "saxophone"}` | Tocar saxofón |
+| `{"action": "taichichua"}` | Tai Chi |
+| `{"action": "gangnamstyle"}` | Baile Gangnam Style |
+| `{"action": "elephant"}` | Elefante |
+| `{"action": "disco"}` | Baile disco |
+| `{"action": "macarena"}` | Macarena |
+| `{"action": "listBehaviors"}` | Listar behaviors instalados |
+| `{"action": "stopBehavior"}` | Detener behavior actual |
+
+### LEDs
+```json
+{"action": "led", "group": "FaceLeds", "r": 1.0, "g": 0, "b": 0, "duration": 0.5}
+```
+
+Grupos de LEDs: `ChestLeds`, `FaceLeds`, `LeftEarLeds`, `RightEarLeds`, `LeftFootLeds`, `RightFootLeds`, `BrainLeds`
+
+### Voz
+| Acción | Ejemplo |
+|--------|---------|
+| Hablar | `{"action": "say", "text": "Hola mundo"}` |
+| Idioma | `{"action": "language", "value": "Spanish"}` |
+| Volumen | `{"action": "volume", "value": 80}` |
+
+### Sistema
+| Acción | Descripción |
+|--------|-------------|
+| `{"action": "getBattery"}` | Nivel de batería |
+| `{"action": "getAutonomousLife"}` | Estado de vida autónoma |
+| `{"action": "autonomous", "value": false}` | Activar/desactivar vida autónoma |
+| `{"action": "getConfig"}` | Configuración actual |
+
+### Marcha Adaptativa (ML)
+| Acción | Descripción |
+|--------|-------------|
+| `{"action": "gait", "MaxStepX": 0.04, ...}` | Configurar parámetros de marcha |
+| `{"action": "getGait"}` | Obtener parámetros actuales |
+| `{"action": "resetGait"}` | Restaurar parámetros por defecto |
+| `{"action": "gaitPreset", "preset": "fast"}` | Aplicar preset (fast/slow/stable) |
+| `{"action": "adaptiveLightGBM", "enable": true}` | Activar modo adaptativo ML |
+| `{"action": "setAdaptiveMode", "mode": "manual"}` | Cambiar modo (manual/adaptive/cautious) |
+
+### Seguridad
+| Acción | Descripción |
+|--------|-------------|
+| `{"action": "footProtection", "enable": true}` | Protección de contacto de pie |
+| `{"action": "fallManager", "enable": false}` | Gestión de caídas |
+| `{"action": "forceDisableFallManager"}` | Forzar desactivación de fall manager |
+
+---
+
+## 🌐 Frontend Web
+
+### Desarrollo
+```bash
+cd Frontend/NaoControlReact
+npm install
+npm start
+```
+
+### Producción
+Servir la carpeta `Frontend/ControllerWebServer/` con cualquier servidor HTTP:
+```bash
+# Con Python
+cd Frontend/ControllerWebServer
+python3 -m http.server 3000
+
+# Con Node
+npx serve -s . -l 3000
+```
+
+Acceder a `http://localhost:3000` y configurar la IP del robot.
+
+---
+
+## 🔌 Puertos Utilizados
+
+| Puerto | Protocolo | Servicio | Descripción |
+|--------|-----------|----------|-------------|
+| 6671   | WebSocket | Control Server | Comandos de control |
+| 6672   | WebSocket | Logger | Logs en tiempo real |
+| 6673   | UDP       | Logger | Logs UDP |
+| 8080   | HTTP      | Video Stream | MJPEG streaming |
+| 9559   | NAOqi     | NAOqi Framework | API interna |
+
+---
+
+## 🐛 Solución de Problemas
+
+### "Address already in use"
+```bash
+# Matar procesos existentes
+pkill -f "python2.*server.py"
+pkill -f "python2.*launcher.py"
+pkill -f "python2.*logger.py"
+```
+
+### Robot no se mueve con walk
+1. Verificar que el robot está en postura correcta:
+   ```json
+   {"action": "posture", "value": "StandInit"}
+   ```
+2. Verificar que Autonomous Life está desactivado:
+   ```json
+   {"action": "autonomous", "value": false}
+   ```
+
+### Behaviors no funcionan
+
+**Error: "Behavior is not installed"**
+
+1. Verificar que el behavior está instalado (NO basta con copiar archivos):
    ```bash
-   cd ~/remote_control
-   python2 -m SimpleHTTPServer 8000 &   # HTTP en 8000
+   ssh nao@<NAO_IP>
+   python2 -c "from naoqi import ALProxy; b=ALProxy('ALBehaviorManager','127.0.0.1',9559); print(b.getInstalledBehaviors())"
    ```
-5. **Lanzar servidor WebSocket**
 
+2. Si no aparece, debes **instalarlo desde Choregraphe** (ver Paso 5)
+
+3. Si aparece pero con diferente nombre/hash, actualiza `behavior_commands.py`:
    ```bash
-   cd ~/remote_control
-   python2 walk_ws_server.py &
+   # Ver nombres exactos instalados
+   ls /home/nao/.local/share/PackageManager/apps/
    ```
-6. **Conectar y probar**
 
-   * Desde el móvil/PC: `http://<IP_NAO>:8000`.
-   * Abrir consola SSH en el NAO para ver logs de conexiones, peticiones y watchdog.
+4. Listar behaviors desde WebSocket para debug:
+   ```json
+   {"action": "listBehaviors"}
+   ```
+
+### Ver logs del sistema
+```bash
+# Log principal
+tail -f /tmp/nao_system.log
+
+# Log específico del launcher
+tail -f /tmp/nao_launcher.log
+```
+
+### WebSocket no conecta
+1. Verificar que el servicio está corriendo:
+   ```bash
+   ps aux | grep python2
+   ```
+2. Verificar firewall y red
+3. Probar conexión:
+   ```bash
+   # Desde PC
+   curl -v telnet://<NAO_IP>:6671
+   ```
+
+---
+
+## 🔒 Seguridad y Buenas Prácticas
+
+- **Zona despejada** (≥1.5 × 1.5 m) sin obstáculos
+- **Superficie antideslizante** (no usar en superficies pulidas)
+- **Batería** ≥30% para evitar fallos de tensión
+- **Watchdog interno**: detiene marcha automáticamente si no hay comandos en 0.6s
+- **Fall Manager**: activar para protección ante caídas (a menos que interfiera con behaviors)
+- **No ejecutar** simultáneamente otros clientes que usen ALMotion
 
 ---
 
-## 4 · Seguridad y buenas prácticas
+## 📊 Arquitectura del Sistema
 
-* **Zona despejada** (≥1 × 1 m) sin obstáculos.
-* **Superficie antideslizante**.
-* **Batería** ≥30 % para evitar fallos de tensión.
-* **Watchdog interno**: frena en 0.6 s sin datos.
-* **Stiffness** ON solo al tele-operar; OFF para manipular a mano.
-* **AutonomousLife** desactivado por `walk_ws_server.py`.
-* **No ejecutar** simultáneamente otros clientes que usen ALMotion.
+```
+┌─────────────────────┐     WebSocket      ┌───────────────────────────────┐
+│   Frontend React    │◄──────────────────►│     Control Server v2.0       │
+│  (Navegador/Móvil)  │     :6671          │                               │
+└─────────────────────┘                    │  ┌─────────────────────────┐  │
+                                           │  │    Command Factory      │  │
+┌─────────────────────┐     WebSocket      │  │  (Patrón Command)       │  │
+│   Logger Client     │◄──────────────────►│  └───────────┬─────────────┘  │
+│   (Postman/etc)     │     :6672          │              │                │
+└─────────────────────┘                    │  ┌───────────▼─────────────┐  │
+                                           │  │      NAO Facade         │  │
+┌─────────────────────┐     HTTP/MJPEG     │  │  (Abstracción NAOqi)    │  │
+│   Video Viewer      │◄──────────────────►│  └───────────┬─────────────┘  │
+│                     │     :8080          │              │                │
+└─────────────────────┘                    │  ┌───────────▼─────────────┐  │
+                                           │  │   Movement Strategies   │  │
+                                           │  │ (Manual/Adaptive/etc)   │  │
+                                           │  └───────────┬─────────────┘  │
+                                           └──────────────┼────────────────┘
+                                                          │
+                                                          ▼ NAOqi API :9559
+                                           ┌──────────────────────────────┐
+                                           │         NAO Robot            │
+                                           │   ALMotion, ALPosture, etc   │
+                                           └──────────────────────────────┘
+```
+
+---
+
+## 📜 Changelog
+
+### v2.0 (2025)
+- ✅ Arquitectura modular con Command Pattern
+- ✅ Facade para abstracción de NAOqi
+- ✅ Strategies para modos de movimiento
+- ✅ Soporte completo de behaviors
+- ✅ Sistema de logging centralizado
+- ✅ Launcher con control por sensor táctil
+
+### v1.x (2024)
+- Sistema monolítico inicial
+- Control básico de movimiento
+- Prototipo de interfaz web
 
 ---
 
-## 5 · Explicación detallada de `walk_ws_server.py`
+## ⚖️ Licencia
 
-1. **Imports y path**: añade la carpeta local para importar `SimpleWebSocketServer.py`.
-2. **Configurables**: IP, puertos y WATCHDOG al inicio.
-3. **Inicialización NAOqi**:
-
-   * `ALMotion`, `ALAutonomousLife`, `ALRobotPosture`.
-   * Apaga gestos automáticos y fija postura de pie.
-4. **Clase WalkWS**:
-
-   * `handleConnected`/`handleClose`: logs de conexión.
-   * `handleMessage`: parseo de “walk vx vy wz”, validación, normalización, llamada a `moveToward`, log de envío.
-5. **Watchdog**:
-
-   * Hilo demonio via `threading.Thread` + `setDaemon(True)`.
-   * Cada 50 ms comprueba si `time()-last_cmd > WATCHDOG` → `stopMove()`.
-6. **Arranque de servidor**:
-
-   * `SimpleWebSocketServer("", WS_PORT, WalkWS).serveforever()`.
-   * `KeyboardInterrupt` → frena motores y sale.
+MIT License - Universidad de La Sabana
 
 ---
-## ⚖️ Licencia & Créditos
 
-* **Proyecto Open Source** para investigación y educación.
-* Desarrollado por Semillero de Robotica Aplicada de Universidad de La Sabana.
-* Desarrollador principal: Luis Mario Ramirez Muñoz, estudiante de Ingenieria Informatica.
+## 👥 Créditos
+
+- **Semillero de Robótica Aplicada** - Universidad de La Sabana
+- **Desarrollador principal**: Luis Mario Ramírez Muñoz
+
 ---
 
-¡Disfruta pilotar a tu NAO! 🤖🚀
-=======
-# Control‑NAO — Documentación definitiva (junio 2025)
-
-## Changelog de mejoras
-
-* **V1**: Prototipo inicial con puente UDP (`ws2udp.py`) y servidor UDP (`walk_server.py`).
-* **V2**: Eliminación de puente. Introducción de servidor WebSocket directo en Python 2.7 (`walk_ws_server.py`).
-* **V3**: Añadidos *prints* para trazabilidad: conexiones, peticiones, normalizaciones y watchdog.
-* **V4**: Correcciones de compatibilidad Py2.7: eliminación de f‑strings, uso de `.format()`, hilos demonio con `setDaemon()`.
-* **V5**: Mejoras de interfaz y manejo del robot.
----
-© 2025 Control‑NAO Project — Universidad de La Sabana
+¡Disfruta controlando a NAO! 🤖🚀
