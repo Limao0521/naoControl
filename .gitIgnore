@@ -115,3 +115,4 @@ models/
 *.bak
 *.orig
 *.~*
+.vscode
