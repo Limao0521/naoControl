@@ -4,13 +4,13 @@ import './EmotesMenu.css';
 const EmotesMenu = ({ isOpen, onClose, onEmote, isEmbedded = false }) => {
   if (!isOpen) return null;
 
-  // Agrega o modifica acciones fácilmente aquí
   const emoteActions = [
-    { action: 'dance_1', label: 'Baile 1' },
-    { action: 'dance_2', label: 'Baile 2' },
-    { action: 'dance_3', label: 'Baile 3' },
-    { action: 'wave', label: 'Saludo' },
-    { action: 'clap', label: 'Aplauso' }
+    { action: 'saxophone', label: 'Saxophone' },
+    { action: 'taichichua', label: 'Tai Chi' },
+    { action: 'gangnamstyle', label: 'Gangnam Style' },
+    { action: 'elephant', label: 'Elephant' },
+    { action: 'disco', label: 'Disco' },
+    { action: 'macarena', label: 'Macarena' }
   ];
 
   const containerClass = isEmbedded ? 'menu embedded' : 'menu active';
