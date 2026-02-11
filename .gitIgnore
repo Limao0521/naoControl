@@ -5,6 +5,12 @@ desktop.ini
 .Spotlight-V100
 .Trashes
 
+# Archivos sensibles - API Keys
+.env
+.env.local
+.env.*.local
+*.env
+
 # Archivos de log y temporales
 *.log
 *.tmp
