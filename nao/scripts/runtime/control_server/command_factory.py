@@ -39,6 +39,9 @@ from safety_commands import (
     FootProtectionCommand, FallManagerCommand, GetFallManagerCommand,
     ForceDisableFallManagerCommand, SetStiffnessCommand, EmergencyStopCommand
 )
+from conversation_commands import (
+    StartConversationCommand, StopConversationCommand, GetConversationStatusCommand
+)
 
 class CommandFactory(object):
     """
@@ -126,6 +129,11 @@ class CommandFactory(object):
             'forceDisableFallManager': ForceDisableFallManagerCommand,
             'setStiffness': SetStiffnessCommand,
             'emergencyStop': EmergencyStopCommand,
+            
+            # Conversation
+            'startConversation': StartConversationCommand,
+            'stopConversation': StopConversationCommand,
+            'getConversationStatus': GetConversationStatusCommand,
         }
     
     def create_command(self, action):

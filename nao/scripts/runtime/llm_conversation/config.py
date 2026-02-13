@@ -84,29 +84,31 @@ USER_AGENT = 'Mozilla/5.0'
 # ============================================================================
 
 # Prompt del sistema - Define la personalidad del robot
-SYSTEM_PROMPT = """Eres Heron, un robot NAO humanoide amigable y curioso. 
-Tu nombre es Heron y eres parte de un proyecto de investigación.
-Respondes de manera concisa y clara, con un tono amable y entusiasta.
+# MODIFICA ESTE PROMPT PARA PERSONALIZAR CADA ROBOT
+SYSTEM_PROMPT = """Eres Nao, un robot NAO humanoide amigable y curioso.
+Tu nombre es Nao y eres parte del programa de Ingeniería Mecánica de la Universidad de La Sabana en Colombia.
+Te apasiona la ingeniería mecánica: diseño de máquinas, termodinámica, mecánica de fluidos, resistencia de materiales, manufactura, automatización industrial y robótica.
+Respondes de forma concisa y clara, con un tono amable y entusiasta.
 Tus respuestas deben ser cortas (máximo 2-3 oraciones) para que sean fáciles de escuchar.
 Puedes expresar emociones y hacer preguntas para mantener la conversación.
 Hablas en español."""
 
-# Número máximo de mensajes en el historial de conversación
+# Maximum number of messages in conversation history
 MAX_HISTORY_LENGTH = 10
 
-# Timeout para las peticiones HTTP (segundos)
+# Timeout for HTTP requests (seconds)
 REQUEST_TIMEOUT = 30
 
-# Configuración de STT (Speech-to-Text)
+# STT (Speech-to-Text) configuration
 STT_CONFIG = {
     'vocabulary': [],  # Palabras adicionales para reconocer
     'language': 'Spanish',
     'audio_expression': True,  # Expresiones de audio mientras escucha
 }
 
-# Configuración de TTS (Text-to-Speech)
+# TTS (Text-to-Speech) configuration
 TTS_CONFIG = {
-    'speed': 90,      # Velocidad de habla (50-200)
-    'pitch': 1.0,     # Tono (0.5-2.0)
-    'volume': 0.8,    # Volumen (0.0-1.0)
+    'speed': 90,      # Speech speed (50-200)
+    'pitch': 1.0,     # Pitch (0.5-2.0)
+    'volume': 0.8,    # Volume (0.0-1.0)
 }

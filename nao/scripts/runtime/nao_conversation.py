@@ -125,8 +125,8 @@ class NaoConversationWhisper:
         
         # Estado
         self.conversation_active = True
-        self.exit_keywords = ['adios', 'hasta luego', 'chao', 'terminar', 'salir', 'bye', 'exit']
-        self.reset_keywords = ['reiniciar', 'nueva conversacion', 'reset']
+        self.exit_keywords = ['adios', 'adiós', 'hasta luego', 'chao', 'terminar', 'salir', 'bye', 'exit']
+        self.reset_keywords = ['reiniciar', 'nueva conversacion', 'nueva conversación', 'reset']
     
     def _init_nao_proxies(self):
         """Inicializar proxies de NAOqi"""
@@ -172,7 +172,7 @@ class NaoConversationWhisper:
                 raise ValueError("Proveedor no soportado: {}".format(self.provider_name))
             
             # System prompt
-            system_prompt = "Eres Heron, un robot NAO amigable. Responde de forma concisa en español."
+            system_prompt = "Eres Nao, un robot NAO amigable experto en ingeniería mecánica. Responde de forma concisa en español."
             if self.config and hasattr(self.config, 'SYSTEM_PROMPT'):
                 system_prompt = self.config.SYSTEM_PROMPT
             
@@ -389,13 +389,7 @@ class NaoConversationWhisper:
             return
         
         try:
-            # Preparar robot
-            if self.autonomous_life:
-                try:
-                    self.autonomous_life.setState("disabled")
-                except:
-                    pass
-            
+            # Ensure robot is standing (do NOT disable autonomous life, it causes sitting)
             if self.posture and self.motion:
                 try:
                     self.motion.wakeUp()
@@ -404,7 +398,7 @@ class NaoConversationWhisper:
                     pass
             
             # Saludo
-            self.speak("Hola, soy Heron. Estoy listo para conversar. Habla cuando mis ojos estén azules.")
+            self.speak("Hola, soy Nao. Estoy listo para conversar sobre ingeniería mecánica. Habla cuando mis ojos estén azules.")
             
             # Loop de conversación
             while self.conversation_active:
