@@ -402,6 +402,8 @@ const NaoController = () => {
         onUIChange={handleUIChange}
         onEmote={handleEmote}
         currentUI={currentUI}
+        sendMessage={sendMessage}
+        lastMessage={lastMessage}
       />
 
       {/* Main Content */}
