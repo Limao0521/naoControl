@@ -137,6 +137,16 @@ class NaoConversationWhisper:
             self.audio_device = ALProxy('ALAudioDevice', self.nao_ip, self.nao_port)
             self.memory = ALProxy('ALMemory', self.nao_ip, self.nao_port)
             
+            # Configurar velocidad del TTS desde config
+            try:
+                tts_speed = 90  # Default
+                if self.config and hasattr(self.config, 'TTS_CONFIG'):
+                    tts_speed = self.config.TTS_CONFIG.get('speed', 90)
+                self.tts.setParameter("speed", tts_speed)
+                logger.info("TTS speed configurado a {}".format(tts_speed))
+            except Exception as e:
+                logger.warning("No se pudo configurar velocidad TTS: {}".format(e))
+            
             # Opcionales
             try:
                 self.motion = ALProxy('ALMotion', self.nao_ip, self.nao_port)
@@ -323,17 +333,84 @@ class NaoConversationWhisper:
         # Transcribir
         return self.transcribe_audio(audio_file)
     
+    def _clean_text_for_tts(self, text):
+        """
+        Limpiar texto para TTS - eliminar caracteres que el robot pronuncia literalmente.
+        
+        Args:
+            text: Texto a limpiar
+            
+        Returns:
+            Texto limpio para TTS
+        """
+        import re
+        
+        if not text:
+            return text
+        
+        # Remover markdown: **bold**, *italic*, __bold__, _italic_
+        text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)  # **bold**
+        text = re.sub(r'\*([^*]+)\*', r'\1', text)      # *italic*
+        text = re.sub(r'__([^_]+)__', r'\1', text)      # __bold__
+        text = re.sub(r'_([^_]+)_', r'\1', text)        # _italic_
+        
+        # Remover backticks (código)
+        text = re.sub(r'`([^`]+)`', r'\1', text)
+        text = re.sub(r'```[^`]*```', '', text)
+        
+        # Remover links markdown [texto](url)
+        text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)
+        
+        # Remover headers markdown
+        text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+        
+        # Remover caracteres especiales que el TTS pronuncia
+        text = text.replace('*', '')
+        text = text.replace('#', '')
+        text = text.replace('`', '')
+        text = text.replace('~', '')
+        text = text.replace('^', '')
+        text = text.replace('|', '')
+        text = text.replace('\\', '')
+        text = text.replace('[', '')
+        text = text.replace(']', '')
+        text = text.replace('{', '')
+        text = text.replace('}', '')
+        text = text.replace('<', '')
+        text = text.replace('>', '')
+        text = text.replace('/', ' ')
+        text = text.replace('@', '')
+        text = text.replace('&', ' y ')
+        text = text.replace('+', ' más ')
+        text = text.replace('=', ' igual ')
+        
+        # Limpiar múltiples espacios
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Limpiar múltiples puntos (...)
+        text = re.sub(r'\.{3,}', '.', text)
+        
+        # Limpiar múltiples signos de exclamación/interrogación
+        text = re.sub(r'!{2,}', '!', text)
+        text = re.sub(r'\?{2,}', '?', text)
+        
+        return text.strip()
+    
     def speak(self, text):
         """Hacer que el robot hable"""
         try:
             self.set_eye_color('green')
-            logger.info("Hablando: {}".format(text[:60] + "..." if len(text) > 60 else text))
+            
+            # Limpiar texto para TTS
+            clean_text = self._clean_text_for_tts(text)
+            
+            logger.info("Hablando: {}".format(clean_text[:60] + "..." if len(clean_text) > 60 else clean_text))
             # Asegurar que el texto es str (bytes) para NAOqi en Python 2
-            if isinstance(text, unicode):
-                text = text.encode('utf-8')
-            elif not isinstance(text, str):
-                text = str(text)
-            self.tts.say(text)
+            if isinstance(clean_text, unicode):
+                clean_text = clean_text.encode('utf-8')
+            elif not isinstance(clean_text, str):
+                clean_text = str(clean_text)
+            self.tts.say(clean_text)
         except Exception as e:
             logger.error("Error al hablar: {}".format(e))
     

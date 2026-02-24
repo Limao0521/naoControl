@@ -34,7 +34,10 @@ from adaptive_commands import (
     SetAdaptiveModeCommand, GetAdaptiveModeCommand, PredictGaitCommand
 )
 from logging_commands import StartLoggingCommand, StopLoggingCommand, GetLoggingStatusCommand, LogSampleCommand
-from record_commands import RecordModeCommand, GetRecordStatusCommand
+from record_commands import (
+    RecordModeCommand, GetRecordStatusCommand,
+    StartRecordingCommand, StopRecordingCommand, ListRecordingsCommand
+)
 from safety_commands import (
     FootProtectionCommand, FallManagerCommand, GetFallManagerCommand,
     ForceDisableFallManagerCommand, SetStiffnessCommand, EmergencyStopCommand
@@ -42,6 +45,16 @@ from safety_commands import (
 from conversation_commands import (
     StartConversationCommand, StopConversationCommand, GetConversationStatusCommand
 )
+
+# Import record system functions
+try:
+    from record_system import (
+        get_record_system, toggle_record_mode, get_record_status,
+        start_recording, stop_recording
+    )
+    RECORD_SYSTEM_AVAILABLE = True
+except ImportError:
+    RECORD_SYSTEM_AVAILABLE = False
 
 class CommandFactory(object):
     """
@@ -61,6 +74,23 @@ class CommandFactory(object):
         self.nao_facade = nao_facade
         self.logger = logger
         self.movement_context = movement_context
+        
+        # Inicializar sistema de grabación si está disponible
+        self.record_system_funcs = None
+        if RECORD_SYSTEM_AVAILABLE:
+            try:
+                nao_ip = nao_facade.nao_ip if hasattr(nao_facade, 'nao_ip') else "127.0.0.1"
+                nao_port = nao_facade.nao_port if hasattr(nao_facade, 'nao_port') else 9559
+                get_record_system(nao_ip, nao_port, logger)
+                self.record_system_funcs = {
+                    "toggle": toggle_record_mode,
+                    "status": get_record_status,
+                    "start": start_recording,
+                    "stop": stop_recording
+                }
+                logger.info("Sistema de grabación con soporte de bumper inicializado")
+            except Exception as e:
+                logger.warning("Error inicializando record_system: {}".format(e))
         
         # Mapeo de actions a clases de comando
         self.command_classes = {
@@ -121,6 +151,9 @@ class CommandFactory(object):
             # Grabación
             'recordMode': RecordModeCommand,
             'getRecordStatus': GetRecordStatusCommand,
+            'startRecording': StartRecordingCommand,
+            'stopRecording': StopRecordingCommand,
+            'listRecordings': ListRecordingsCommand,
             
             # Seguridad
             'footProtection': FootProtectionCommand,
@@ -153,6 +186,14 @@ class CommandFactory(object):
                 # Comandos de movimiento necesitan el movement_context
                 if action in ('walk', 'walkTo', 'turnLeft', 'turnRight'):
                     command = command_class(self.nao_facade, self.logger, self.movement_context)
+                # Comandos de grabación necesitan record_system_funcs
+                elif action in ('recordMode', 'getRecordStatus', 'startRecording', 'stopRecording'):
+                    command = command_class(
+                        self.nao_facade, self.logger,
+                        record_system_funcs=self.record_system_funcs
+                    )
+                    if action == 'getRecordStatus':
+                        command.available = self.record_system_funcs is not None
                 else:
                     command = command_class(self.nao_facade, self.logger)
                 self.logger.debug("Comando creado para action: {}".format(action))
