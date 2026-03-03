@@ -44,7 +44,7 @@ except ImportError:
 class FacialRecordingSystem:
     """Sistema de grabación de video con reconocimiento facial"""
     
-    def __init__(self, nao_ip, nao_port=9559, fps=30, resolution=1):
+    def __init__(self, nao_ip, nao_port=9559, fps=13, resolution=1):
         """
         Inicializar el sistema
         
@@ -521,8 +521,9 @@ class FacialRecordingSystem:
             logger.warning("Ya se está grabando")
             return
         
-        # Crear nombre de archivo con timestamp (formato: dia_mes_ano_hora)
-        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M")
+        # Crear nombre de archivo con timestamp (formato: dia_mes_año_hora_minuto_segundo)
+        # Ejemplo: 05_03_2026_143012
+        timestamp = datetime.now().strftime("%d_%m_%Y_%H%M%S")
         self.recording_filename = os.path.join(
             self.recordings_dir,
             "face_recording_{}.avi".format(timestamp)
@@ -735,9 +736,6 @@ class FacialRecordingSystem:
                         
                         last_bumper_state = current_bumper_state
                     
-                    # Control de framerate
-                    time.sleep(1.0 / self.fps)
-                    
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
@@ -791,7 +789,7 @@ def main():
     parser.add_argument(
         '--fps',
         type=int,
-        default=30,
+        default=13,
         help='Frames por segundo (default: 30)'
     )
     parser.add_argument(

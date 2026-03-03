@@ -111,7 +111,6 @@ build/
 
 # Archivos específicos de proyecto (ajusta según necesites)
 # Por ejemplo datos grandes, modelos entrenados, binarios robot, etc.
-data/
 models/
 *.h5
 *.pt
