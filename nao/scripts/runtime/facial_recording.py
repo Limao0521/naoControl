@@ -44,7 +44,7 @@ except ImportError:
 class FacialRecordingSystem:
     """Sistema de grabación de video con reconocimiento facial"""
     
-    def __init__(self, nao_ip, nao_port=9559, fps=13, resolution=1):
+    def __init__(self, nao_ip, nao_port=9559, fps=13, resolution=1, auto_record_enabled=False):
         """
         Inicializar el sistema
         
@@ -53,6 +53,7 @@ class FacialRecordingSystem:
             nao_port: Puerto NAOqi (default: 9559)
             fps: Frames por segundo (default: 30)
             resolution: Resolución de video (0=160x120, 1=320x240, 2=640x480, 3=1280x960)
+            auto_record_enabled: Si False, no inicia/detiene grabación según detección de rostro
         """
         self.nao_ip = nao_ip
         self.nao_port = nao_port
@@ -67,7 +68,7 @@ class FacialRecordingSystem:
         self.recording_filename = None
         
         # Sistema de grabación automática por detección continua
-        self.auto_record_enabled = True  # Habilitar grabación automática
+        self.auto_record_enabled = auto_record_enabled  # Habilitar grabación automática (puede desactivarse)
         self.auto_record_threshold = 5.0  # Segundos de detección continua para iniciar grabación
         self.face_visible_start_time = None  # Tiempo cuando empezó a ver el rostro
         self.auto_record_triggered = False  # Si ya se activó la grabación automática
@@ -75,6 +76,16 @@ class FacialRecordingSystem:
         # Sistema de parada automática por pérdida de rostro
         self.auto_stop_threshold = 5.0  # Segundos sin rostro para detener grabación
         self.face_lost_start_time = None  # Tiempo cuando se perdió el rostro durante grabación
+        
+        # Sistema de grabación múltiple (15 videos de 3 segundos)
+        self.bumper_press_time = None  # Tiempo cuando se presionó el bumper
+        self.multi_video_recording = False  # Si estamos en modo de grabación múltiple
+        self.multi_video_mode_active = False  # Si se está esperando los 5 segundos o grabando
+        self.videos_recorded = 0  # Contador de videos grabados (máximo 15)
+        self.video_start_time = None  # Tiempo cuando empezó el video actual
+        self.video_duration = 6.0  # Duración de cada video en segundos
+        self.max_videos = 16  # Máximo número de videos a grabar
+        self.wait_before_recording = 5.0  # Segundos a esperar antes de empezar a grabar
         
         # Configuración de cámara (igual que video_stream.py)
         self.colorspace = 13  # BGR - compatible con OpenCV
@@ -593,6 +604,117 @@ class FacialRecordingSystem:
         except Exception as e:
             logger.error("Error deteniendo grabación: {}".format(e))
     
+    def start_multi_video_recording(self):
+        """Iniciar el proceso de grabación múltiple (5 segundos de espera, luego 15 videos de 3 segundos)"""
+        self.bumper_press_time = time.time()
+        self.multi_video_mode_active = True
+        self.videos_recorded = 0
+        self.video_start_time = None
+        self.multi_video_recording = False  # Aún no comenzó la grabación, primero espera 5 segundos
+        
+        logger.info("Modo multi-video activado - esperando 5 segundos antes de grabar...")
+        self.tts.say("Grabación múltiple iniciada, esperando 5 segundos")
+        
+        # Indicar visualmente que está en modo de espera (ambos ojos diferentes)
+        self.set_eye_color('left', 'cyan')
+        self.set_eye_color('right', 'cyan')
+    
+    def check_multi_video_state(self):
+        """
+        Verificar y manejar el estado de grabación múltiple
+        Returns True si el modo multi-video sigue activo, False si terminou
+        """
+        if not self.multi_video_mode_active:
+            return False
+        
+        current_time = time.time()
+        elapsed_since_press = current_time - self.bumper_press_time
+        
+        # Fase 1: Esperar 5 segundos antes de empezar a grabar
+        if not self.multi_video_recording:
+            if elapsed_since_press < self.wait_before_recording:
+                # Aún en fase de espera
+                remaining = self.wait_before_recording - elapsed_since_press
+                if int(remaining) % 2 == 0:  # Parpadear cada segundo (alternando)
+                    self.set_eye_color('left', 'cyan')
+                    self.set_eye_color('right', 'cyan')
+                else:
+                    self.set_eye_color('left', 'off')
+                    self.set_eye_color('right', 'off')
+                
+                # Contar los segundos en voz alta cada segundo
+                if int(remaining) != int(self.wait_before_recording - max(1, elapsed_since_press - 1)):
+                    if int(remaining) > 0:
+                        self.tts.say(str(int(remaining)))
+                
+                return True
+            else:
+                # Ya pasaron 5 segundos, empezar grabación de videos
+                self.multi_video_recording = True
+                logger.info("Iniciando grabación de 15 videos de 3 segundos cada uno...")
+                self.tts.say("Iniciando grabación de videos")
+                self.start_recording()
+                self.video_start_time = current_time
+                self.videos_recorded = 1
+                
+                # Encender ojo derecho en verde
+                self.set_eye_color('right', 'green')
+                self.set_eye_color('left', 'green')
+                
+                return True
+        
+        # Fase 2: Grabar 15 videos de 3 segundos cada uno
+        if self.video_start_time is None:
+            self.video_start_time = current_time
+        
+        elapsed_current_video = current_time - self.video_start_time
+        
+        if elapsed_current_video >= self.video_duration:
+            # Tiempo de cambiar a siguiente video
+            self.stop_recording()
+            
+            if self.videos_recorded < self.max_videos:
+                # Aún hay más videos por grabar
+                self.videos_recorded += 1
+                
+                logger.info("Video {} completado, iniciando video {}...".format(
+                    self.videos_recorded - 1,
+                    self.videos_recorded
+                ))
+                self.tts.say("Video {} de {}".format(self.videos_recorded, self.max_videos))
+                
+                # Pequeña pausa entre videos
+                time.sleep(0.5)
+                
+                # Iniciar nuevo video - ACTUALIZAR current_time después de la pausa
+                current_time = time.time()
+                self.start_recording()
+                self.video_start_time = current_time
+                
+                if self.videos_recorded == self.max_videos:
+                    # Este es el último video
+                    logger.info("Iniciando video final ({}/{})...".format(
+                        self.max_videos, self.max_videos))
+                
+                return True
+            else:
+                # Todos los videos se han grabado
+                logger.info("Grabación múltiple completada - {} videos grabados".format(
+                    self.max_videos))
+                self.tts.say("Grabación completada, 15 videos grabados")
+                
+                self.multi_video_mode_active = False
+                self.multi_video_recording = False
+                
+                # Apagar LEDs
+                self.set_eye_color('left', 'green')
+                self.set_eye_color('right', 'off')
+                
+                return False
+        
+        return True
+
+    
     def subscribe_camera(self):
         """Suscribir a la cámara del robot"""
         try:
@@ -692,12 +814,12 @@ class FacialRecordingSystem:
                     face_visible = self.check_face_detected()
                     self.update_face_status_leds(face_visible)
                     
-                    # Verificar grabación automática (rostro visible por 5 segundos)
-                    self.check_auto_record()
-                    
-                    # Verificar parada automática (rostro perdido por 5 segundos durante grabación)
-                    if self.check_auto_stop():
-                        frame_count = 0
+                            # Verificar grabación automática (rostro visible por 5 segundos)
+                    if self.auto_record_enabled:
+                        self.check_auto_record()
+                        # Verificar parada automática (rostro perdido por 5 segundos durante grabación)
+                        if self.check_auto_stop():
+                            frame_count = 0
                     
                     # Seguimiento manual de rostro si ALFaceTracker no está disponible
                     if not self.use_face_tracker:
@@ -722,19 +844,31 @@ class FacialRecordingSystem:
                         if current_bumper_state and not last_bumper_state:
                             logger.info("Bumper derecho presionado")
                             
-                            if self.is_recording:
-                                self.stop_recording()
-                                frame_count = 0
-                                # Resetear estado de grabación automática
-                                self.auto_record_triggered = False
-                                self.face_visible_start_time = time.time()  # Reiniciar contador
+                            # Si no hay grabación en progreso, iniciar modo multi-video
+                            if not self.multi_video_mode_active:
+                                self.start_multi_video_recording()
                             else:
-                                self.start_recording()
+                                # Si estamos en modo multi-video, cancelar
+                                logger.info("Cancelando grabación múltiple")
+                                self.tts.say("Grabación múltiple cancelada")
+                                
+                                if self.is_recording:
+                                    self.stop_recording()
+                                
+                                self.multi_video_mode_active = False
+                                self.multi_video_recording = False
+                                self.set_eye_color('left', 'green')
+                                self.set_eye_color('right', 'off')
                             
-                            # Cooldown de 500ms (15 frames a 30fps)
+                            # Cooldown de 500ms (15 frames)
                             bumper_cooldown = 15
                         
                         last_bumper_state = current_bumper_state
+                    
+                    # Manejar grabación múltiple si está activa
+                    if self.multi_video_mode_active:
+                        self.check_multi_video_state()
+
                     
                 except KeyboardInterrupt:
                     raise
@@ -799,6 +933,11 @@ def main():
         choices=[0, 1, 2, 3],
         help='Resolución: 0=160x120, 1=320x240, 2=640x480, 3=1280x960 (default: 2)'
     )
+    parser.add_argument(
+        '--enable-face-auto',
+        action='store_true',
+        help='Activa el inicio/detención de grabación automático basado en detección facial (desactivado por defecto)'
+    )
     
     args = parser.parse_args()
     
@@ -808,7 +947,8 @@ def main():
             nao_ip=args.nao_ip,
             nao_port=args.nao_port,
             fps=args.fps,
-            resolution=args.resolution
+            resolution=args.resolution,
+            auto_record_enabled=args.enable_face_auto
         )
         system.run()
     except Exception as e:
