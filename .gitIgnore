@@ -7,6 +7,8 @@ desktop.ini
 
 # Archivos sensibles - API Keys
 .env
+.env.*
+!.env.example
 .env.local
 .env.*.local
 *.env
@@ -84,6 +86,7 @@ ipynb_checkpoints/
 *.p12
 *.env
 .env.*
+!.env.example
 secrets.yml
 credentials.json
 

@@ -46,7 +46,7 @@ INSTRUCCIONES PARA OBTENER API KEYS GRATUITAS:
 import os
 
 # ============================================================================
-# API KEYS HARDCODEADAS
+# API KEYS (transición legacy; el sistema Nemotron vive en el PC)
 # ============================================================================
 
 # Proveedor por defecto
@@ -54,14 +54,14 @@ DEFAULT_PROVIDER = 'groq'
 
 # API Keys
 API_KEYS = {
-    'groq': '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',
-    'gemini': 'AIzaSyAtQeurKtQXXPqPjydCZz2ZwUrokRXsHpc',
-    'openai': '',
-    'huggingface': '',
+    'groq': os.environ.get('GROQ_API_KEY', ''),
+    'gemini': os.environ.get('GEMINI_API_KEY', ''),
+    'openai': os.environ.get('OPENAI_API_KEY', ''),
+    'huggingface': os.environ.get('HUGGINGFACE_API_KEY', ''),
 }
 
 # API Key para Whisper STT (usa Groq)
-WHISPER_API_KEY = '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'
+WHISPER_API_KEY = os.environ.get('WHISPER_API_KEY', '')
 WHISPER_PROVIDER = 'groq'
 WHISPER_MODEL = 'whisper-large-v3'
 

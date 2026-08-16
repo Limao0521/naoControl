@@ -79,11 +79,6 @@ class WhisperSTTProvider(object):
         Returns:
             Texto transcrito
         """
-        # Crear contexto SSL
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
         # Crear boundary para multipart (igual al test que funciona)
         boundary = '----WebKitFormBoundary7MA4YWxkTrZu0gW'
         
@@ -112,7 +107,7 @@ class WhisperSTTProvider(object):
         request.add_header('User-Agent', 'Mozilla/5.0')
         
         try:
-            response = urllib2.urlopen(request, timeout=30, context=context)
+            response = urllib2.urlopen(request, timeout=30)
             response_data = json.loads(response.read().decode('utf-8'))
             return response_data.get('text', '')
         except urllib2.HTTPError as e:
@@ -150,11 +145,6 @@ class GoogleSpeechSTTProvider(object):
         Returns:
             Texto transcrito
         """
-        # Crear contexto SSL
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
         # Codificar audio en base64
         audio_content = base64.b64encode(audio_bytes).decode('utf-8')
         
@@ -177,7 +167,7 @@ class GoogleSpeechSTTProvider(object):
         request = urllib2.Request(self.api_url, data=body.encode('utf-8'), headers=headers)
         
         try:
-            response = urllib2.urlopen(request, timeout=30, context=context)
+            response = urllib2.urlopen(request, timeout=30)
             response_data = json.loads(response.read().decode('utf-8'))
             
             # Extraer texto

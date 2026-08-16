@@ -110,11 +110,6 @@ class BaseLLMProvider(object):
         Returns:
             Dict con la respuesta parseada
         """
-        # Crear contexto SSL que ignore verificación (para compatibilidad)
-        context = ssl.create_default_context()
-        context.check_hostname = False
-        context.verify_mode = ssl.CERT_NONE
-        
         # Construir request
         body = json.dumps(self._build_request_body())
         headers = self._get_headers()
@@ -126,7 +121,7 @@ class BaseLLMProvider(object):
         )
         
         try:
-            response = urllib2.urlopen(request, timeout=timeout, context=context)
+            response = urllib2.urlopen(request, timeout=timeout)
             response_data = json.loads(response.read().decode('utf-8'))
             return response_data
         except urllib2.HTTPError as e:

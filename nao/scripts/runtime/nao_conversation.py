@@ -82,12 +82,7 @@ class NaoConversationWhisper:
         elif self.config and provider in self.config.API_KEYS:
             self.api_key = self.config.API_KEYS[provider]
         else:
-            # Fallback: API keys hardcodeadas
-            _fallback_keys = {
-                'gemini': 'AIzaSyAtQeurKtQXXPqPjydCZz2ZwUrokRXsHpc',
-                'groq': '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',
-            }
-            self.api_key = _fallback_keys.get(provider, '')
+            self.api_key = os.environ.get('{}_API_KEY'.format(provider.upper()), '')
         
         # Verificar que la API key es válida
         if not self.api_key or 'TU_' in self.api_key:
@@ -195,11 +190,6 @@ class NaoConversationWhisper:
     
     def _init_whisper_provider(self):
         """Inicializar proveedor Whisper para STT"""
-        # Usar API key hardcodeada como fallback si no se cargó desde config
-        if not self.whisper_key or 'TU_' in self.whisper_key:
-            # Fallback: API key hardcodeada
-            self.whisper_key = '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'
-        
         if not self.whisper_key or 'TU_' in self.whisper_key:
             logger.warning("Sin API key de Whisper - STT no disponible")
             logger.warning("Obtén una API key gratuita de Groq: https://console.groq.com")
@@ -208,7 +198,7 @@ class NaoConversationWhisper:
         
         try:
             from whisper_stt import WhisperSTTProvider
-            logger.debug("Inicializando Whisper con key: {}...".format(self.whisper_key[:20]))
+            logger.debug("Inicializando Whisper con credencial de entorno")
             self.whisper = WhisperSTTProvider(self.whisper_key, self.whisper_provider)
             logger.info("Whisper STT inicializado ({})".format(self.whisper_provider))
         except Exception as e:
