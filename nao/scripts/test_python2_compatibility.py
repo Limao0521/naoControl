@@ -31,6 +31,9 @@ def test_adaptive_walk_import():
         # Cambiar al directorio donde está el script
         import os
         script_dir = os.path.dirname(os.path.abspath(__file__))
+        ml_dir = os.path.join(script_dir, 'ml')
+        if ml_dir not in sys.path:
+            sys.path.insert(0, ml_dir)
         os.chdir(script_dir)
         
         # Intentar importar
@@ -96,12 +99,12 @@ def main():
         print("\n[TEST] {}...".format(test_name))
         try:
             if test_func():
-                print("[PASS] {} ✓".format(test_name))
+                print("[PASS] {}".format(test_name))
                 passed += 1
             else:
-                print("[FAIL] {} ✗".format(test_name))
+                print("[FAIL] {}".format(test_name))
         except Exception as e:
-            print("[FAIL] {} ✗ - {}".format(test_name, e))
+            print("[FAIL] {} - {}".format(test_name, e))
     
     print("\n" + "="*50)
     print("RESULTADOS: {}/{} tests pasaron".format(passed, total))
@@ -114,4 +117,5 @@ def main():
         return False
 
 if __name__ == "__main__":
-    main()
+    import sys
+    sys.exit(0 if main() else 1)
