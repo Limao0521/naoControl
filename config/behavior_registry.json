@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "behaviors": {
+    "dance_siu": {"package": "siu-17777b/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
+    "dance_gangnam": {"package": "gangnamstyle-0ff3ac/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
+    "dance_macarena": {"package": "macarena-original-055bea/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
+    "play_saxophone": {"package": "saxophone-f56d02/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
+    "taichi": {"package": "taichichua-a22a25/behavior_1", "required_posture": "Stand", "timeout_ms": 30000}
+  }
+}
