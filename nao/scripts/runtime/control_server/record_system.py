@@ -23,6 +23,7 @@ import os
 import sys
 import time
 import threading
+import json
 from datetime import datetime
 
 # Path setup
@@ -192,6 +193,16 @@ class RecordSystem(object):
         """Verificar estado del bumper derecho"""
         if not self.memory:
             return False
+
+    def _web_control_owns_bumpers(self):
+        """Avoid competing with the intelligent-mode physical controller."""
+        mode_path = os.environ.get('NAO_CONTROL_MODE_FILE', '/tmp/nao_control_mode.json')
+        try:
+            with open(mode_path, 'r') as mode_file:
+                state = json.load(mode_file)
+            return state.get('mode', 'WEB_CONTROL') == 'WEB_CONTROL'
+        except (IOError, OSError, ValueError):
+            return True
         try:
             value = self.memory.getData("RightBumperPressed")
             return value == 1.0
@@ -204,6 +215,11 @@ class RecordSystem(object):
         
         while self.bumper_running and self.mode_active:
             try:
+                if not self._web_control_owns_bumpers():
+                    if self.is_recording:
+                        self.stop_recording()
+                    time.sleep(0.1)
+                    continue
                 # Cooldown para evitar rebotes
                 if self.bumper_cooldown > 0:
                     self.bumper_cooldown -= 1
@@ -258,6 +274,9 @@ class RecordSystem(object):
     
     def toggle_mode(self):
         """Alternar modo de grabación (activa/desactiva monitoreo de bumper)"""
+        if not self.mode_active and not self._web_control_owns_bumpers():
+            self._log("Bumper reservado por modo Nemotron", level="warning")
+            return False
         if self.mode_active:
             # Desactivar modo
             self.mode_active = False
