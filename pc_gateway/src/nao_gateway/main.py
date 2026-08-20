@@ -43,6 +43,8 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
                 except Exception as error:
                     print(f"Interaction failed: {type(error).__name__}: {error}")
                     await robot.execute("say", {"text": "No pude procesar la solicitud."})
+                finally:
+                    await robot.complete_turn()
             elif message_type == "emergency":
                 print("Emergency stop requested on robot.")
     finally:

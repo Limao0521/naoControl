@@ -31,3 +31,13 @@ def test_outbound_command_is_signed_and_expiring():
 
     assert payload == {"action": "say", "arguments": {"text": "Hola"}}
     assert envelope["expires_at_ms"] == 11000
+
+
+def test_turn_finished_envelope_is_authenticated():
+    client = RobotClient("ws://robot:6674", b"shared-secret", now_ms=lambda: 1000)
+
+    envelope = client.turn_finished_envelope()
+    payload = verify_envelope(envelope, b"shared-secret", 1000, ReplayGuard())
+
+    assert envelope["message_type"] == "turn_finished"
+    assert payload == {}

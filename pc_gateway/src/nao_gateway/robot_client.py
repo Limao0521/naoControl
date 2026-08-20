@@ -36,6 +36,9 @@ class RobotClient:
     def command_envelope(self, action: str, arguments: dict) -> dict:
         return self._envelope("command", {"action": action, "arguments": arguments})
 
+    def turn_finished_envelope(self) -> dict:
+        return self._envelope("turn_finished", {})
+
     def ingest(self, raw: str) -> tuple[str, dict]:
         envelope = json.loads(raw)
         payload = verify_envelope(envelope, self.secret, self.now_ms(), self.replay_guard)
@@ -65,6 +68,11 @@ class RobotClient:
         while self.socket is not None:
             await self.socket.send(json.dumps(self._envelope("heartbeat", {})))
             await asyncio.sleep(1)
+
+    async def complete_turn(self) -> None:
+        if self.socket is None:
+            raise RuntimeError("robot client is not connected")
+        await self.socket.send(json.dumps(self.turn_finished_envelope()))
 
     async def close(self) -> None:
         if self.socket is not None:

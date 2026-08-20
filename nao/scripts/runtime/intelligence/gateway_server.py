@@ -22,10 +22,11 @@ from protocol import ProtocolError, ReplayGuard, sign_envelope, verify_envelope
 
 
 class GatewayCore(object):
-    def __init__(self, secret, executor, now_ms=None):
+    def __init__(self, secret, executor, now_ms=None, system_handler=None):
         self.secret = secret
         self.executor = executor
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
+        self.system_handler = system_handler or (lambda name: None)
         self.replay_guard = ReplayGuard(1000)
 
     def envelope(self, message_type, payload):
@@ -49,6 +50,10 @@ class GatewayCore(object):
             if message_type == "heartbeat":
                 result = {"status": "ok"}
                 response_type = "heartbeat_result"
+            elif message_type == "turn_finished":
+                self.system_handler("TURN_FINISHED")
+                result = {"status": "ok"}
+                response_type = "event_result"
             elif message_type == "command":
                 result = self.executor.execute(payload)
             else:
@@ -84,11 +89,23 @@ def _load_runtime():
     executor = ActionExecutor(facade, registry)
     safety = SafetySupervisor(facade)
     allowed, reasons = safety.check_intelligent_entry()
-    manager = ModeManager(initial_mode="WEB_CONTROL", entry_check=lambda: allowed)
+    manager = ModeManager(
+        initial_mode="WEB_CONTROL",
+        entry_check=lambda: safety.check_intelligent_entry()[0],
+    )
     memory = ALProxy("ALMemory", "127.0.0.1", 9559)
     capture = AudioCapture(ALProxy("ALAudioRecorder", "127.0.0.1", 9559))
-    core = GatewayCore(secret, executor)
     clients = set()
+
+    def system_handler(name):
+        events = manager.handle_system(name, int(time.time() * 1000))
+        write_mode()
+        if name == "TURN_FINISHED":
+            facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
+        for event in events:
+            send_all("mode_event", event.as_dict())
+
+    core = GatewayCore(secret, executor, system_handler=system_handler)
 
     def send_all(message_type, payload):
         encoded = json.dumps(core.envelope(message_type, payload))

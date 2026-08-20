@@ -99,3 +99,20 @@ def test_heartbeat_has_a_distinct_result_type():
     assert result["message_type"] == "heartbeat_result"
     assert result["payload"]["status"] == "ok"
     assert executor.commands == []
+
+
+def test_turn_finished_invokes_system_handler():
+    events = []
+    core = GatewayCore(
+        b"shared-secret", FakeExecutor(), now_ms=lambda: 1000,
+        system_handler=lambda name: events.append(name),
+    )
+    envelope = sign_envelope(
+        unsigned("turn_finished", "turn-1", {}), b"shared-secret"
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["message_type"] == "event_result"
+    assert result["payload"]["status"] == "ok"
+    assert events == ["TURN_FINISHED"]
