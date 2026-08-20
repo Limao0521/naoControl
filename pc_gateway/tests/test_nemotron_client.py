@@ -39,6 +39,28 @@ async def test_perception_sends_synchronized_audio_and_image():
 
 
 @pytest.mark.asyncio
+async def test_perception_allows_audio_only_when_camera_is_unavailable():
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({
+            "transcript": "Hola", "scene_summary": "Sin imagen disponible",
+            "objects": [], "uncertainties": ["camera unavailable"]
+        })}}]})
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    result = await client.perceive(b"RIFF-audio", None)
+
+    assert [item["type"] for item in captured["messages"][1]["content"]] == ["audio_url"]
+    assert result.transcript == "Hola"
+
+
+@pytest.mark.asyncio
 async def test_decision_rejects_unknown_tool_shape():
     captured = {}
 

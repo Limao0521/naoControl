@@ -55,6 +55,11 @@ etapa afectada como `PERCEPTION_FAILED` (audio/imagen) o `DECISION_FAILED`
 (respuesta estructurada), para no confundir una indisponibilidad de nube con una
 captura de micrófono fallida.
 
+La cámara usa un servidor MJPEG concurrente: un navegador o un lector que cierre
+su flujo no bloquea la instantánea solicitada por el agente. Si la cámara no
+responde dentro de su límite, el turno continúa en modo audio, registra
+`VISION_UNAVAILABLE` y no inventa contexto visual.
+
 Indicadores: azul significa modo inteligente listo, verde grabación, naranja
 procesamiento, blanco control web y rojo parada de emergencia.
 

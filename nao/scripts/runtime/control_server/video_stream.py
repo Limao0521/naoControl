@@ -18,6 +18,7 @@ import time
 import argparse
 import sys
 from BaseHTTPServer import HTTPServer, BaseHTTPRequestHandler
+from SocketServer import ThreadingMixIn
 from naoqi import ALProxy
 import numpy as np
 import cv2
@@ -86,6 +87,12 @@ class MJPEGHandler(BaseHTTPRequestHandler):
             # Framerate más adaptativo basado en el FPS configurado
             fps = args.fps if args else 30
             time.sleep(1.0 / (fps * 1.2))  # Slightly faster than capture rate
+
+
+class ThreadedHTTPServer(ThreadingMixIn, HTTPServer):
+    """Do not let one persistent MJPEG reader block the agent snapshot request."""
+    daemon_threads = True
+    allow_reuse_address = True
 
 
 def grabber(video_proxy, client_name, server_ip, server_port, fps, resolution):
@@ -231,7 +238,7 @@ def main():
     # Iniciar servidor HTTP MJPEG
     logger.info("Iniciando servidor HTTP MJPEG en puerto {}...".format(args.http_port))
     try:
-        http_server = HTTPServer(('', args.http_port), MJPEGHandler)
+        http_server = ThreadedHTTPServer(('', args.http_port), MJPEGHandler)
         logger.info("Servidor MJPEG listo en http://localhost:{}/video.mjpeg".format(args.http_port))
         http_server.serve_forever()
     except KeyboardInterrupt:

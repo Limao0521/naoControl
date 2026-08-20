@@ -51,3 +51,25 @@ async def test_audio_event_executes_policy_tools_then_speaks(caplog, capsys):
     assert "transcript='¿Qué color tiene?'" in caplog.text
     assert "action=set_led status=completed" in caplog.text
     assert "TRANSCRIPTION" in capsys.readouterr().out
+
+
+@pytest.mark.asyncio
+async def test_audio_event_continues_without_vision_when_camera_times_out(caplog):
+    robot = FakeRobot()
+    nemotron = FakeNemotron()
+
+    async def unavailable_camera():
+        raise TimeoutError("camera unavailable")
+
+    host = AgentHost(robot, nemotron, image_provider=unavailable_camera, registry={
+        "actions": {
+            "set_led": {"risk": "low", "groups": ["FaceLeds"], "colors": ["red"]},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    with caplog.at_level(logging.WARNING):
+        await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-camera"})
+
+    assert "VISION_UNAVAILABLE turn=i-camera" in caplog.text
+    assert robot.actions[-1] == ("say", {"text": "La botella es roja."})

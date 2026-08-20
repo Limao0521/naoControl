@@ -147,16 +147,17 @@ class NemotronClient:
         raise RuntimeError("unreachable NVIDIA retry state")
 
     async def perceive(
-        self, audio_wav: bytes, image: bytes, image_media_type: str = "image/jpeg"
+        self, audio_wav: bytes, image: bytes | None, image_media_type: str = "image/jpeg"
     ) -> Perception:
         content = [
             {"type": "audio_url", "audio_url": {
                 "url": "data:audio/wav;base64," + base64.b64encode(audio_wav).decode("ascii")
             }},
-            {"type": "image_url", "image_url": {
-                "url": "data:" + image_media_type + ";base64," + base64.b64encode(image).decode("ascii")
-            }},
         ]
+        if image:
+            content.append({"type": "image_url", "image_url": {
+                "url": "data:" + image_media_type + ";base64," + base64.b64encode(image).decode("ascii")
+            }})
         response = await self._post({
             "model": self.omni_model,
             "messages": [

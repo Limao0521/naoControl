@@ -28,12 +28,19 @@ class AgentHost:
     async def handle_audio(self, payload: dict) -> None:
         interaction_id = payload.get("interaction_id", "unknown")
         audio = base64.b64decode(payload["audio_b64"])
-        image = self.image_provider()
-        if inspect.isawaitable(image):
-            image = await image
+        try:
+            image = self.image_provider()
+            if inspect.isawaitable(image):
+                image = await image
+        except Exception as error:
+            logger.warning(
+                "VISION_UNAVAILABLE turn=%s error=%s: %s",
+                interaction_id, type(error).__name__, error,
+            )
+            image = None
         logger.info(
             "turn=%s media audio_bytes=%d image_bytes=%d",
-            interaction_id, len(audio), len(image),
+            interaction_id, len(audio), len(image or b""),
         )
         logger.info(
             "turn=%s audio_diagnostics=%r", interaction_id,
