@@ -106,7 +106,11 @@ class NemotronClient:
         )
 
     async def _post(self, body: dict) -> httpx.Response:
-        response = await self.client.post("/chat/completions", json=body)
+        try:
+            response = await self.client.post("/chat/completions", json=body)
+        except httpx.ReadTimeout:
+            await asyncio.sleep(0.25)
+            return await self.client.post("/chat/completions", json=body)
         if response.status_code in (502, 503, 504):
             await asyncio.sleep(0.25)
             response = await self.client.post("/chat/completions", json=body)
