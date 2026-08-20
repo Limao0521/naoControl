@@ -13,6 +13,8 @@ La instalación del robot vive en `/home/nao/naoControl`. Sus logs están en
 ## Operación
 
 1. Iniciar el robot con `sh /home/nao/naoControl/nao/scripts/runtime/start_nemotron.sh`.
+   La interfaz web queda disponible en `http://<ip-del-nao>:3000` y se conecta
+   al WebSocket de control del mismo robot en el puerto `6671`.
 2. En el PC, desde la raíz del repositorio, ejecutar
    `.venv\\Scripts\\python.exe -m nao_gateway.main`.
 3. Mantener presionado el bumper izquierdo 1.5 s para entrar o salir del modo inteligente.

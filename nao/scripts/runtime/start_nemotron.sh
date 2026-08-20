@@ -24,6 +24,7 @@ start_service() {
 }
 
 start_service control python "$RUNTIME/control_server/server.py"
+start_service web sh -c "cd '$BASE/NaoControlReact/build' && exec python -m SimpleHTTPServer 3000"
 start_service camera python "$RUNTIME/control_server/video_stream.py" \
     --nao_ip 127.0.0.1 --server_ip 169.254.151.5 --server_port 6666 \
     --http_port 8080 --fps 5 --resolution 1
