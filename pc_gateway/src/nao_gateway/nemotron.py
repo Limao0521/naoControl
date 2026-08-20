@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import base64
 import asyncio
+import ast
 import json
 import logging
 from typing import Any
@@ -22,7 +23,8 @@ DECISION_SYSTEM_PROMPT = (
     "Eres el cerebro conversacional de NAO. Responde breve y amablemente en español. "
     "Usa solo las herramientas proporcionadas y nunca inventes una acción o información "
     "visual. Si hay incertidumbre, dilo. Devuelve exclusivamente JSON con speech y "
-    "tool_calls; speech será pronunciado por NAO."
+    "tool_calls; speech será pronunciado por NAO. No uses Markdown. Ejemplo exacto: "
+    "{\"speech\":\"Hola\",\"tool_calls\":[]}."
 )
 
 
@@ -52,10 +54,21 @@ def _json_content(response: httpx.Response) -> dict[str, Any]:
     content = message.get("content", "").strip()
     if content.startswith("```"):
         content = content.split("\n", 1)[1].rsplit("```", 1)[0]
-    start, end = content.find("{"), content.rfind("}")
-    if start < 0 or end < start:
-        raise ValueError("Nemotron response did not contain JSON")
-    return json.loads(content[start:end + 1])
+    decoder = json.JSONDecoder()
+    for start, character in enumerate(content):
+        if character != "{":
+            continue
+        fragment = content[start:]
+        try:
+            value, _ = decoder.raw_decode(fragment)
+        except json.JSONDecodeError:
+            try:
+                value = ast.literal_eval(fragment)
+            except (SyntaxError, ValueError):
+                continue
+        if isinstance(value, dict):
+            return value
+    raise ValueError("Nemotron response did not contain a valid object")
 
 
 def _normalize_string_list(value: Any) -> list[str]:
@@ -137,8 +150,8 @@ class NemotronClient:
                 {"role": "system", "content": DECISION_SYSTEM_PROMPT},
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
             ],
-            "temperature": 0.1,
-            "max_tokens": 512,
+            "temperature": 0,
+            "max_tokens": 180,
             "response_format": {"type": "json_object"},
         })
         data = _json_content(response)

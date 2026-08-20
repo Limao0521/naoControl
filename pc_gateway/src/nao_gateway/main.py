@@ -37,7 +37,8 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
     try:
         while True:
             message_type, payload = await robot.events.get()
-            print(f"Robot event: {message_type}")
+            if message_type != "heartbeat_result":
+                print(f"Robot event: {message_type}")
             if message_type == "audio_result":
                 try:
                     await host.handle_audio(payload)

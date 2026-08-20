@@ -79,6 +79,40 @@ async def test_decision_normalizes_response_only_shape_to_safe_speech():
 
 
 @pytest.mark.asyncio
+async def test_decision_extracts_first_json_object_when_model_appends_text():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": (
+                '{"speech":"Hola","tool_calls":[]}{"debug":"ignored"}'
+            )}}]
+        })
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    decision = await client.decide("Hola", "Una mesa", [])
+
+    assert decision.speech == "Hola"
+
+
+@pytest.mark.asyncio
+async def test_decision_accepts_safe_python_dict_fallback():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": "{'speech': 'Hola', 'tool_calls': []}"}}]
+        })
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert (await client.decide("Hola", "Una mesa", [])).speech == "Hola"
+
+
+@pytest.mark.asyncio
 async def test_perception_retries_one_transient_nvidia_failure():
     attempts = 0
 
