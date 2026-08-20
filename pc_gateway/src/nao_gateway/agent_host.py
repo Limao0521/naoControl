@@ -87,9 +87,16 @@ class AgentHost:
                 logger.warning("turn=%s rejected_tool=%s reason=%s", interaction_id, call.name, error)
                 continue
             result = await self.robot.execute(command["action"], command["arguments"])
-            logger.info("turn=%s action=%s status=%s", interaction_id, command["action"], result.get("status"))
+            logger.info(
+                "turn=%s action=%s arguments=%r status=%s reason=%s",
+                interaction_id, command["action"], command["arguments"],
+                result.get("status"), result.get("reason"),
+            )
         if decision.speech:
             speech_policy = PolicyEngine(self.registry)
             command = speech_policy.authorize("say", {"text": decision.speech[:500]})
             result = await self.robot.execute(command["action"], command["arguments"])
-            logger.info("turn=%s action=say status=%s", interaction_id, result.get("status"))
+            logger.info(
+                "turn=%s action=say status=%s reason=%s",
+                interaction_id, result.get("status"), result.get("reason"),
+            )

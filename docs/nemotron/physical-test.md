@@ -73,6 +73,13 @@ Las acciones se solicitan mediante el tool calling nativo de Nemotron. Por
 ejemplo, una orden de sentarse debe producir `set_posture` con `posture: Sit`;
 la respuesta hablada nunca se toma como autorización para mover el robot.
 
+Cada resultado de acción registra ahora el nombre, los argumentos no sensibles,
+el estado y la razón de rechazo. Para una orden de postura debe verse en el PC
+una línea como `action=set_posture arguments={'posture': 'Stand', 'speed': 0.3}
+status=completed reason=None`. Si aparece `status=rejected`, la misma razón se
+imprime también en `intelligence.log`; usar ese valor antes de cambiar el
+registro de acciones o los límites físicos.
+
 Ante una saturación temporal de NVIDIA (`ReadTimeout`, 502, 503 o 504), el PC
 reintenta hasta tres veces con esperas de 1 y 2 segundos. El log identifica la
 etapa afectada como `PERCEPTION_FAILED` (audio/imagen) o `DECISION_FAILED`

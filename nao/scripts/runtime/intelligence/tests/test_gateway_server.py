@@ -92,7 +92,7 @@ def test_unsigned_command_is_rejected_without_execution():
     assert executor.commands == []
 
 
-def test_signed_command_executes_allowlisted_action():
+def test_signed_command_executes_allowlisted_action(capsys):
     executor = FakeExecutor()
     core = GatewayCore(b"shared-secret", executor, now_ms=lambda: 1000)
     envelope = sign_envelope(
@@ -104,6 +104,24 @@ def test_signed_command_executes_allowlisted_action():
 
     assert result["payload"]["status"] == "completed"
     assert executor.commands == [{"action": "say", "arguments": {"text": "Hola"}}]
+    assert "GATEWAY message=command status=completed" in capsys.readouterr().out
+
+
+def test_rejected_command_logs_rejection_reason(capsys):
+    class RejectingExecutor(object):
+        def execute(self, command):
+            return {"status": "rejected", "reason": "invalid_posture"}
+
+    core = GatewayCore(b"shared-secret", RejectingExecutor(), now_ms=lambda: 1000)
+    envelope = sign_envelope(
+        unsigned("command", "message-rejected", {"action": "set_posture", "arguments": {}}),
+        b"shared-secret",
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["payload"]["reason"] == "invalid_posture"
+    assert "GATEWAY message=command status=rejected reason=invalid_posture" in capsys.readouterr().out
 
 
 def test_heartbeat_has_a_distinct_result_type():

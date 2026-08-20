@@ -61,7 +61,11 @@ class GatewayCore(object):
         except Exception as error:
             result = {"status": "rejected", "reason": str(error)}
         if message_type != "heartbeat":
-            print("GATEWAY message={} status={}".format(message_type, result.get("status")))
+            print(
+                "GATEWAY message={} status={} reason={}".format(
+                    message_type, result.get("status"), result.get("reason")
+                )
+            )
         return self.envelope(response_type, result)
 
 
