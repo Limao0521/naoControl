@@ -35,7 +35,19 @@ class AgentHost:
             "turn=%s media audio_bytes=%d image_bytes=%d",
             interaction_id, len(audio), len(image),
         )
-        perception = await self.nemotron.perceive(audio, image)
+        try:
+            perception = await self.nemotron.perceive(audio, image)
+        except Exception as error:
+            logger.error(
+                "TRANSCRIPTION_FAILED turn=%s error=%s: %s",
+                interaction_id, type(error).__name__, error,
+            )
+            raise
+        print(
+            "TRANSCRIPTION turn={} text={!r}".format(
+                interaction_id, perception.transcript or "(vacía)"
+            )
+        )
         logger.info(
             "turn=%s perception transcript=%r scene=%r uncertainties=%r",
             interaction_id, perception.transcript, perception.scene_summary,

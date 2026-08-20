@@ -29,7 +29,7 @@ class FakeNemotron(object):
 
 
 @pytest.mark.asyncio
-async def test_audio_event_executes_policy_tools_then_speaks(caplog):
+async def test_audio_event_executes_policy_tools_then_speaks(caplog, capsys):
     robot = FakeRobot()
     nemotron = FakeNemotron()
     host = AgentHost(robot, nemotron, image_provider=lambda: b"jpeg", registry={
@@ -50,3 +50,4 @@ async def test_audio_event_executes_policy_tools_then_speaks(caplog):
     assert [tool["name"] for tool in nemotron.tools] == ["set_led"]
     assert "transcript='¿Qué color tiene?'" in caplog.text
     assert "action=set_led status=completed" in caplog.text
+    assert "TRANSCRIPTION" in capsys.readouterr().out
