@@ -12,14 +12,17 @@ La instalación del robot vive en `/home/nao/naoControl`. Sus logs están en
 
 ## Operación
 
-1. Iniciar el robot con `sh /home/nao/naoControl/nao/scripts/runtime/start_nemotron.sh`.
-   La interfaz web queda disponible en `http://<ip-del-nao>:3000` y se conecta
+1. Al reiniciar, `autoload.ini` ejecuta el launcher residente. Con el sistema
+   detenido, mantener el sensor táctil central de la cabeza durante 3 segundos
+   inicia web control, cámara y gateway Nemotron juntos. Otra pulsación larga
+   los detiene para dejar el robot preparado para Choregraphe.
+2. La interfaz web queda disponible en `http://<ip-del-nao>:3000` y se conecta
    al WebSocket de control del mismo robot en el puerto `6671`.
-2. En el PC, desde la raíz del repositorio, ejecutar
+3. En el PC, desde la raíz del repositorio, ejecutar
    `.venv\\Scripts\\python.exe -m nao_gateway.main`.
-3. Mantener presionado el bumper izquierdo 1.5 s para entrar o salir del modo inteligente.
-4. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
-5. Presionar ambos bumpers para solicitar parada de emergencia.
+4. Mantener presionado el bumper izquierdo 1.5 s para entrar o salir del modo inteligente.
+5. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
+6. Presionar ambos bumpers para solicitar parada de emergencia.
 
 Para arrancar los servicios del robot y ver sus logs por SSH en tiempo real:
 
