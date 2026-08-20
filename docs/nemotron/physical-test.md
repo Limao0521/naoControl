@@ -10,6 +10,26 @@
 La instalación del robot vive en `/home/nao/naoControl`. Sus logs están en
 `/home/nao/logs/naoControl` y sus PID en `/home/nao/run/naoControl`.
 
+## Despliegue desde Windows
+
+Desde la raíz del repositorio, una sola orden empaqueta el runtime del robot,
+la configuración no secreta y la web compilada; los copia al NAO, conserva
+`robot_gateway.secret` existente y valida los módulos Python críticos:
+
+```powershell
+.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141
+```
+
+Para que el mismo comando arranque control web, cámara y gateway al terminar:
+
+```powershell
+.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141 -StartServices
+```
+
+El script nunca transfiere `.env`, `.git`, `.venv` ni la clave NVIDIA y tampoco
+modifica `autoload.ini`. Sin `-StartServices`, el launcher táctil sigue siendo
+el responsable de iniciar los servicios con la presión larga central.
+
 ## Operación
 
 1. Al reiniciar, `autoload.ini` ejecuta el launcher residente. Con el sistema

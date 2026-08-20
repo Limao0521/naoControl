@@ -104,6 +104,18 @@ naoControl/
 
 ## 🔧 Requisitos
 
+## 🚀 Despliegue actual NAO + Nemotron
+
+Desde PowerShell, en la raíz del repositorio, ejecutar:
+
+```powershell
+.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141
+```
+
+Añadir `-StartServices` si se desea iniciar los servicios inmediatamente tras
+el despliegue. El script preserva el secreto del robot y no copia `.env` ni las
+credenciales NVIDIA. La guía operativa actual está en `docs/nemotron/physical-test.md`.
+
 ### En el Robot NAO
 - **NAO V6** con NAOqi 2.8
 - **Python 2.7** (preinstalado)
