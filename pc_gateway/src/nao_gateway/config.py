@@ -23,7 +23,7 @@ class GatewaySettings:
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str]) -> "GatewaySettings":
-        required = ("NVIDIA_API_KEY", "NVIDIA_ASR_URL", "NAO_GATEWAY_SECRET")
+        required = ("NVIDIA_API_KEY", "NAO_GATEWAY_SECRET")
         missing = [name for name in required if not environ.get(name, "").strip()]
         if missing:
             raise ConfigurationError(
@@ -33,10 +33,10 @@ class GatewaySettings:
         base_url = environ.get(
             "NVIDIA_BASE_URL", "https://integrate.api.nvidia.com/v1"
         ).rstrip("/")
-        asr_url = environ["NVIDIA_ASR_URL"].strip()
+        asr_url = environ.get("NVIDIA_ASR_URL", "").strip()
         if urlparse(base_url).scheme != "https":
             raise ConfigurationError("NVIDIA_BASE_URL must use HTTPS")
-        if urlparse(asr_url).scheme != "https":
+        if asr_url and urlparse(asr_url).scheme != "https":
             raise ConfigurationError("NVIDIA_ASR_URL must use HTTPS")
 
         return cls(

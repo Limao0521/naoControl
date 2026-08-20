@@ -37,3 +37,12 @@ def test_settings_use_documented_nemotron_defaults() -> None:
     assert settings.agent_model == "nvidia/nemotron-3-nano-30b-a3b"
     assert settings.vision_model == "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"
     assert settings.robot_url == "ws://nao.local:6674"
+
+
+def test_omni_perception_does_not_require_separate_asr_endpoint() -> None:
+    environment = valid_environment()
+    del environment["NVIDIA_ASR_URL"]
+
+    settings = GatewaySettings.from_env(environment)
+
+    assert settings.asr_url == ""
