@@ -28,6 +28,7 @@ async def test_perception_sends_synchronized_audio_and_image():
 
     assert captured["messages"][0]["role"] == "system"
     assert "evidencia visible" in captured["messages"][0]["content"]
+    assert captured["response_format"] == {"type": "json_object"}
     content = captured["messages"][1]["content"]
     assert [item["type"] for item in content] == ["input_audio", "image_url"]
     assert result.transcript == "¿Qué ves?"
@@ -53,9 +54,28 @@ async def test_decision_rejects_unknown_tool_shape():
 
     assert captured["messages"][0]["role"] == "system"
     assert "cerebro conversacional" in captured["messages"][0]["content"]
+    assert captured["response_format"] == {"type": "json_object"}
     assert decision.speech == "Hola"
     assert decision.tool_calls[0].name == "say"
     assert decision.tool_calls[0].arguments == {"text": "Hola"}
+
+
+@pytest.mark.asyncio
+async def test_decision_normalizes_response_only_shape_to_safe_speech():
+    def handler(request):
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"response":"Hola desde NAO"}'}}]
+        })
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    decision = await client.decide("Hola", "Una mesa", [])
+
+    assert decision.speech == "Hola desde NAO"
+    assert decision.tool_calls == []
 
 
 @pytest.mark.asyncio

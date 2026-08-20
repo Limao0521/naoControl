@@ -66,6 +66,18 @@ def _normalize_string_list(value: Any) -> list[str]:
     return list(value)
 
 
+def _normalize_decision(data: dict[str, Any]) -> dict[str, Any]:
+    """Accept a text-only model response without turning it into an action."""
+    if "speech" not in data:
+        for key in ("response", "/response", "answer", "text"):
+            if isinstance(data.get(key), str):
+                data["speech"] = data[key]
+                break
+    data.setdefault("speech", "")
+    data.setdefault("tool_calls", [])
+    return data
+
+
 class NemotronClient:
     def __init__(
         self, api_key: str, base_url: str, agent_model: str, omni_model: str,
@@ -106,6 +118,7 @@ class NemotronClient:
             ],
             "temperature": 0,
             "max_tokens": 512,
+            "response_format": {"type": "json_object"},
         })
         data = _json_content(response)
         data["objects"] = _normalize_string_list(data.get("objects"))
@@ -126,9 +139,11 @@ class NemotronClient:
             ],
             "temperature": 0.1,
             "max_tokens": 512,
+            "response_format": {"type": "json_object"},
         })
         data = _json_content(response)
-        for call in data.get("tool_calls", []):
+        data = _normalize_decision(data)
+        for call in data["tool_calls"]:
             if "arguments" not in call and "args" in call:
                 args = call.pop("args")
                 if isinstance(args, dict):
