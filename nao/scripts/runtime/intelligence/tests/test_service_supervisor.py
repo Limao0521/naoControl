@@ -9,7 +9,7 @@ def test_service_supervisor_requires_every_deployed_service_pid():
         "/robot/run/naoControl/intelligence.pid": "14",
     }
     supervisor = NemotronServiceSupervisor(
-        base="/robot", read_file=lambda path: pids[path],
+        base="/robot/naoControl", read_file=lambda path: pids[path],
         is_alive=lambda pid: pid in (11, 12, 13, 14),
     )
 
@@ -23,12 +23,12 @@ def test_service_supervisor_requires_every_deployed_service_pid():
 def test_service_supervisor_delegates_start_and_stop_to_deployed_scripts():
     calls = []
     supervisor = NemotronServiceSupervisor(
-        base="/robot", runner=lambda args: calls.append(args) or 0,
+        base="/robot/naoControl", runner=lambda args: calls.append(args) or 0,
     )
 
     assert supervisor.start() is True
     assert supervisor.stop() is True
     assert calls == [
-        ["sh", "/robot/nao/scripts/runtime/start_nemotron.sh"],
-        ["sh", "/robot/nao/scripts/runtime/stop_nemotron.sh"],
+        ["sh", "/robot/naoControl/nao/scripts/runtime/start_nemotron.sh"],
+        ["sh", "/robot/naoControl/nao/scripts/runtime/stop_nemotron.sh"],
     ]
