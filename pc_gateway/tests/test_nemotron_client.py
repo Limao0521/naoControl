@@ -157,3 +157,29 @@ async def test_perception_retries_one_nvidia_read_timeout():
 
     assert (await client.perceive(b"wav", b"jpg")).transcript == "Hola"
     assert attempts == 2
+
+
+@pytest.mark.asyncio
+async def test_perception_retries_busy_nvidia_endpoint_twice_with_backoff(monkeypatch):
+    attempts = 0
+
+    async def no_delay(seconds):
+        assert seconds in (1, 2)
+
+    def handler(request):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise httpx.ReadTimeout("upstream busy", request=request)
+        return httpx.Response(200, json={"choices": [{"message": {"content": json.dumps({
+            "transcript": "Hola", "scene_summary": "Mesa", "objects": [], "uncertainties": []
+        })}}]})
+
+    monkeypatch.setattr("nao_gateway.nemotron.asyncio.sleep", no_delay)
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    assert (await client.perceive(b"wav", b"jpg")).transcript == "Hola"
+    assert attempts == 3

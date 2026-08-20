@@ -43,7 +43,7 @@ class AgentHost:
             perception = await self.nemotron.perceive(audio, image)
         except Exception as error:
             logger.error(
-                "TRANSCRIPTION_FAILED turn=%s error=%s: %s",
+                "PERCEPTION_FAILED turn=%s error=%s: %s",
                 interaction_id, type(error).__name__, error,
             )
             raise
@@ -57,9 +57,16 @@ class AgentHost:
             interaction_id, perception.transcript, perception.scene_summary,
             perception.uncertainties,
         )
-        decision = await self.nemotron.decide(
-            perception.transcript, perception.scene_summary, self.tool_schemas()
-        )
+        try:
+            decision = await self.nemotron.decide(
+                perception.transcript, perception.scene_summary, self.tool_schemas()
+            )
+        except Exception as error:
+            logger.error(
+                "DECISION_FAILED turn=%s error=%s: %s",
+                interaction_id, type(error).__name__, error,
+            )
+            raise
         logger.info(
             "turn=%s decision speech=%r tools=%r",
             interaction_id, decision.speech,

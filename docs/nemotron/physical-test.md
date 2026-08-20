@@ -49,6 +49,12 @@ de razonamiento para las respuestas JSON breves. Así se reserva la salida para
 `transcript`/`scene_summary` y para `{speech, tool_calls}`, en lugar de agotarla
 en la traza de razonamiento.
 
+Ante una saturación temporal de NVIDIA (`ReadTimeout`, 502, 503 o 504), el PC
+reintenta hasta tres veces con esperas de 1 y 2 segundos. El log identifica la
+etapa afectada como `PERCEPTION_FAILED` (audio/imagen) o `DECISION_FAILED`
+(respuesta estructurada), para no confundir una indisponibilidad de nube con una
+captura de micrófono fallida.
+
 Indicadores: azul significa modo inteligente listo, verde grabación, naranja
 procesamiento, blanco control web y rojo parada de emergencia.
 

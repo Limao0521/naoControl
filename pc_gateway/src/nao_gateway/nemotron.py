@@ -100,6 +100,8 @@ def _normalize_decision(data: dict[str, Any]) -> dict[str, Any]:
 
 
 class NemotronClient:
+    MAX_ATTEMPTS = 3
+
     def __init__(
         self, api_key: str, base_url: str, agent_model: str, omni_model: str,
         transport: httpx.AsyncBaseTransport | None = None,
@@ -109,20 +111,40 @@ class NemotronClient:
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
-            timeout=httpx.Timeout(90, connect=10),
+            timeout=httpx.Timeout(60, connect=10),
             transport=transport,
         )
 
-    async def _post(self, body: dict) -> httpx.Response:
-        try:
-            response = await self.client.post("/chat/completions", json=body)
-        except httpx.ReadTimeout:
-            await asyncio.sleep(0.25)
-            return await self.client.post("/chat/completions", json=body)
-        if response.status_code in (502, 503, 504):
-            await asyncio.sleep(0.25)
-            response = await self.client.post("/chat/completions", json=body)
-        return response
+    async def _post(self, body: dict, stage: str) -> httpx.Response:
+        """Retry temporary NVIDIA capacity failures with bounded backoff."""
+        retry_statuses = (502, 503, 504)
+        for attempt in range(1, self.MAX_ATTEMPTS + 1):
+            try:
+                response = await self.client.post("/chat/completions", json=body)
+            except httpx.ReadTimeout:
+                if attempt == self.MAX_ATTEMPTS:
+                    logger.error(
+                        "NVIDIA timeout stage=%s model=%s attempts=%d",
+                        stage, body["model"], attempt,
+                    )
+                    raise
+                delay = 2 ** (attempt - 1)
+                logger.warning(
+                    "NVIDIA timeout stage=%s model=%s attempt=%d/%d retry_in_s=%d",
+                    stage, body["model"], attempt, self.MAX_ATTEMPTS, delay,
+                )
+                await asyncio.sleep(delay)
+                continue
+            if response.status_code not in retry_statuses or attempt == self.MAX_ATTEMPTS:
+                return response
+            delay = 2 ** (attempt - 1)
+            logger.warning(
+                "NVIDIA temporary_status=%d stage=%s model=%s attempt=%d/%d retry_in_s=%d",
+                response.status_code, stage, body["model"], attempt,
+                self.MAX_ATTEMPTS, delay,
+            )
+            await asyncio.sleep(delay)
+        raise RuntimeError("unreachable NVIDIA retry state")
 
     async def perceive(
         self, audio_wav: bytes, image: bytes, image_media_type: str = "image/jpeg"
@@ -145,7 +167,7 @@ class NemotronClient:
             "max_tokens": 512,
             "response_format": {"type": "json_object"},
             "chat_template_kwargs": {"enable_thinking": False},
-        })
+        }, "perception")
         data = _json_content(response)
         data["objects"] = _normalize_string_list(data.get("objects"))
         data["uncertainties"] = _normalize_string_list(data.get("uncertainties"))
@@ -167,7 +189,7 @@ class NemotronClient:
             "max_tokens": 180,
             "response_format": {"type": "json_object"},
             "chat_template_kwargs": {"enable_thinking": False},
-        })
+        }, "decision")
         data = _json_content(response)
         data = _normalize_decision(data)
         for call in data["tool_calls"]:
