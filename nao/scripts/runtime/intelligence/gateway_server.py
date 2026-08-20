@@ -42,11 +42,11 @@ class GatewayCore(object):
 
     def handle_message(self, envelope):
         response_type = "command_result"
+        message_type = envelope.get("message_type", "invalid") if isinstance(envelope, dict) else "invalid"
         try:
             payload = verify_envelope(
                 envelope, self.secret, self.now_ms(), self.replay_guard
             )
-            message_type = envelope.get("message_type")
             if message_type == "heartbeat":
                 result = {"status": "ok"}
                 response_type = "heartbeat_result"
@@ -60,6 +60,7 @@ class GatewayCore(object):
                 result = {"status": "rejected", "reason": "unknown_message_type"}
         except Exception as error:
             result = {"status": "rejected", "reason": str(error)}
+        print("GATEWAY message={} status={}".format(message_type, result.get("status")))
         return self.envelope(response_type, result)
 
 
@@ -118,6 +119,7 @@ def _load_runtime():
     class GatewaySocket(WebSocket):
         def handleConnected(self):
             clients.add(self)
+            print("GATEWAY pc_connected clients={}".format(len(clients)))
             self.sendMessage(json.dumps(core.envelope("hello_result", {
                 "status": "ready", "mode": manager.mode, "entry_reasons": reasons
             })))
@@ -131,6 +133,7 @@ def _load_runtime():
 
         def handleClose(self):
             clients.discard(self)
+            print("GATEWAY pc_disconnected clients={}".format(len(clients)))
 
     def write_mode():
         path = os.environ.get("NAO_CONTROL_MODE_FILE", "/tmp/nao_control_mode.json")
@@ -148,6 +151,7 @@ def _load_runtime():
             right = memory.getData("RightBumperPressed") == 1.0
             events = manager.handle_bumper(left, right, now)
             for event in events:
+                print("GATEWAY event={} mode={}".format(event.name, event.mode))
                 if event.name == "MODE_ENTER_REQUESTED":
                     facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
                     facade.say("Modo inteligente listo")
@@ -161,6 +165,7 @@ def _load_runtime():
                     facade.set_led_rgb("FaceLeds", 0.0, 1.0, 0.0)
                 elif event.name == "CAPTURE_FINISHED":
                     result = capture.stop(now)
+                    print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
                     facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)
                     send_all("audio_result", result)
                 elif event.name == "EMERGENCY_REQUESTED":
