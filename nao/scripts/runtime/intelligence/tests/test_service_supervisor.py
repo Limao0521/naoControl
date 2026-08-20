@@ -1,4 +1,5 @@
 from nao.scripts.runtime.intelligence.service_supervisor import NemotronServiceSupervisor
+from nao.scripts.runtime import launcher
 
 
 def test_service_supervisor_requires_every_deployed_service_pid():
@@ -32,3 +33,32 @@ def test_service_supervisor_delegates_start_and_stop_to_deployed_scripts():
         ["sh", "/robot/naoControl/nao/scripts/runtime/start_nemotron.sh"],
         ["sh", "/robot/naoControl/nao/scripts/runtime/stop_nemotron.sh"],
     ]
+
+
+def test_launcher_delegates_the_touch_transition_to_deployed_supervisor():
+    class FakeSupervisor(object):
+        def __init__(self):
+            self.running = False
+            self.calls = []
+
+        def is_running(self):
+            return self.running
+
+        def start(self):
+            self.calls.append("start")
+            self.running = True
+            return True
+
+        def stop(self):
+            self.calls.append("stop")
+            self.running = False
+            return True
+
+    target = launcher.RobustLauncher.__new__(launcher.RobustLauncher)
+    target.service_supervisor = FakeSupervisor()
+    target.services_running = False
+
+    assert target.start_services() is True
+    assert target.services_running is True
+    assert target.stop_services() is True
+    assert target.service_supervisor.calls == ["start", "stop"]

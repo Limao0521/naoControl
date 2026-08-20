@@ -14,6 +14,12 @@ import socket
 import sys
 from datetime import datetime
 
+RUNTIME_DIR = os.path.dirname(os.path.abspath(__file__))
+INTELLIGENCE_DIR = os.path.join(RUNTIME_DIR, "intelligence")
+if INTELLIGENCE_DIR not in sys.path:
+    sys.path.insert(0, INTELLIGENCE_DIR)
+from service_supervisor import NemotronServiceSupervisor
+
 # Compatibilidad con Python 2 para TimeoutExpired
 try:
     from subprocess import TimeoutExpired
@@ -55,6 +61,8 @@ try:
     NAOQI_ADVANCED = True
 except ImportError:
     NAOQI_ADVANCED = False
+    ALModule = object
+    ALBroker = None
 
 # Importar sistema de logging
 try:
@@ -103,48 +111,12 @@ IP_NAO     = "127.0.0.1"
 PORT_NAO   = 9559
 PRESS_HOLD = 3.0            # segundos mínimos de pulsación (3 o más)
 
-# === RUTAS DEL BACKEND MODULAR ===
-# Todo el backend vive dentro de control_server/
-BACKEND_DIR = "/home/nao/scripts/runtime/control_server"
-CONTROL_PY  = BACKEND_DIR + "/server.py"          # Servidor WebSocket modular
-LOGGER_PY   = BACKEND_DIR + "/logger.py"          # Sistema de logging
-CAMERA_PY   = BACKEND_DIR + "/video_stream.py"    # Streaming de video
-DATA_LOGGER = BACKEND_DIR + "/data_logger.py"     # Data logger CSV
-
-# Frontend y configuración HTTP
-WEB_DIR    = "/home/nao/Webs/ControllerWebServer"
-HTTP_PORT  = "8000"
-
-def get_server_ip():
-    """Obtiene automáticamente la IP del servidor (gateway de la red local)."""
-    try:
-        # Crear un socket para obtener la IP local del NAO
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        # Conectar a una IP externa (no se envía tráfico real)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        
-        # Obtener la IP del gateway (asumiendo que es la .1 de la red)
-        ip_parts = local_ip.split('.')
-        gateway_ip = '.'.join(ip_parts[:3]) + '.1'
-        
-        # Intentar hacer ping al gateway para verificar conectividad
-        response = os.system("ping -c 1 " + gateway_ip + " > /dev/null 2>&1")
-        if response == 0:
-            return gateway_ip
-        else:
-            # Si el gateway no responde, usar la IP base de la red + .100
-            return '.'.join(ip_parts[:3]) + '.100'
-    except Exception:
-        # IP por defecto si hay algún error
-        return "192.168.1.100"
-
 class RobustLauncher:
     """Launcher robusto que funciona con cualquier versión de NAOqi."""
     
     def __init__(self):
-        self.services_running = False
+        self.service_supervisor = NemotronServiceSupervisor()
+        self.services_running = self.service_supervisor.is_running()
         self.balancer_was_enabled = False
         self.pressed = False
         self.press_start = 0.0
@@ -442,8 +414,7 @@ class RobustLauncher:
             # Paso 3: Actualizar estado interno
             log("INFO", "Paso 3/3: Actualizando estado...", "CONTROL")
             try:
-                # Solo marcar como running si al menos algunos servicios están activos
-                if self.server_proc or self.camera_proc or self.http_proc:
+                if self.service_supervisor.is_running():
                     self.services_running = True
                     success_steps += 1
                     log("SUCCESS", "Estado actualizado - servicios activos", "CONTROL")
@@ -516,135 +487,30 @@ class RobustLauncher:
                 log("ERROR", "Cambio a modo control falló - manteniendo estado actual", "LAUNCHER")
     
     def start_services(self):
-        """Inicia todos los servicios de control."""
-        log("INFO", "Iniciando servicios...", "SERVICES")
-        services_started = 0
-        total_services = 4  # Incrementado para incluir el logger
-        
-        # Logger (debe iniciarse primero)
-        if not hasattr(self, 'logger_proc') or not self.logger_proc:
-            try:
-                log("INFO", "Iniciando logger centralizado...", "SERVICES")
-                self.logger_proc = subprocess.Popen(["python2", LOGGER_PY])
-                time.sleep(2)  # Dar tiempo al logger para inicializar
-                
-                if self.logger_proc.poll() is None:
-                    services_started += 1
-                    log("SUCCESS", "Logger iniciado en ws://localhost:6672", "SERVICES")
-                else:
-                    self.logger_proc = None
-                    log("ERROR", "Logger falló al iniciar", "SERVICES")
-            except Exception as e:
-                log("ERROR", "Error iniciando logger: {}".format(e), "SERVICES")
-                self.logger_proc = None
-        
-        # Control server
-        if not self.server_proc:
-            try:
-                self.server_proc = subprocess.Popen(["python2", CONTROL_PY])
-                time.sleep(3)
-                
-                if self.server_proc.poll() is None:
-                    services_started += 1
-                    log("SUCCESS", "Control server iniciado", "SERVICES")
-                else:
-                    self.server_proc = None
-                    log("ERROR", "Control server falló", "SERVICES")
-            except Exception as e:
-                log("ERROR", "Error iniciando control server: " + str(e), "SERVICES")
-                self.server_proc = None
-        else:
-            services_started += 1
-        
-        # Cámara
-        if not self.camera_proc:
-            try:
-                server_ip = get_server_ip()
-                self.camera_proc = subprocess.Popen([
-                    "python2", CAMERA_PY,
-                    "--server_ip", server_ip,
-                    "--nao_ip", IP_NAO,
-                    "--nao_port", str(PORT_NAO),
-                    "--http_port", "8080"
-                ])
-                time.sleep(2)
-                
-                if self.camera_proc.poll() is None:
-                    services_started += 1
-                    log("SUCCESS", "Cámara iniciada", "SERVICES")
-                else:
-                    self.camera_proc = None
-                    log("ERROR", "Cámara falló", "SERVICES")
-            except Exception as e:
-                log("ERROR", "Error iniciando cámara: " + str(e), "SERVICES")
-                self.camera_proc = None
-        else:
-            services_started += 1
-        
-        # HTTP server
-        if not self.http_proc:
-            try:
-                self.http_proc = subprocess.Popen(
-                    ["python2", "-m", "SimpleHTTPServer", HTTP_PORT],
-                    cwd=WEB_DIR,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE
-                )
-                time.sleep(1)
-                
-                if self.http_proc.poll() is None:
-                    services_started += 1
-                    log("SUCCESS", "HTTP server iniciado", "SERVICES")
-                else:
-                    self.http_proc = None
-                    log("ERROR", "HTTP server falló", "SERVICES")
-            except Exception as e:
-                log("ERROR", "Error iniciando HTTP server: " + str(e), "SERVICES")
-                self.http_proc = None
-        else:
-            services_started += 1
-        
-        success = (services_started == total_services)
-        log("INFO", "Servicios iniciados: {}/{}".format(services_started, total_services), "SERVICES")
-        return success
+        """Inicia web, cámara y gateway Nemotron mediante el script desplegado."""
+        log("INFO", "Iniciando servicios desplegados...", "SERVICES")
+        if self.service_supervisor.is_running():
+            self.services_running = True
+            return True
+        try:
+            started = self.service_supervisor.start()
+            self.services_running = started and self.service_supervisor.is_running()
+            return self.services_running
+        except Exception as e:
+            log("ERROR", "Error iniciando servicios: " + str(e), "SERVICES")
+            self.services_running = False
+            return False
     
     def stop_services(self):
-        """Detiene todos los servicios."""
-        log("INFO", "Deteniendo servicios...", "SERVICES")
-        
-        processes = [
-            ("HTTP server", self.http_proc),
-            ("Cámara", self.camera_proc),
-            ("Control server", self.server_proc),
-            ("Logger", getattr(self, 'logger_proc', None))  # Agregar logger a la lista
-        ]
-        
-        for name, proc in processes:
-            if proc:
-                try:
-                    log("INFO", "Deteniendo {}...".format(name), "SERVICES")
-                    proc.terminate()
-                    wait_with_timeout(proc, 5)
-                    log("SUCCESS", "{} detenido".format(name), "SERVICES")
-                except TimeoutExpired:
-                    log("WARN", "Forzando cierre de {}...".format(name), "SERVICES")
-                    proc.kill()
-                except Exception as e:
-                    log("ERROR", "Error deteniendo {}: {}".format(name, str(e)), "SERVICES")
-        
-        self.http_proc = None
-        self.camera_proc = None
-        self.server_proc = None
-        self.logger_proc = None  # Resetear también el logger
-        
-        # Pausa adicional para asegurar limpieza completa de NAOqi
-        log("INFO", "Liberando recursos NAOqi...", "SERVICES")
-        time.sleep(3)  # Pausa más larga para limpieza completa
-        
-        # Verificar que la limpieza fue exitosa
-        self.verify_naoqi_cleanup()
-        
-        log("SUCCESS", "Todos los servicios detenidos y recursos liberados", "SERVICES")
+        """Detiene web, cámara y gateway Nemotron mediante el script desplegado."""
+        log("INFO", "Deteniendo servicios desplegados...", "SERVICES")
+        try:
+            stopped = self.service_supervisor.stop()
+            self.services_running = False
+            return stopped
+        except Exception as e:
+            log("ERROR", "Error deteniendo servicios: " + str(e), "SERVICES")
+            return False
     
     def run_polling_mode(self):
         """Ejecuta el launcher en modo polling."""
