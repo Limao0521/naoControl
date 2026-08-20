@@ -23,12 +23,12 @@ start_service() {
     echo "$name started: $(cat "$pid_file")"
 }
 
-start_service control python "$RUNTIME/control_server/server.py"
+start_service control python -u "$RUNTIME/control_server/server.py"
 start_service web sh -c "cd '$BASE/NaoControlReact/build' && exec python -m SimpleHTTPServer 3000"
-start_service camera python "$RUNTIME/control_server/video_stream.py" \
+start_service camera python -u "$RUNTIME/control_server/video_stream.py" \
     --nao_ip 127.0.0.1 --server_ip 169.254.151.5 --server_port 6666 \
     --http_port 8080 --fps 5 --resolution 1
-start_service intelligence python "$RUNTIME/intelligence/gateway_server.py"
+start_service intelligence python -u "$RUNTIME/intelligence/gateway_server.py"
 
 sleep 3
 for pid_file in "$PID_DIR"/*.pid; do
