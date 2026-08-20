@@ -196,6 +196,12 @@ class NAOFacade(object):
         if not self.posture:
             return False
         return self._call_succeeded(self.safe_call(self.posture.goToPosture, str(posture_name), speed))
+
+    def get_posture(self):
+        """Obtener postura actual para validar precondiciones de seguridad."""
+        if not self.posture:
+            return "Unknown"
+        return self.safe_call(self.posture.getPosture) or "Unknown"
     
     # === LED METHODS ===
     def set_led_rgb(self, group, r, g, b, duration=0.3):

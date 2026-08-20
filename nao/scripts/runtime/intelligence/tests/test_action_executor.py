@@ -30,12 +30,27 @@ class FakeFacade(object):
         self.calls.append(("run_behavior", name))
         return True
 
+    def set_led_rgb(self, group, red, green, blue, duration=0.3):
+        self.calls.append(("set_led_rgb", group, red, green, blue, duration))
+        return True
+
+    def go_to_posture(self, posture, speed):
+        self.calls.append(("go_to_posture", posture, speed))
+        return True
+
+    def set_angles(self, joint, angle, speed):
+        self.calls.append(("set_angles", joint, angle, speed))
+        return True
+
 
 REGISTRY = {
     "actions": {
         "say": {"max_text_length": 500},
         "run_behavior": {"allowed_postures": ["Stand"]},
         "stop_all": {},
+        "set_led": {},
+        "set_posture": {"allowed": ["Stand", "Sit", "Crouch"], "max_speed": 0.5},
+        "look": {"max_speed": 0.15, "yaw_range": [-1.0, 1.0], "pitch_range": [-0.5, 0.5]},
     },
     "behaviors": {"dance_siu": {"package": "siu-17777b/behavior_1"}},
 }
@@ -70,3 +85,33 @@ def test_emergency_stop_preempts_body_actions():
     result = SafetySupervisor(facade).emergency_stop("both_bumpers")
     assert facade.calls[:2] == [("stop_move",), ("stop_all_behaviors",)]
     assert result == {"status": "stopped", "reason": "both_bumpers"}
+
+
+def test_led_uses_named_safe_color():
+    facade = FakeFacade()
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "set_led", "arguments": {"group": "FaceLeds", "color": "blue"}}
+    )
+    assert result["status"] == "completed"
+    assert facade.calls == [("set_led_rgb", "FaceLeds", 0.0, 0.0, 1.0, 0.3)]
+
+
+def test_look_rejects_angle_outside_registry_range():
+    facade = FakeFacade()
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "look", "arguments": {"yaw": 2.0, "pitch": 0.0}}
+    )
+    assert result["status"] == "rejected"
+    assert facade.calls == []
+
+
+def test_look_moves_only_head_with_bounded_speed():
+    facade = FakeFacade()
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "look", "arguments": {"yaw": 0.4, "pitch": -0.2, "speed": 0.9}}
+    )
+    assert result["status"] == "completed"
+    assert facade.calls == [
+        ("set_angles", "HeadYaw", 0.4, 0.15),
+        ("set_angles", "HeadPitch", -0.2, 0.15),
+    ]

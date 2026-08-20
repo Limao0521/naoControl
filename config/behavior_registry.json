@@ -1,6 +1,10 @@
 {
   "version": 1,
   "behaviors": {
+    "wave": {"package": "animations/Stand/Gestures/Hey_1", "required_posture": "Stand", "timeout_ms": 10000},
+    "yes": {"package": "animations/Stand/Gestures/Yes_1", "required_posture": "Stand", "timeout_ms": 10000},
+    "no": {"package": "animations/Stand/Gestures/No_1", "required_posture": "Stand", "timeout_ms": 10000},
+    "thinking": {"package": "animations/Stand/BodyTalk/Thinking/ThinkingLoop_1", "required_posture": "Stand", "timeout_ms": 10000},
     "dance_siu": {"package": "siu-17777b/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
     "dance_gangnam": {"package": "gangnamstyle-0ff3ac/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},
     "dance_macarena": {"package": "macarena-original-055bea/behavior_1", "required_posture": "Stand", "timeout_ms": 30000},

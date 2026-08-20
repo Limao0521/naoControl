@@ -89,6 +89,8 @@ ipynb_checkpoints/
 !.env.example
 secrets.yml
 credentials.json
+config/robot_gateway.secret
+work/
 
 # Contenedores / empaquetadores
 docker-compose.override.yml
