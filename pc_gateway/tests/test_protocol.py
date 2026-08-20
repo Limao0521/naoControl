@@ -28,7 +28,7 @@ def test_invalid_envelopes_are_rejected(mutation: str) -> None:
     envelope = sign_envelope(UNSIGNED, b"test-secret")
     guard = ReplayGuard(100)
     if mutation == "expired":
-        verification_time = UNSIGNED["expires_at_ms"] + 1
+        verification_time = UNSIGNED["expires_at_ms"] + 120_001
     elif mutation == "replayed":
         verify_envelope(envelope, b"test-secret", NOW_MS, guard)
         verification_time = NOW_MS
@@ -52,3 +52,11 @@ def test_replay_guard_stays_bounded() -> None:
         verify_envelope(sign_envelope(envelope, b"test-secret"), b"test-secret", NOW_MS, guard)
 
     assert len(guard) == 2
+
+
+def test_accepts_a_one_minute_clock_offset() -> None:
+    envelope = sign_envelope(UNSIGNED, b"test-secret")
+
+    payload = verify_envelope(envelope, b"test-secret", NOW_MS + 60_000, ReplayGuard())
+
+    assert payload["action"] == "say"

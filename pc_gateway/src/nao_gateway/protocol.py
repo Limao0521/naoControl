@@ -12,6 +12,7 @@ from typing import Any
 
 
 PROTOCOL_VERSION = 1
+CLOCK_SKEW_TOLERANCE_MS = 120_000
 UNSIGNED_FIELDS = (
     "protocol_version",
     "message_type",
@@ -84,7 +85,8 @@ def verify_envelope(
     expires = envelope["expires_at_ms"]
     if not isinstance(issued, int) or not isinstance(expires, int) or expires <= issued:
         raise ProtocolError("invalid validity interval")
-    if now_ms < issued - 5_000 or now_ms > expires:
+    if (now_ms < issued - CLOCK_SKEW_TOLERANCE_MS or
+            now_ms > expires + CLOCK_SKEW_TOLERANCE_MS):
         raise ProtocolError("envelope expired or issued in the future")
     message_id = envelope["message_id"]
     if not isinstance(message_id, str) or not message_id:

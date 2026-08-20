@@ -28,3 +28,14 @@ def test_robot_rejects_replay():
     except protocol.ProtocolError:
         return
     raise AssertionError("replayed envelope was accepted")
+
+
+def test_robot_accepts_a_one_minute_clock_offset():
+    guard = protocol.ReplayGuard(100)
+    signed = protocol.sign_envelope(UNSIGNED, b"test-secret")
+
+    payload = protocol.verify_envelope(
+        signed, b"test-secret", NOW_MS + 60000, guard
+    )
+
+    assert payload["action"] == "say"

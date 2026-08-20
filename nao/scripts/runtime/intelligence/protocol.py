@@ -16,6 +16,7 @@ except NameError:
 
 
 PROTOCOL_VERSION = 1
+CLOCK_SKEW_TOLERANCE_MS = 120000
 UNSIGNED_FIELDS = (
     "protocol_version", "message_type", "message_id", "issued_at_ms",
     "expires_at_ms", "payload"
@@ -92,7 +93,8 @@ def verify_envelope(envelope, secret, now_ms, replay_guard):
     expires = envelope["expires_at_ms"]
     if not isinstance(issued, (int, long)) or not isinstance(expires, (int, long)):
         raise ProtocolError("invalid validity interval")
-    if expires <= issued or now_ms < issued - 5000 or now_ms > expires:
+    if (expires <= issued or now_ms < issued - CLOCK_SKEW_TOLERANCE_MS or
+            now_ms > expires + CLOCK_SKEW_TOLERANCE_MS):
         raise ProtocolError("envelope expired or issued in the future")
     message_id = envelope["message_id"]
     if not isinstance(message_id, basestring) or not message_id:
