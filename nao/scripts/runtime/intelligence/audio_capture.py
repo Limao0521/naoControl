@@ -3,7 +3,47 @@
 from __future__ import absolute_import
 
 import base64
+from io import BytesIO
 import os
+import struct
+import wave
+
+
+def _rms(frames, sample_width):
+    """Return PCM RMS without persisting or emitting any audio samples."""
+    count = len(frames) // sample_width
+    if not count:
+        return 0
+    if sample_width == 1:
+        values = [ord(value) - 128 for value in frames]
+    elif sample_width == 2:
+        values = struct.unpack("<{}h".format(count), frames)
+    elif sample_width == 4:
+        values = struct.unpack("<{}i".format(count), frames)
+    else:
+        return 0
+    return int((sum(value * value for value in values) / count) ** 0.5)
+
+
+def audio_diagnostics(audio):
+    """Return safe WAV metadata to diagnose silent microphone captures."""
+    details = {"bytes": len(audio)}
+    try:
+        source = wave.open(BytesIO(audio), "rb")
+    except Exception as error:
+        details["wav_error"] = type(error).__name__
+        return details
+    try:
+        details.update({
+            "channels": source.getnchannels(),
+            "sample_rate_hz": source.getframerate(),
+            "sample_width_bytes": source.getsampwidth(),
+            "frames": source.getnframes(),
+        })
+        details["rms"] = _rms(source.readframes(source.getnframes()), details["sample_width_bytes"])
+        return details
+    finally:
+        source.close()
 
 
 class _Files(object):
@@ -51,6 +91,7 @@ class AudioCapture(object):
             "interaction_id": self.interaction_id,
             "duration_ms": duration,
             "audio_b64": base64.b64encode(audio).decode("ascii"),
+            "audio_diagnostics": audio_diagnostics(audio),
         }
         self.files.remove(self.path)
         self.interaction_id = None

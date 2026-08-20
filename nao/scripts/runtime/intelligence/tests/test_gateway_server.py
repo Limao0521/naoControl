@@ -1,6 +1,8 @@
 import base64
+import io
+import wave
 
-from nao.scripts.runtime.intelligence.audio_capture import AudioCapture
+from nao.scripts.runtime.intelligence.audio_capture import AudioCapture, audio_diagnostics
 from nao.scripts.runtime.intelligence.gateway_server import GatewayCore
 from nao.scripts.runtime.intelligence.protocol import ReplayGuard, sign_envelope
 
@@ -61,6 +63,23 @@ def test_audio_capture_returns_bounded_wav_bytes():
     assert result["duration_ms"] == 800
     assert base64.b64decode(result["audio_b64"]) == b"RIFF-test-wav"
     assert files.data is None
+
+
+def test_audio_diagnostics_reports_wav_metadata_without_retaining_audio():
+    buffer = io.BytesIO()
+    wav = wave.open(buffer, "wb")
+    wav.setnchannels(1)
+    wav.setsampwidth(2)
+    wav.setframerate(16000)
+    wav.writeframes(b"\x01\x00" * 160)
+    wav.close()
+
+    details = audio_diagnostics(buffer.getvalue())
+
+    assert details == {
+        "bytes": len(buffer.getvalue()), "channels": 1, "sample_rate_hz": 16000,
+        "sample_width_bytes": 2, "frames": 160, "rms": 1,
+    }
 
 
 def test_unsigned_command_is_rejected_without_execution():

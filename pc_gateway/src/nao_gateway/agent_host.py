@@ -35,6 +35,10 @@ class AgentHost:
             "turn=%s media audio_bytes=%d image_bytes=%d",
             interaction_id, len(audio), len(image),
         )
+        logger.info(
+            "turn=%s audio_diagnostics=%r", interaction_id,
+            payload.get("audio_diagnostics", {}),
+        )
         try:
             perception = await self.nemotron.perceive(audio, image)
         except Exception as error:

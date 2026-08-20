@@ -13,6 +13,9 @@ from pydantic import TypeAdapter
 from pydantic.dataclasses import dataclass
 
 
+logger = logging.getLogger(__name__)
+
+
 PERCEPTION_SYSTEM_PROMPT = (
     "Eres el módulo de percepción multimodal de NAO. Transcribe el audio en español "
     "y describe solamente evidencia visible en la imagen. No inventes objetos ni "
@@ -51,7 +54,7 @@ class AgentDecision:
 def _json_content(response: httpx.Response) -> dict[str, Any]:
     response.raise_for_status()
     message = response.json()["choices"][0]["message"]
-    content = message.get("content", "").strip()
+    content = (message.get("content") or "").strip()
     if content.startswith("```"):
         content = content.split("\n", 1)[1].rsplit("```", 1)[0]
     decoder = json.JSONDecoder()
@@ -68,6 +71,11 @@ def _json_content(response: httpx.Response) -> dict[str, Any]:
                 continue
         if isinstance(value, dict):
             return value
+    logger.warning(
+        "NVIDIA response lacked JSON object finish_reason=%r content_chars=%d reasoning_chars=%d prefix=%r",
+        response.json()["choices"][0].get("finish_reason"), len(content),
+        len(message.get("reasoning") or ""), content[:160],
+    )
     raise ValueError("Nemotron response did not contain a valid object")
 
 
@@ -120,8 +128,8 @@ class NemotronClient:
         self, audio_wav: bytes, image: bytes, image_media_type: str = "image/jpeg"
     ) -> Perception:
         content = [
-            {"type": "input_audio", "input_audio": {
-                "data": base64.b64encode(audio_wav).decode("ascii"), "format": "wav"
+            {"type": "audio_url", "audio_url": {
+                "url": "data:audio/wav;base64," + base64.b64encode(audio_wav).decode("ascii")
             }},
             {"type": "image_url", "image_url": {
                 "url": "data:" + image_media_type + ";base64," + base64.b64encode(image).decode("ascii")
@@ -136,6 +144,7 @@ class NemotronClient:
             "temperature": 0,
             "max_tokens": 512,
             "response_format": {"type": "json_object"},
+            "chat_template_kwargs": {"enable_thinking": False},
         })
         data = _json_content(response)
         data["objects"] = _normalize_string_list(data.get("objects"))
@@ -157,6 +166,7 @@ class NemotronClient:
             "temperature": 0,
             "max_tokens": 180,
             "response_format": {"type": "json_object"},
+            "chat_template_kwargs": {"enable_thinking": False},
         })
         data = _json_content(response)
         data = _normalize_decision(data)

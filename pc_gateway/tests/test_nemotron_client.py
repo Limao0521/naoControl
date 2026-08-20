@@ -30,7 +30,9 @@ async def test_perception_sends_synchronized_audio_and_image():
     assert "evidencia visible" in captured["messages"][0]["content"]
     assert captured["response_format"] == {"type": "json_object"}
     content = captured["messages"][1]["content"]
-    assert [item["type"] for item in content] == ["input_audio", "image_url"]
+    assert [item["type"] for item in content] == ["audio_url", "image_url"]
+    assert content[0]["audio_url"]["url"].startswith("data:audio/wav;base64,")
+    assert captured["chat_template_kwargs"] == {"enable_thinking": False}
     assert result.transcript == "¿Qué ves?"
     assert result.scene_summary == "Una botella roja"
     assert result.uncertainties == ["La imagen es pequeña"]
@@ -55,6 +57,7 @@ async def test_decision_rejects_unknown_tool_shape():
     assert captured["messages"][0]["role"] == "system"
     assert "cerebro conversacional" in captured["messages"][0]["content"]
     assert captured["response_format"] == {"type": "json_object"}
+    assert captured["chat_template_kwargs"] == {"enable_thinking": False}
     assert decision.speech == "Hola"
     assert decision.tool_calls[0].name == "say"
     assert decision.tool_calls[0].arguments == {"text": "Hola"}

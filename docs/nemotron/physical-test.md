@@ -24,10 +24,11 @@ La instalación del robot vive en `/home/nao/naoControl`. Sus logs están en
 5. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
 6. Presionar ambos bumpers para solicitar parada de emergencia.
 
-Para arrancar los servicios del robot y ver sus logs por SSH en tiempo real:
+Para seguir los logs locales del gateway Nemotron (bumpers, captura y diagnóstico
+WAV) por SSH en tiempo real:
 
 ```sh
-ssh -t nao@169.254.31.157 "sh /home/nao/naoControl/nao/scripts/runtime/start_nemotron.sh && tail -F /home/nao/logs/naoControl/intelligence.log /home/nao/logs/naoControl/camera.log"
+ssh -t nao@169.254.186.141 "tail -F /home/nao/logs/naoControl/intelligence.log"
 ```
 
 En una terminal del PC se inicia el componente que llama a NVIDIA y muestra el
@@ -36,6 +37,17 @@ transcript, contexto visual, decisión y resultado de cada acción:
 ```powershell
 .\.venv\Scripts\python.exe -u -m nao_gateway.main --env-file .env --registry config\action_registry.json
 ```
+
+El PC imprime `TRANSCRIPTION` y el resultado de Nemotron. El robot imprime
+`audio_diagnostics` con tamaño, frecuencia, canales y RMS, sin conservar ni
+mostrar la grabación. Un RMS muy bajo o cero confirma que el problema está antes
+de NVIDIA (micrófono/canal); una transcripción distinta de la voz confirma que
+la captura llega a NVIDIA pero debe revisarse el canal o el entorno acústico.
+
+La petición multimodal usa `audio_url` con un WAV en base64 y desactiva el modo
+de razonamiento para las respuestas JSON breves. Así se reserva la salida para
+`transcript`/`scene_summary` y para `{speech, tool_calls}`, en lugar de agotarla
+en la traza de razonamiento.
 
 Indicadores: azul significa modo inteligente listo, verde grabación, naranja
 procesamiento, blanco control web y rojo parada de emergencia.

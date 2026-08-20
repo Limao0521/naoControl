@@ -167,6 +167,7 @@ def _load_runtime():
                 elif event.name == "CAPTURE_FINISHED":
                     result = capture.stop(now)
                     print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
+                    print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
                     facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)
                     send_all("audio_result", result)
                 elif event.name == "EMERGENCY_REQUESTED":
