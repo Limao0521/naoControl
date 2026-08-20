@@ -62,3 +62,7 @@ def test_launcher_delegates_the_touch_transition_to_deployed_supervisor():
     assert target.services_running is True
     assert target.stop_services() is True
     assert target.service_supervisor.calls == ["start", "stop"]
+
+
+def test_launcher_declares_naoqi_site_packages_for_standalone_execution():
+    assert launcher.NAOQI_SITE_PACKAGES == "/opt/aldebaran/lib/python2.7/site-packages"

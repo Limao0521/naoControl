@@ -14,6 +14,10 @@ import socket
 import sys
 from datetime import datetime
 
+NAOQI_SITE_PACKAGES = "/opt/aldebaran/lib/python2.7/site-packages"
+if NAOQI_SITE_PACKAGES not in sys.path:
+    sys.path.insert(0, NAOQI_SITE_PACKAGES)
+
 RUNTIME_DIR = os.path.dirname(os.path.abspath(__file__))
 INTELLIGENCE_DIR = os.path.join(RUNTIME_DIR, "intelligence")
 if INTELLIGENCE_DIR not in sys.path:
