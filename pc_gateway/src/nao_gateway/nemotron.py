@@ -4,11 +4,26 @@ from __future__ import annotations
 import base64
 import asyncio
 import json
+import logging
 from typing import Any
 
 import httpx
 from pydantic import TypeAdapter
 from pydantic.dataclasses import dataclass
+
+
+PERCEPTION_SYSTEM_PROMPT = (
+    "Eres el módulo de percepción multimodal de NAO. Transcribe el audio en español "
+    "y describe solamente evidencia visible en la imagen. No inventes objetos ni "
+    "atributos. Responde JSON con transcript, scene_summary, objects y uncertainties."
+)
+
+DECISION_SYSTEM_PROMPT = (
+    "Eres el cerebro conversacional de NAO. Responde breve y amablemente en español. "
+    "Usa solo las herramientas proporcionadas y nunca inventes una acción o información "
+    "visual. Si hay incertidumbre, dilo. Devuelve exclusivamente JSON con speech y "
+    "tool_calls; speech será pronunciado por NAO."
+)
 
 
 @dataclass
@@ -76,10 +91,6 @@ class NemotronClient:
         self, audio_wav: bytes, image: bytes, image_media_type: str = "image/jpeg"
     ) -> Perception:
         content = [
-            {"type": "text", "text": (
-                "Transcribe el audio en español y describe solo evidencia visible. "
-                "Responde JSON con transcript, scene_summary, objects y uncertainties."
-            )},
             {"type": "input_audio", "input_audio": {
                 "data": base64.b64encode(audio_wav).decode("ascii"), "format": "wav"
             }},
@@ -89,7 +100,10 @@ class NemotronClient:
         ]
         response = await self._post({
             "model": self.omni_model,
-            "messages": [{"role": "user", "content": content}],
+            "messages": [
+                {"role": "system", "content": PERCEPTION_SYSTEM_PROMPT},
+                {"role": "user", "content": content},
+            ],
             "temperature": 0,
             "max_tokens": 512,
         })
@@ -100,17 +114,16 @@ class NemotronClient:
 
     async def decide(self, transcript: str, scene: str, tools: list[dict]) -> AgentDecision:
         prompt = {
-            "instruction": (
-                "Eres el cerebro de NAO. Responde brevemente en español. Usa solo las "
-                "herramientas listadas. Devuelve JSON: speech y tool_calls."
-            ),
             "transcript": transcript,
             "visual_context": scene,
             "tools": tools,
         }
         response = await self._post({
             "model": self.agent_model,
-            "messages": [{"role": "user", "content": json.dumps(prompt, ensure_ascii=False)}],
+            "messages": [
+                {"role": "system", "content": DECISION_SYSTEM_PROMPT},
+                {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
+            ],
             "temperature": 0.1,
             "max_tokens": 512,
         })

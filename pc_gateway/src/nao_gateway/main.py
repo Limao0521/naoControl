@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import logging
 import os
 from pathlib import Path
 
@@ -55,6 +56,10 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
 
 
 def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
     parser = argparse.ArgumentParser()
     parser.add_argument("--env-file", default=".env")
     parser.add_argument("--registry", default="config/action_registry.json")

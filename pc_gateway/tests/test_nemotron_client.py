@@ -26,8 +26,10 @@ async def test_perception_sends_synchronized_audio_and_image():
     )
     result = await client.perceive(b"RIFF-audio", b"jpeg-image")
 
-    content = captured["messages"][0]["content"]
-    assert [item["type"] for item in content] == ["text", "input_audio", "image_url"]
+    assert captured["messages"][0]["role"] == "system"
+    assert "evidencia visible" in captured["messages"][0]["content"]
+    content = captured["messages"][1]["content"]
+    assert [item["type"] for item in content] == ["input_audio", "image_url"]
     assert result.transcript == "¿Qué ves?"
     assert result.scene_summary == "Una botella roja"
     assert result.uncertainties == ["La imagen es pequeña"]
@@ -35,7 +37,10 @@ async def test_perception_sends_synchronized_audio_and_image():
 
 @pytest.mark.asyncio
 async def test_decision_rejects_unknown_tool_shape():
+    captured = {}
+
     def handler(request):
+        captured.update(json.loads(request.content))
         return httpx.Response(200, json={
             "choices": [{"message": {"content": '{"speech":"Hola","tool_calls":[{"name":"say","args":["Hola"]}]}'}}]
         })
@@ -46,6 +51,8 @@ async def test_decision_rejects_unknown_tool_shape():
     )
     decision = await client.decide("Hola", "Una mesa", [{"name": "say"}])
 
+    assert captured["messages"][0]["role"] == "system"
+    assert "cerebro conversacional" in captured["messages"][0]["content"]
     assert decision.speech == "Hola"
     assert decision.tool_calls[0].name == "say"
     assert decision.tool_calls[0].arguments == {"text": "Hola"}

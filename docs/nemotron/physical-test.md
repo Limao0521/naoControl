@@ -21,6 +21,19 @@ La instalación del robot vive en `/home/nao/naoControl`. Sus logs están en
 4. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
 5. Presionar ambos bumpers para solicitar parada de emergencia.
 
+Para arrancar los servicios del robot y ver sus logs por SSH en tiempo real:
+
+```sh
+ssh -t nao@169.254.31.157 "sh /home/nao/naoControl/nao/scripts/runtime/start_nemotron.sh && tail -F /home/nao/logs/naoControl/intelligence.log /home/nao/logs/naoControl/camera.log"
+```
+
+En una terminal del PC se inicia el componente que llama a NVIDIA y muestra el
+transcript, contexto visual, decisión y resultado de cada acción:
+
+```powershell
+.\.venv\Scripts\python.exe -u -m nao_gateway.main --env-file .env --registry config\action_registry.json
+```
+
 Indicadores: azul significa modo inteligente listo, verde grabación, naranja
 procesamiento, blanco control web y rojo parada de emergencia.
 
