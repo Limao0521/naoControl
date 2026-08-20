@@ -69,6 +69,10 @@ de razonamiento para las respuestas JSON breves. Así se reserva la salida para
 `transcript`/`scene_summary` y para `{speech, tool_calls}`, en lugar de agotarla
 en la traza de razonamiento.
 
+Las acciones se solicitan mediante el tool calling nativo de Nemotron. Por
+ejemplo, una orden de sentarse debe producir `set_posture` con `posture: Sit`;
+la respuesta hablada nunca se toma como autorización para mover el robot.
+
 Ante una saturación temporal de NVIDIA (`ReadTimeout`, 502, 503 o 504), el PC
 reintenta hasta tres veces con esperas de 1 y 2 segundos. El log identifica la
 etapa afectada como `PERCEPTION_FAILED` (audio/imagen) o `DECISION_FAILED`

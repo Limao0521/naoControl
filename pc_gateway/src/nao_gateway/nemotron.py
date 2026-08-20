@@ -26,7 +26,11 @@ DECISION_SYSTEM_PROMPT = (
     "Eres el cerebro conversacional de NAO. Responde breve y amablemente en español. "
     "Usa solo las herramientas proporcionadas y nunca inventes una acción o información "
     "visual. Si hay incertidumbre, dilo. Devuelve exclusivamente JSON con speech y "
-    "tool_calls; speech será pronunciado por NAO. No uses Markdown. Ejemplo exacto: "
+    "tool_calls; speech será pronunciado por NAO. Cada llamada tiene exactamente name y "
+    "arguments. Nunca prometas una acción física en speech sin emitir la tool_call "
+    "correspondiente. Si el usuario pide sentarse, usa exactamente "
+    "{\"name\":\"set_posture\",\"arguments\":{\"posture\":\"Sit\",\"speed\":0.3}}. "
+    "No uses Markdown. Ejemplo conversacional sin acción: "
     "{\"speech\":\"Hola\",\"tool_calls\":[]}."
 )
 
@@ -97,6 +101,54 @@ def _normalize_decision(data: dict[str, Any]) -> dict[str, Any]:
     data.setdefault("speech", "")
     data.setdefault("tool_calls", [])
     return data
+
+
+def _function_parameters(name: str, constraints: dict) -> dict[str, Any]:
+    if name == "set_posture":
+        return {"type": "object", "properties": {
+            "posture": {"type": "string", "enum": constraints.get("allowed", [])},
+            "speed": {"type": "number", "minimum": 0, "maximum": constraints.get("max_speed", 0.5)},
+        }, "required": ["posture"], "additionalProperties": False}
+    if name == "set_led":
+        return {"type": "object", "properties": {
+            "group": {"type": "string", "enum": constraints.get("groups", [])},
+            "color": {"type": "string", "enum": constraints.get("colors", [])},
+        }, "required": ["group", "color"], "additionalProperties": False}
+    if name == "look":
+        return {"type": "object", "properties": {
+            "yaw": {"type": "number", "minimum": constraints["yaw_range"][0], "maximum": constraints["yaw_range"][1]},
+            "pitch": {"type": "number", "minimum": constraints["pitch_range"][0], "maximum": constraints["pitch_range"][1]},
+            "speed": {"type": "number", "minimum": 0, "maximum": constraints.get("max_speed", 0.15)},
+        }, "required": ["yaw", "pitch"], "additionalProperties": False}
+    if name == "run_behavior":
+        return {"type": "object", "properties": {
+            "behavior_id": {"type": "string"},
+        }, "required": ["behavior_id"], "additionalProperties": False}
+    return {"type": "object", "properties": {}, "additionalProperties": False}
+
+
+def _native_tools(tools: list[dict]) -> list[dict]:
+    return [{"type": "function", "function": {
+        "name": tool["name"], "description": "Ejecuta la acción NAO autorizada " + tool["name"],
+        "parameters": _function_parameters(tool["name"], tool.get("constraints", {})),
+    }} for tool in tools]
+
+
+def _decision_content(response: httpx.Response) -> dict[str, Any]:
+    response.raise_for_status()
+    message = response.json()["choices"][0]["message"]
+    calls = []
+    for tool_call in message.get("tool_calls") or []:
+        function = tool_call.get("function") or {}
+        try:
+            arguments = json.loads(function.get("arguments") or "{}")
+        except (TypeError, ValueError):
+            arguments = {}
+        if function.get("name") and isinstance(arguments, dict):
+            calls.append({"name": function["name"], "arguments": arguments})
+    if calls:
+        return {"speech": (message.get("content") or "").strip(), "tool_calls": calls}
+    return _json_content(response)
 
 
 class NemotronClient:
@@ -188,10 +240,11 @@ class NemotronClient:
             ],
             "temperature": 0,
             "max_tokens": 180,
-            "response_format": {"type": "json_object"},
             "chat_template_kwargs": {"enable_thinking": False},
+            "tools": _native_tools(tools),
+            "tool_choice": "auto",
         }, "decision")
-        data = _json_content(response)
+        data = _decision_content(response)
         data = _normalize_decision(data)
         for call in data["tool_calls"]:
             if "arguments" not in call and "args" in call:

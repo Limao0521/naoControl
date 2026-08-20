@@ -4,7 +4,7 @@ import json
 import httpx
 import pytest
 
-from nao_gateway.nemotron import NemotronClient
+from nao_gateway.nemotron import NemotronClient, ToolCall
 
 
 @pytest.mark.asyncio
@@ -78,7 +78,9 @@ async def test_decision_rejects_unknown_tool_shape():
 
     assert captured["messages"][0]["role"] == "system"
     assert "cerebro conversacional" in captured["messages"][0]["content"]
-    assert captured["response_format"] == {"type": "json_object"}
+    assert '"name":"set_posture"' in captured["messages"][0]["content"]
+    assert "Nunca prometas una acción física" in captured["messages"][0]["content"]
+    assert "response_format" not in captured
     assert captured["chat_template_kwargs"] == {"enable_thinking": False}
     assert decision.speech == "Hola"
     assert decision.tool_calls[0].name == "say"
@@ -101,6 +103,36 @@ async def test_decision_normalizes_response_only_shape_to_safe_speech():
 
     assert decision.speech == "Hola desde NAO"
     assert decision.tool_calls == []
+
+
+@pytest.mark.asyncio
+async def test_decision_uses_native_function_call_for_posture_request():
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {
+            "content": "Claro, me siento.",
+            "tool_calls": [{"type": "function", "function": {
+                "name": "set_posture", "arguments": '{"posture":"Sit","speed":0.3}'
+            }}],
+        }}]})
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        transport=httpx.MockTransport(handler),
+    )
+
+    decision = await client.decide("Siéntate", "Sin contexto visual", [{
+        "name": "set_posture", "constraints": {
+            "allowed": ["Stand", "Sit"], "max_speed": 0.5,
+        }
+    }])
+
+    assert captured["tool_choice"] == "auto"
+    assert captured["tools"][0]["function"]["name"] == "set_posture"
+    assert decision.speech == "Claro, me siento."
+    assert decision.tool_calls == [ToolCall("set_posture", {"posture": "Sit", "speed": 0.3})]
 
 
 @pytest.mark.asyncio
