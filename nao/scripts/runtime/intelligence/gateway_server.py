@@ -40,6 +40,7 @@ class GatewayCore(object):
         }, self.secret)
 
     def handle_message(self, envelope):
+        response_type = "command_result"
         try:
             payload = verify_envelope(
                 envelope, self.secret, self.now_ms(), self.replay_guard
@@ -47,13 +48,14 @@ class GatewayCore(object):
             message_type = envelope.get("message_type")
             if message_type == "heartbeat":
                 result = {"status": "ok"}
+                response_type = "heartbeat_result"
             elif message_type == "command":
                 result = self.executor.execute(payload)
             else:
                 result = {"status": "rejected", "reason": "unknown_message_type"}
         except Exception as error:
             result = {"status": "rejected", "reason": str(error)}
-        return self.envelope("command_result", result)
+        return self.envelope(response_type, result)
 
 
 def _load_runtime():

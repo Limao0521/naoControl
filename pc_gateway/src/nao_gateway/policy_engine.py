@@ -16,6 +16,8 @@ class PolicyEngine:
         rule = self.registry.get("actions", {}).get(name)
         if rule is None:
             raise PolicyViolation("tool is not allowlisted")
+        if not rule.get("enabled", True):
+            raise PolicyViolation("tool is disabled")
         if self.tool_count >= 3:
             raise PolicyViolation("turn tool budget exceeded")
         if rule.get("risk") == "body":

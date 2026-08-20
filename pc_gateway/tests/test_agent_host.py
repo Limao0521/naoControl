@@ -16,20 +16,26 @@ class FakeRobot(object):
 
 
 class FakeNemotron(object):
+    def __init__(self):
+        self.tools = None
+
     async def perceive(self, audio, image):
         return Perception("¿Qué color tiene?", "Una botella roja", ["botella roja"], [])
 
     async def decide(self, transcript, scene, tools):
+        self.tools = tools
         return AgentDecision("La botella es roja.", [ToolCall("set_led", {"group": "FaceLeds", "color": "red"})])
 
 
 @pytest.mark.asyncio
 async def test_audio_event_executes_policy_tools_then_speaks():
     robot = FakeRobot()
-    host = AgentHost(robot, FakeNemotron(), image_provider=lambda: b"jpeg", registry={
+    nemotron = FakeNemotron()
+    host = AgentHost(robot, nemotron, image_provider=lambda: b"jpeg", registry={
         "actions": {
             "set_led": {"risk": "low", "groups": ["FaceLeds"], "colors": ["red"]},
             "say": {"risk": "low", "max_text_length": 500},
+            "play_sound": {"risk": "low", "enabled": False},
         }
     })
 
@@ -39,3 +45,4 @@ async def test_audio_event_executes_policy_tools_then_speaks():
         ("set_led", {"group": "FaceLeds", "color": "red"}),
         ("say", {"text": "La botella es roja."}),
     ]
+    assert [tool["name"] for tool in nemotron.tools] == ["set_led"]

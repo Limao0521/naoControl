@@ -17,6 +17,12 @@ def test_unknown_model_tool_is_rejected():
         PolicyEngine(REGISTRY).authorize("move", {})
 
 
+def test_disabled_tool_is_rejected():
+    registry = {"actions": {"play_sound": {"risk": "low", "enabled": False}}}
+    with pytest.raises(PolicyViolation):
+        PolicyEngine(registry).authorize("play_sound", {})
+
+
 def test_turn_allows_at_most_one_body_action():
     policy = PolicyEngine(REGISTRY)
     policy.authorize("look", {"yaw": 0.1, "pitch": 0.0})

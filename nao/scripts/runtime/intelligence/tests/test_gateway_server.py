@@ -85,3 +85,17 @@ def test_signed_command_executes_allowlisted_action():
 
     assert result["payload"]["status"] == "completed"
     assert executor.commands == [{"action": "say", "arguments": {"text": "Hola"}}]
+
+
+def test_heartbeat_has_a_distinct_result_type():
+    executor = FakeExecutor()
+    core = GatewayCore(b"shared-secret", executor, now_ms=lambda: 1000)
+    envelope = sign_envelope(
+        unsigned("heartbeat", "heartbeat-1", {}), b"shared-secret"
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["message_type"] == "heartbeat_result"
+    assert result["payload"]["status"] == "ok"
+    assert executor.commands == []

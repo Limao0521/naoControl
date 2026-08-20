@@ -1,13 +1,13 @@
 {
   "version": 1,
   "actions": {
-    "get_robot_state": {"risk": "read_only", "timeout_ms": 1000},
+    "get_robot_state": {"risk": "read_only", "timeout_ms": 1000, "enabled": false},
     "say": {"risk": "low", "timeout_ms": 15000, "max_text_length": 500},
     "set_led": {"risk": "low", "timeout_ms": 2000, "groups": ["FaceLeds", "ChestLeds", "EarLeds"], "colors": ["off", "red", "green", "blue", "yellow", "white"]},
-    "play_sound": {"risk": "low", "timeout_ms": 10000},
+    "play_sound": {"risk": "low", "timeout_ms": 10000, "enabled": false},
     "look": {"risk": "body", "timeout_ms": 5000, "max_speed": 0.15, "yaw_range": [-1.0, 1.0], "pitch_range": [-0.5, 0.5]},
     "set_posture": {"risk": "body", "timeout_ms": 15000, "max_speed": 0.5, "allowed": ["Stand", "StandInit", "Sit", "Crouch"]},
-    "gesture": {"risk": "body", "timeout_ms": 15000, "max_intensity": 0.6},
+    "gesture": {"risk": "body", "timeout_ms": 15000, "max_intensity": 0.6, "enabled": false},
     "run_behavior": {"risk": "body", "timeout_ms": 30000, "allowed_postures": ["Stand", "StandInit"]},
     "stop_all": {"risk": "emergency", "timeout_ms": 500}
   }

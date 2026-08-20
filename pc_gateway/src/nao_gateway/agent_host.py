@@ -15,7 +15,11 @@ class AgentHost:
         self.registry = registry
 
     def tool_schemas(self) -> list[dict]:
-        return [{"name": name, "constraints": rule} for name, rule in self.registry["actions"].items()]
+        return [
+            {"name": name, "constraints": rule}
+            for name, rule in self.registry["actions"].items()
+            if rule.get("enabled", True) and name != "say"
+        ]
 
     async def handle_audio(self, payload: dict) -> None:
         audio = base64.b64decode(payload["audio_b64"])
@@ -34,5 +38,6 @@ class AgentHost:
                 continue
             await self.robot.execute(command["action"], command["arguments"])
         if decision.speech:
-            command = policy.authorize("say", {"text": decision.speech[:500]})
+            speech_policy = PolicyEngine(self.registry)
+            command = speech_policy.authorize("say", {"text": decision.speech[:500]})
             await self.robot.execute(command["action"], command["arguments"])
