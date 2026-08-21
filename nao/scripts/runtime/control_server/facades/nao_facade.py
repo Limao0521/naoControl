@@ -106,6 +106,13 @@ class NAOFacade(object):
             if self.motion:
                 self.safe_call(self.motion.setMotionConfig, 
                               [["ENABLE_FOOT_CONTACT_PROTECTION", True]])
+
+            # Toda respuesta del modo inteligente se pronuncia en español.
+            if self.tts:
+                if self.set_language("Spanish"):
+                    self.logger.info("Idioma TTS configurado en español")
+                else:
+                    self.logger.warning("No se pudo configurar el idioma TTS en español")
                 
         except Exception as e:
             self.logger.error("Error configurando estado inicial: {}".format(e))
@@ -137,6 +144,18 @@ class NAOFacade(object):
     def _call_succeeded(self, result):
         """Verificar si safe_call tuvo éxito (resultado no es error sentinel)."""
         return result is not self._SAFE_CALL_ERROR
+
+    def _post_action(self, proxy, method_name, *args):
+        """Iniciar una tarea NAOqi larga sin bloquear el servidor WebSocket."""
+        post_proxy = getattr(proxy, "post", None)
+        method = getattr(post_proxy, method_name, None) if post_proxy else None
+        if method is None:
+            self.logger.warning("NAOqi async no disponible para {}".format(method_name))
+            return False
+        result = self.safe_call(method, *args)
+        if not self._call_succeeded(result):
+            return False
+        return "accepted"
     
     # === MOTION METHODS ===
     def move_toward(self, vx, vy, wz, config=None):
@@ -192,10 +211,10 @@ class NAOFacade(object):
     
     # === POSTURE METHODS ===
     def go_to_posture(self, posture_name, speed=0.7):
-        """Ir a postura específica."""
+        """Iniciar una transición de postura sin bloquear el gateway."""
         if not self.posture:
             return False
-        return self._call_succeeded(self.safe_call(self.posture.goToPosture, str(posture_name), speed))
+        return self._post_action(self.posture, "goToPosture", str(posture_name), speed)
 
     def get_posture(self):
         """Obtener postura actual para validar precondiciones de seguridad."""
@@ -208,6 +227,8 @@ class NAOFacade(object):
         """Configurar LEDs RGB."""
         if not self.leds:
             return False
+
+        group = str(group)
         
         rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
         
@@ -219,10 +240,10 @@ class NAOFacade(object):
     
     # === TTS METHODS ===
     def say(self, text):
-        """Hacer hablar al robot."""
+        """Iniciar TTS sin bloquear el gateway durante toda la locución."""
         if not self.tts:
             return False
-        return self._call_succeeded(self.safe_call(self.tts.say, str(text)))
+        return self._post_action(self.tts, "say", str(text))
     
     def set_language(self, language):
         """Configurar idioma TTS."""
@@ -258,8 +279,7 @@ class NAOFacade(object):
             
             # Ejecutar nuevo behavior
             if self.behavior.isBehaviorInstalled(behavior_name):
-                self.behavior.runBehavior(behavior_name)
-                return True
+                return self._post_action(self.behavior, "runBehavior", str(behavior_name))
             else:
                 self.logger.warning("Behavior no instalado: {}".format(behavior_name))
                 return False

@@ -91,3 +91,58 @@ async def test_audio_event_continues_without_vision_when_camera_times_out(caplog
 
     assert "VISION_UNAVAILABLE turn=i-camera" in caplog.text
     assert robot.actions[-1] == ("say", {"text": "La botella es roja."})
+
+
+@pytest.mark.asyncio
+async def test_unsolicited_body_action_is_rejected_but_speech_continues(caplog):
+    class ConversationalNemotron(FakeNemotron):
+        async def perceive(self, audio, image):
+            return Perception("Hola, ¿cómo estás?", "Una persona", ["persona"], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision(
+                "Estoy bien, gracias.",
+                [ToolCall("look", {"yaw": 0.4, "pitch": 0.0, "speed": 0.1})],
+            )
+
+    robot = FakeRobot()
+    host = AgentHost(robot, ConversationalNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "look": {"risk": "body", "max_speed": 0.15, "yaw_range": [-1.0, 1.0], "pitch_range": [-0.5, 0.5]},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    with caplog.at_level(logging.WARNING):
+        await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-chat"})
+
+    assert robot.actions == [("say", {"text": "Estoy bien, gracias."})]
+    assert "rejected_tool=look reason=physical_action_not_explicitly_requested" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_explicit_posture_request_allows_matching_body_action():
+    class PostureNemotron(FakeNemotron):
+        async def perceive(self, audio, image):
+            return Perception("Por favor, párate.", "Una persona", ["persona"], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision(
+                "Me pondré de pie.",
+                [ToolCall("set_posture", {"posture": "Stand", "speed": 0.3})],
+            )
+
+    robot = FakeRobot()
+    host = AgentHost(robot, PostureNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "set_posture": {"risk": "body", "allowed": ["Stand"], "max_speed": 0.5},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-stand"})
+
+    assert robot.actions == [
+        ("set_posture", {"posture": "Stand", "speed": 0.3}),
+        ("say", {"text": "Me pondré de pie."}),
+    ]

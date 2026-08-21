@@ -17,13 +17,13 @@ la configuración no secreta y la web compilada; los copia al NAO, conserva
 `robot_gateway.secret` existente y valida los módulos Python críticos:
 
 ```powershell
-.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141
+.\tools\deploy-nao.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>
 ```
 
 Para que el mismo comando arranque control web, cámara y gateway al terminar:
 
 ```powershell
-.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141 -StartServices
+.\tools\deploy-nao.ps1 -NaoIp <IP_ACTUAL_DEL_NAO> -StartServices
 ```
 
 El script nunca transfiere `.env`, `.git`, `.venv` ni la clave NVIDIA y tampoco
@@ -48,7 +48,7 @@ Para seguir los logs locales del gateway Nemotron (bumpers, captura y diagnósti
 WAV) por SSH en tiempo real:
 
 ```sh
-ssh -t nao@169.254.186.141 "tail -F /home/nao/logs/naoControl/intelligence.log"
+ssh -t nao@<IP_ACTUAL_DEL_NAO> "tail -F /home/nao/logs/naoControl/intelligence.log"
 ```
 
 En una terminal del PC se inicia el componente que llama a NVIDIA y muestra el
@@ -76,9 +76,24 @@ la respuesta hablada nunca se toma como autorización para mover el robot.
 Cada resultado de acción registra ahora el nombre, los argumentos no sensibles,
 el estado y la razón de rechazo. Para una orden de postura debe verse en el PC
 una línea como `action=set_posture arguments={'posture': 'Stand', 'speed': 0.3}
-status=completed reason=None`. Si aparece `status=rejected`, la misma razón se
+status=accepted reason=None`. `accepted` significa que NAOqi inició la tarea
+asíncrona sin bloquear el canal de control; el movimiento o la locución pueden
+seguir ejecutándose después de recibir ese resultado. Si aparece
+`status=rejected`, la misma razón se
 imprime también en `intelligence.log`; usar ese valor antes de cambiar el
 registro de acciones o los límites físicos.
+
+Las operaciones largas (`say`, `set_posture` y `run_behavior`) se lanzan con el
+sistema de tareas asíncronas de NAOqi. Así, una postura que tarde o no pueda
+terminar no impide responder heartbeats. Si el enlace se pierde de todos modos,
+el gateway del PC conserva el proceso y vuelve a conectar cada dos segundos.
+Las acciones corporales solo se autorizan cuando la transcripción contiene una
+petición explícita compatible; una conversación normal no permite que el modelo
+añada movimientos espontáneos.
+
+Al iniciar el runtime, `ALTextToSpeech` selecciona el idioma `Spanish`. Si esa
+voz no está instalada en el robot, `intelligence.log` registra la advertencia y
+la instalación debe completarse desde las preferencias de voz de NAO/Choregraphe.
 
 Ante una saturación temporal de NVIDIA (`ReadTimeout`, 502, 503 o 504), el PC
 reintenta hasta tres veces con esperas de 1 y 2 segundos. El log identifica la

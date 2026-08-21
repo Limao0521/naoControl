@@ -45,17 +45,28 @@ class RobotClient:
         return envelope["message_type"], payload
 
     async def connect(self) -> None:
+        self.events = asyncio.Queue()
+        self.results = asyncio.Queue()
         self.socket = await websockets.connect(self.url, max_size=12 * 1024 * 1024)
 
     async def receive_forever(self) -> None:
         if self.socket is None:
             raise RuntimeError("robot client is not connected")
-        async for raw in self.socket:
-            message_type, payload = self.ingest(raw)
-            if message_type == "command_result":
-                await self.results.put(payload)
-            else:
-                await self.events.put((message_type, payload))
+        try:
+            async for raw in self.socket:
+                message_type, payload = self.ingest(raw)
+                if message_type == "command_result":
+                    await self.results.put(payload)
+                else:
+                    await self.events.put((message_type, payload))
+        except Exception as error:
+            await self.events.put(("connection_lost", {
+                "error_type": type(error).__name__, "reason": str(error),
+            }))
+        else:
+            await self.events.put(("connection_lost", {
+                "error_type": "ConnectionClosed", "reason": "robot closed the connection",
+            }))
 
     async def execute(self, action: str, arguments: dict) -> dict:
         if self.socket is None:

@@ -22,6 +22,7 @@ class ActionExecutor(object):
     def execute(self, command):
         action = command.get("action")
         arguments = command.get("arguments") or {}
+        status = "completed"
         rule = self.registry.get("actions", {}).get(action)
         if rule is None:
             return self._reject("action_not_allowed")
@@ -35,8 +36,11 @@ class ActionExecutor(object):
                 text = arguments.get("text", "")
                 if not text or len(text) > rule.get("max_text_length", 500):
                     return self._reject("invalid_text")
-                if self._facade_failed(self.facade.say(text)):
+                outcome = self.facade.say(text)
+                if self._facade_failed(outcome):
                     return self._reject("facade_failed")
+                if outcome == "accepted":
+                    status = "accepted"
             elif action == "set_led":
                 group = arguments.get("group", "FaceLeds")
                 color = self.COLORS.get(arguments.get("color"))
@@ -49,8 +53,11 @@ class ActionExecutor(object):
                 if posture not in rule.get("allowed", []):
                     return self._reject("invalid_posture")
                 speed = min(float(arguments.get("speed", 0.3)), rule.get("max_speed", 0.5))
-                if self._facade_failed(self.facade.go_to_posture(posture, speed)):
+                outcome = self.facade.go_to_posture(posture, speed)
+                if self._facade_failed(outcome):
                     return self._reject("facade_failed")
+                if outcome == "accepted":
+                    status = "accepted"
             elif action == "look":
                 yaw = float(arguments.get("yaw", 0.0))
                 pitch = float(arguments.get("pitch", 0.0))
@@ -70,10 +77,13 @@ class ActionExecutor(object):
                 posture = self.facade.get_posture()
                 if posture not in rule.get("allowed_postures", []):
                     return self._reject("unsafe_posture")
-                if self._facade_failed(self.facade.run_behavior(behavior["package"])):
+                outcome = self.facade.run_behavior(behavior["package"])
+                if self._facade_failed(outcome):
                     return self._reject("facade_failed")
+                if outcome == "accepted":
+                    status = "accepted"
             else:
                 return self._reject("action_not_implemented")
         except Exception as error:
             return self._reject("facade_error: {}".format(error))
-        return {"status": "completed", "action": action}
+        return {"status": status, "action": action}

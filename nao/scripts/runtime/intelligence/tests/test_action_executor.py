@@ -107,6 +107,17 @@ def test_facade_failure_is_not_reported_as_completed():
     assert result == {"status": "rejected", "reason": "facade_failed"}
 
 
+def test_async_facade_action_is_reported_as_accepted():
+    facade = FakeFacade()
+    facade.go_to_posture = lambda posture, speed: "accepted"
+
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "set_posture", "arguments": {"posture": "Stand", "speed": 0.3}}
+    )
+
+    assert result == {"status": "accepted", "action": "set_posture"}
+
+
 def test_look_rejects_angle_outside_registry_range():
     facade = FakeFacade()
     result = ActionExecutor(facade, REGISTRY).execute(

@@ -109,7 +109,7 @@ naoControl/
 Desde PowerShell, en la raíz del repositorio, ejecutar:
 
 ```powershell
-.\tools\deploy-nao.ps1 -NaoIp 169.254.186.141
+.\tools\deploy-nao.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>
 ```
 
 Añadir `-StartServices` si se desea iniciar los servicios inmediatamente tras

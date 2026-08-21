@@ -4,11 +4,36 @@ from __future__ import annotations
 import base64
 import inspect
 import logging
+import re
+import unicodedata
 
 from .policy_engine import PolicyEngine, PolicyViolation
 
 
 logger = logging.getLogger(__name__)
+
+
+BODY_ACTION_CUES = {
+    "set_posture": (
+        "parate", "levantate", "ponte de pie", "estar de pie", "stand up",
+        "sientate", "sentarse", "sit down", "agachate", "crouch",
+    ),
+    "look": ("mira", "mirar", "voltea", "gira la cabeza", "look at", "turn your head"),
+    "run_behavior": ("baila", "baile", "danza", "dance", "comportamiento", "behavior"),
+}
+
+
+def _normalized_text(text: str) -> str:
+    decomposed = unicodedata.normalize("NFKD", text.lower())
+    return re.sub(r"\s+", " ", "".join(c for c in decomposed if not unicodedata.combining(c)))
+
+
+def _physical_action_explicitly_requested(action: str, transcript: str) -> bool:
+    cues = BODY_ACTION_CUES.get(action)
+    if cues is None:
+        return True
+    normalized = _normalized_text(transcript)
+    return any(cue in normalized for cue in cues)
 
 
 class AgentHost:
@@ -81,6 +106,12 @@ class AgentHost:
         )
         policy = PolicyEngine(self.registry)
         for call in decision.tool_calls:
+            if not _physical_action_explicitly_requested(call.name, perception.transcript):
+                logger.warning(
+                    "turn=%s rejected_tool=%s reason=physical_action_not_explicitly_requested",
+                    interaction_id, call.name,
+                )
+                continue
             try:
                 command = policy.authorize(call.name, call.arguments)
             except PolicyViolation as error:

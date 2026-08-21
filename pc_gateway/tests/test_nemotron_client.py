@@ -4,7 +4,13 @@ import json
 import httpx
 import pytest
 
-from nao_gateway.nemotron import NemotronClient, ToolCall
+from nao_gateway.nemotron import DECISION_SYSTEM_PROMPT, NemotronClient, ToolCall
+
+
+def test_decision_prompt_uses_nao_first_person_and_explicit_physical_actions():
+    assert "habla siempre como nao en primera persona" in DECISION_SYSTEM_PROMPT.lower()
+    assert "solo si el usuario la pidió explícitamente" in DECISION_SYSTEM_PROMPT
+    assert "Me pondré de pie" in DECISION_SYSTEM_PROMPT
 
 
 @pytest.mark.asyncio

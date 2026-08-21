@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from nao_gateway.protocol import ReplayGuard, sign_envelope, verify_envelope
 from nao_gateway.robot_client import RobotClient
 
@@ -41,3 +43,22 @@ def test_turn_finished_envelope_is_authenticated():
 
     assert envelope["message_type"] == "turn_finished"
     assert payload == {}
+
+
+@pytest.mark.asyncio
+async def test_receive_loop_reports_connection_loss_instead_of_crashing_gateway():
+    class BrokenSocket(object):
+        def __aiter__(self):
+            return self
+
+        async def __anext__(self):
+            raise ConnectionError("cable disconnected")
+
+    client = RobotClient("ws://robot:6674", b"shared-secret", now_ms=lambda: 1000)
+    client.socket = BrokenSocket()
+
+    await client.receive_forever()
+
+    message_type, payload = await client.events.get()
+    assert message_type == "connection_lost"
+    assert payload["error_type"] == "ConnectionError"
