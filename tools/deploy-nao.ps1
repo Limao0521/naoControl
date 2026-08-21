@@ -20,7 +20,7 @@ function Invoke-Checked([scriptblock]$Command, [string]$Description) {
 }
 
 try {
-    foreach ($required in @('tar.exe', 'ssh.exe', 'scp.exe')) {
+    foreach ($required in @('ssh.exe', 'scp.exe')) {
         if (-not (Get-Command $required -ErrorAction SilentlyContinue)) {
             throw "Missing required command: $required"
         }
@@ -30,10 +30,12 @@ try {
             throw "Missing required project path: $requiredPath"
         }
     }
+    $python = Join-Path $repoRoot '.venv\Scripts\python.exe'
+    if (-not (Test-Path $python)) {
+        throw "Missing project Python runtime: $python"
+    }
 
-    Push-Location $repoRoot
-    Invoke-Checked { & tar.exe -czf $archive --exclude='.env' --exclude='.git' --exclude='.venv' --exclude='.pytest_cache' --exclude='config/robot_gateway.secret' nao config NaoControlReact/build } 'Creating NAO deployment archive'
-    Pop-Location
+    Invoke-Checked { & $python (Join-Path $repoRoot 'tools\package_nao.py') $archive $repoRoot } 'Creating NAO deployment archive'
 
     Invoke-Checked { & scp.exe -o StrictHostKeyChecking=accept-new $archive "${sshTarget}:$remoteArchive" } 'Copying archive to NAO'
 
@@ -49,10 +51,7 @@ backup="/home/nao/naoControl.backup.$$"
 cleanup() { rm -rf "$stage_root" "$archive"; }
 trap cleanup EXIT
 mkdir -p "$staged"
-# Windows tar can encode directory modes that are not writable on NAO's Linux.
-# Extract with NAO-owned, umask-derived modes instead of applying archive modes.
-tar -xzf "$archive" -C "$staged" --no-same-owner --no-same-permissions \
-    --mode=u+rwX,go+rX,go-w
+tar -xzf "$archive" -C "$staged" --no-same-owner --no-same-permissions
 test -f "$staged/nao/scripts/runtime/intelligence/gateway_server.py"
 test -f "$staged/nao/scripts/runtime/start_nemotron.sh"
 test -f "$staged/NaoControlReact/build/index.html"
