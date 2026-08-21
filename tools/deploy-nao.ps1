@@ -49,7 +49,9 @@ backup="/home/nao/naoControl.backup.$$"
 cleanup() { rm -rf "$stage_root" "$archive"; }
 trap cleanup EXIT
 mkdir -p "$staged"
-tar -xzf "$archive" -C "$staged"
+# Windows tar can encode directory modes that are not writable on NAO's Linux.
+# Extract with NAO-owned, umask-derived modes instead of applying archive modes.
+tar -xzf "$archive" -C "$staged" --no-same-owner --no-same-permissions
 test -f "$staged/nao/scripts/runtime/intelligence/gateway_server.py"
 test -f "$staged/nao/scripts/runtime/start_nemotron.sh"
 test -f "$staged/NaoControlReact/build/index.html"
