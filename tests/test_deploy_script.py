@@ -27,3 +27,4 @@ def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():
 
     assert "--no-same-owner" in content
     assert "--no-same-permissions" in content
+    assert "--mode=u+rwX,go+rX,go-w" in content
