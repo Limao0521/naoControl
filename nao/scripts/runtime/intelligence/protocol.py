@@ -6,6 +6,7 @@ import base64
 import hashlib
 import hmac
 import json
+import math
 from collections import OrderedDict
 
 try:
@@ -57,9 +58,23 @@ def _unsigned(envelope):
 
 def _canonical(envelope):
     return json.dumps(
-        _unsigned(envelope), sort_keys=True, separators=(",", ":"),
+        _normalize_numbers(_unsigned(envelope)),
+        sort_keys=True, separators=(",", ":"),
         ensure_ascii=True
     ).encode("utf-8")
+
+
+def _normalize_numbers(value):
+    """Make HMAC input stable across the PC's Python 3 and NAO's Python 2."""
+    if isinstance(value, float):
+        if math.isnan(value) or math.isinf(value):
+            raise ProtocolError("non-finite number")
+        return "__nao_float__:" + ("%.12g" % value)
+    if isinstance(value, dict):
+        return dict((key, _normalize_numbers(item)) for key, item in value.items())
+    if isinstance(value, (list, tuple)):
+        return [_normalize_numbers(item) for item in value]
+    return value
 
 
 def _constant_time_equal(left, right):

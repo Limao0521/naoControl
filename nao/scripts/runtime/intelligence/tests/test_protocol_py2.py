@@ -19,6 +19,16 @@ def test_robot_signature_matches_shared_golden_vector():
     assert signed["signature"] == "pnZS9Zps9MXYdAZ3ZW/DBLvizkJbPWjjwFYEosWWJpk="
 
 
+def test_robot_float_arguments_use_shared_canonical_representation():
+    envelope = dict(UNSIGNED)
+    envelope["payload"] = {
+        "action": "set_posture",
+        "arguments": {"posture": "Stand", "speed": 0.3},
+    }
+
+    assert b'"speed":"__nao_float__:0.3"' in protocol._canonical(envelope)
+
+
 def test_robot_rejects_replay():
     guard = protocol.ReplayGuard(100)
     signed = protocol.sign_envelope(UNSIGNED, b"test-secret")

@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from nao_gateway.protocol import ProtocolError, ReplayGuard, sign_envelope, verify_envelope
+from nao_gateway.protocol import ProtocolError, ReplayGuard, _canonical, sign_envelope, verify_envelope
 
 
 NOW_MS = 1_700_000_000_000
@@ -21,6 +21,13 @@ GOLDEN_SIGNATURE = "pnZS9Zps9MXYdAZ3ZW/DBLvizkJbPWjjwFYEosWWJpk="
 
 def test_signature_matches_golden_vector() -> None:
     assert sign_envelope(UNSIGNED, b"test-secret")["signature"] == GOLDEN_SIGNATURE
+
+
+def test_float_arguments_use_a_cross_python_canonical_representation() -> None:
+    envelope = copy.deepcopy(UNSIGNED)
+    envelope["payload"]["arguments"]["speed"] = 0.3
+
+    assert b'"speed":"__nao_float__:0.3"' in _canonical(envelope)
 
 
 @pytest.mark.parametrize("mutation", ["expired", "replayed", "bad_signature", "unknown_version"])

@@ -96,6 +96,17 @@ def test_led_uses_named_safe_color():
     assert facade.calls == [("set_led_rgb", "FaceLeds", 0.0, 0.0, 1.0, 0.3)]
 
 
+def test_facade_failure_is_not_reported_as_completed():
+    facade = FakeFacade()
+    facade.say = lambda text: False
+
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "say", "arguments": {"text": "Hola"}}
+    )
+
+    assert result == {"status": "rejected", "reason": "facade_failed"}
+
+
 def test_look_rejects_angle_outside_registry_range():
     facade = FakeFacade()
     result = ActionExecutor(facade, REGISTRY).execute(
