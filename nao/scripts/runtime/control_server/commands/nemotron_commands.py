@@ -33,6 +33,17 @@ class PcTargetStore(object):
             return {"pc_ip": ""}
 
 
+def _peer_ip(websocket):
+    """Read the peer from the accepted socket, not a library-specific wrapper."""
+    try:
+        address = websocket.client.getpeername()
+    except (AttributeError, IOError, OSError):
+        address = getattr(websocket, "address", None)
+    if isinstance(address, (tuple, list)) and address:
+        return address[0]
+    return address if isinstance(address, STRING_TYPES) else ""
+
+
 class NemotronStatusCommand(BaseCommand):
     def __init__(self, nao_facade, logger, state_store=None, target_store=None):
         BaseCommand.__init__(self, nao_facade, logger)
@@ -45,8 +56,7 @@ class NemotronStatusCommand(BaseCommand):
     def execute(self, message, websocket):
         try:
             configured_pc = self.target_store.load().get("pc_ip", "")
-            address = getattr(websocket, "address", None)
-            peer_ip = address[0] if isinstance(address, (tuple, list)) and address else ""
+            peer_ip = _peer_ip(websocket)
             if not configured_pc or peer_ip != configured_pc:
                 self.logger.warning(
                     "nemotronStatus denied for peer {}".format(peer_ip or "unknown")

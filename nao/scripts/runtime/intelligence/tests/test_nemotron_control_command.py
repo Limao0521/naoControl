@@ -30,10 +30,19 @@ class FakeLogger(object):
 class FakeSocket(object):
     def __init__(self, address=None):
         self.messages = []
-        self.address = address or ["169.254.151.5", 54321]
+        self.address = {"library_specific": True}
+        self.client = FakeClient(address or ["169.254.151.5", 54321])
 
     def sendMessage(self, message):
         self.messages.append(json.loads(message))
+
+
+class FakeClient(object):
+    def __init__(self, peer):
+        self.peer = peer
+
+    def getpeername(self):
+        return self.peer
 
 
 class FakeStore(object):
