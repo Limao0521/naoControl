@@ -35,6 +35,21 @@ def test_setup_rejects_shell_syntax_in_nao_ip(tmp_path) -> None:
     assert not (tmp_path / ".env").exists()
 
 
+def test_setup_resolves_default_env_path_after_parameter_binding() -> None:
+    content = SCRIPT.read_text(encoding="utf-8")
+    parameter_block = content.split("$ErrorActionPreference", 1)[0]
+
+    assert "$PSScriptRoot" not in parameter_block
+    assert "[string]$EnvFile = ''" in parameter_block
+    assert "Join-Path $repoRoot '.env'" in content
+
+
+def test_setup_preserves_empty_passphrase_for_windows_ssh_keygen() -> None:
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert "-N '\"\"'" in content
+
+
 def test_setup_writes_only_safe_broker_values_after_key_verification(tmp_path) -> None:
     key_path = tmp_path / "nao_key"
     key_path.write_text("private-placeholder", encoding="utf-8")

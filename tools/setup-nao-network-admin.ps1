@@ -8,13 +8,23 @@ param(
     [string]$User = 'nao',
 
     [string]$KeyPath = (Join-Path $env:USERPROFILE '.ssh\nao_control_ed25519'),
-    [string]$EnvFile = (Join-Path (Split-Path -Parent $PSScriptRoot) '.env'),
+    [string]$EnvFile = '',
     [string]$SshCommand = 'ssh.exe',
     [string]$SshKeygenCommand = 'ssh-keygen.exe'
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+$scriptDirectory = Split-Path -Parent $PSCommandPath
+if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
+    $scriptDirectory = $PSScriptRoot
+}
+if ([string]::IsNullOrWhiteSpace($scriptDirectory)) {
+    throw 'Unable to resolve the setup script directory.'
+}
+$repoRoot = (Resolve-Path (Join-Path $scriptDirectory '..')).Path
+if ([string]::IsNullOrWhiteSpace($EnvFile)) {
+    $EnvFile = Join-Path $repoRoot '.env'
+}
 $resolvedKeyPath = [System.IO.Path]::GetFullPath($KeyPath)
 $resolvedEnvFile = [System.IO.Path]::GetFullPath($EnvFile)
 $keyDirectory = Split-Path -Parent $resolvedKeyPath
@@ -71,7 +81,8 @@ if (-not (Test-Path -LiteralPath $resolvedKeyPath)) {
         throw "Missing SSH key generator: $SshKeygenCommand"
     }
     New-Item -ItemType Directory -Force -Path $keyDirectory | Out-Null
-    & $SshKeygenCommand -t ed25519 -f $resolvedKeyPath -N '' -C 'naoControl-network-admin'
+    # Windows PowerShell otherwise drops an empty native argument after -N.
+    & $SshKeygenCommand -t ed25519 -f $resolvedKeyPath -N '""' -C 'naoControl-network-admin'
     Assert-CommandSucceeded 'SSH key generation'
 }
 
