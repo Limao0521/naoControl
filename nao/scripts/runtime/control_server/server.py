@@ -21,6 +21,9 @@ from datetime import datetime
 _current_dir = os.path.dirname(os.path.abspath(__file__))
 if _current_dir not in sys.path:
     sys.path.insert(0, _current_dir)
+_runtime_dir = os.path.dirname(_current_dir)
+if _runtime_dir not in sys.path:
+    sys.path.insert(0, _runtime_dir)
 
 # Agregar subdirectorios al path para imports
 _facades_dir = os.path.join(_current_dir, "facades")
@@ -36,6 +39,7 @@ from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
 from nao_facade import NAOFacade
 from command_factory import CommandFactory
 from movement_strategies import MovementContext
+from message_security import safe_message_summary
 
 # Importar sistema de logging
 try:
@@ -72,6 +76,8 @@ class ModularControlServer(object):
         self.websocket_server = None
         self.watchdog_thread = None
         self.adaptive_walker = None
+        self.network_session = None
+        self.network_service = None
         
         # Estado global
         self.last_walk_time = time.time()
@@ -107,11 +113,19 @@ class ModularControlServer(object):
             logger.info("Inicializando Movement Context...")
             self.movement_context = MovementContext(self.nao_facade, logger, self.adaptive_walker)
             
-            # 4. Inicializar factory de comandos (pasando movement_context para comandos de walk)
+            # 4. Inicializar gestor de red. Su ausencia no bloquea el control.
+            self._initialize_network_admin()
+
+            # 5. Inicializar factory de comandos (pasando dependencias opcionales)
             logger.info("Inicializando Command Factory...")
-            self.command_factory = CommandFactory(self.nao_facade, logger, self.movement_context)
-            
-            # 5. Inicializar watchdog
+            self.command_factory = CommandFactory(
+                self.nao_facade,
+                logger,
+                self.movement_context,
+                network_service=self.network_service,
+            )
+
+            # 6. Inicializar watchdog
             self._start_watchdog()
             
             logger.info("Todos los componentes inicializados exitosamente")
@@ -119,6 +133,25 @@ class ModularControlServer(object):
             
         except Exception as e:
             logger.critical("Error fatal inicializando componentes: {}".format(e))
+            return False
+
+    def _initialize_network_admin(self):
+        """Construir una única instancia local sin depender del gateway PC."""
+        try:
+            import qi
+            from network_admin import build_robot_service
+
+            session = qi.Session()
+            session.connect("tcp://127.0.0.1:9559")
+            service = build_robot_service(session)
+            self.network_session = session
+            self.network_service = service
+            logger.info("Gestor de red integrado disponible")
+            return True
+        except Exception:
+            self.network_session = None
+            self.network_service = None
+            logger.warning("Gestor de red integrado no disponible")
             return False
     
     def _start_watchdog(self):
@@ -173,13 +206,16 @@ class ModularControlServer(object):
                 try:
                     # Parsear mensaje JSON
                     raw = self.data.strip()
-                    logger.debug("WS: Mensaje recibido: {}".format(raw))
                     
                     try:
                         message = json.loads(raw)
                     except ValueError as e:
-                        logger.warning("WS: JSON inválido: {} - Error: {}".format(raw, e))
+                        logger.warning("WS: JSON inválido")
                         return
+
+                    logger.debug("WS: Mensaje recibido: {}".format(
+                        safe_message_summary(message)
+                    ))
                     
                     # Obtener action
                     action = message.get("action")

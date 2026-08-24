@@ -45,6 +45,7 @@ from safety_commands import (
 from conversation_commands import (
     StartConversationCommand, StopConversationCommand, GetConversationStatusCommand
 )
+from network_commands import NetworkAdminCommand
 
 # Import record system functions
 try:
@@ -62,7 +63,8 @@ class CommandFactory(object):
     Implementa el Factory Pattern para centralizar la creación de comandos.
     """
     
-    def __init__(self, nao_facade, logger, movement_context=None):
+    def __init__(self, nao_facade, logger, movement_context=None,
+                 network_service=None):
         """
         Inicializar factory con dependencias.
         
@@ -74,6 +76,7 @@ class CommandFactory(object):
         self.nao_facade = nao_facade
         self.logger = logger
         self.movement_context = movement_context
+        self.network_service = network_service
         
         # Inicializar sistema de grabación si está disponible
         self.record_system_funcs = None
@@ -167,6 +170,9 @@ class CommandFactory(object):
             'startConversation': StartConversationCommand,
             'stopConversation': StopConversationCommand,
             'getConversationStatus': GetConversationStatusCommand,
+
+            # Red
+            'networkAdmin': NetworkAdminCommand,
         }
     
     def create_command(self, action):
@@ -194,6 +200,10 @@ class CommandFactory(object):
                     )
                     if action == 'getRecordStatus':
                         command.available = self.record_system_funcs is not None
+                elif action == 'networkAdmin':
+                    command = command_class(
+                        self.nao_facade, self.logger, self.network_service
+                    )
                 else:
                     command = command_class(self.nao_facade, self.logger)
                 self.logger.debug("Comando creado para action: {}".format(action))
