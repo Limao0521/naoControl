@@ -8,52 +8,16 @@ import logging
 import os
 from pathlib import Path
 
-from aiohttp import web
 from dotenv import load_dotenv
 
 from .agent_host import AgentHost
 from .config import GatewaySettings
 from .nemotron import NemotronClient
-from .network_broker import SshNetworkTransport, create_network_app
 from .robot_client import RobotClient
 from .sensor_hub import fetch_latest_jpeg
 
 
 logger = logging.getLogger(__name__)
-
-
-async def run_network_broker(
-    settings: GatewaySettings,
-    *,
-    stop_event: asyncio.Event | None = None,
-    runner_factory=web.AppRunner,
-    site_factory=web.TCPSite,
-) -> None:
-    """Serve the administrative API on PC loopback until cancelled."""
-    transport = SshNetworkTransport(
-        settings.nao_ssh_user,
-        settings.nao_ssh_host,
-        settings.nao_ssh_key,
-    )
-    app = create_network_app(transport, settings.network_allowed_origins)
-    runner = runner_factory(app)
-    await runner.setup()
-    try:
-        site = site_factory(
-            runner, settings.network_broker_host, settings.network_broker_port
-        )
-        await site.start()
-        logger.info(
-            "NAO network broker listening on http://%s:%s",
-            settings.network_broker_host,
-            settings.network_broker_port,
-        )
-        if stop_event is None:
-            await asyncio.Future()
-        else:
-            await stop_event.wait()
-    finally:
-        await runner.cleanup()
 
 
 async def handle_audio_result(robot, host, payload: dict) -> None:
@@ -140,10 +104,7 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
 
     host = AgentHost(robot, nemotron, latest_image, registry)
     try:
-        services = [maintain_robot_connection(robot, host)]
-        if settings.network_broker_enabled:
-            services.append(run_network_broker(settings))
-        await asyncio.gather(*services)
+        await maintain_robot_connection(robot, host)
     finally:
         await nemotron.close()
 

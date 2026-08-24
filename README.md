@@ -124,11 +124,18 @@ La preparación segura de la conexión administrativa se realiza una sola vez:
 .\tools\setup-nao-network-admin.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>
 ```
 
-Después, el mismo proceso del gateway Nemotron expone el broker únicamente en
-`http://127.0.0.1:6675`. El menú **Red** permite consultar, escanear, conectar,
-desconectar y eliminar perfiles. Cada cambio requiere mantener el sensor táctil
-trasero durante tres segundos. Consulta `docs/network-management.md` para el
-flujo completo, los límites de seguridad y la recuperación tras un cambio de IP.
+Después inicia el gestor de red independiente en el PC; no requiere arrancar
+Nemotron ni configurar la API NVIDIA:
+
+```powershell
+.\.venv\Scripts\python.exe -u -m nao_gateway.network_main --env-file .env
+```
+
+El broker queda limitado a `http://127.0.0.1:6675`. El menú **Red** permite
+consultar, escanear, conectar, desconectar y eliminar perfiles. Cada cambio
+requiere mantener el sensor táctil trasero durante tres segundos. Consulta
+`docs/network-management.md` para el flujo completo, los límites de seguridad
+y la recuperación tras un cambio de IP.
 
 ### En el Robot NAO
 - **NAO V6** con NAOqi 2.8

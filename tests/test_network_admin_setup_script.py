@@ -66,7 +66,8 @@ def test_setup_writes_only_safe_broker_values_after_key_verification(tmp_path) -
     assert result.returncode == 0, result.stderr + result.stdout
     configured = env_file.read_text(encoding="utf-8")
     assert "NVIDIA_API_KEY=keep-existing" in configured
-    assert "NAO_NETWORK_BROKER_ENABLED=true" in configured
+    assert "NAO_NETWORK_HOST=169.254.1.2" in configured
+    assert "NAO_NETWORK_BROKER_ENABLED=" not in configured
     assert f"NAO_SSH_KEY={key_path.resolve()}" in configured
     assert "NAO_NETWORK_ALLOWED_ORIGINS=http://169.254.1.2:3000" in configured
     assert "private-placeholder" not in configured

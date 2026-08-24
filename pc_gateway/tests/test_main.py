@@ -76,11 +76,7 @@ async def test_connection_manager_reconnects_after_robot_session_is_lost():
 
 
 @pytest.mark.asyncio
-async def test_run_gateway_starts_enabled_network_broker_as_sibling(
-    monkeypatch, tmp_path
-):
-    key_path = tmp_path / "nao_key"
-    key_path.write_text("test-key-placeholder", encoding="utf-8")
+async def test_run_gateway_does_not_start_network_administration(monkeypatch, tmp_path):
     registry_path = tmp_path / "registry.json"
     registry_path.write_text("{}", encoding="utf-8")
     settings = GatewaySettings.from_env(
@@ -88,8 +84,6 @@ async def test_run_gateway_starts_enabled_network_broker_as_sibling(
             "NVIDIA_API_KEY": "test-nvidia-key",
             "NAO_GATEWAY_SECRET": "test-shared-secret-with-enough-entropy",
             "NAO_GATEWAY_URL": "ws://169.254.1.2:6674",
-            "NAO_NETWORK_BROKER_ENABLED": "true",
-            "NAO_SSH_KEY": str(key_path),
         }
     )
     calls = []
@@ -112,59 +106,8 @@ async def test_run_gateway_starts_enabled_network_broker_as_sibling(
     async def fake_robot_connection(robot, host):
         calls.append("robot_service")
 
-    async def fake_network_broker(current_settings):
-        assert current_settings is settings
-        calls.append("network_service")
-
     monkeypatch.setattr(main_module, "maintain_robot_connection", fake_robot_connection)
-    monkeypatch.setattr(main_module, "run_network_broker", fake_network_broker, raising=False)
 
     await main_module.run_gateway(settings, Path(registry_path))
 
-    assert calls[-3:] == ["robot_service", "network_service", "nemotron_closed"]
-
-
-@pytest.mark.asyncio
-async def test_network_broker_binds_loopback_and_cleans_up(tmp_path):
-    key_path = tmp_path / "nao_key"
-    key_path.write_text("test-key-placeholder", encoding="utf-8")
-    settings = GatewaySettings.from_env(
-        {
-            "NVIDIA_API_KEY": "test-nvidia-key",
-            "NAO_GATEWAY_SECRET": "test-shared-secret-with-enough-entropy",
-            "NAO_GATEWAY_URL": "ws://169.254.1.2:6674",
-            "NAO_NETWORK_BROKER_ENABLED": "true",
-            "NAO_SSH_KEY": str(key_path),
-        }
-    )
-    calls = []
-
-    class FakeRunner:
-        def __init__(self, app):
-            calls.append(("runner", app))
-
-        async def setup(self):
-            calls.append(("setup",))
-
-        async def cleanup(self):
-            calls.append(("cleanup",))
-
-    class FakeSite:
-        def __init__(self, runner, host, port):
-            calls.append(("site", host, port))
-
-        async def start(self):
-            calls.append(("start",))
-
-    stop_event = asyncio.Event()
-    stop_event.set()
-
-    await main_module.run_network_broker(
-        settings,
-        stop_event=stop_event,
-        runner_factory=FakeRunner,
-        site_factory=FakeSite,
-    )
-
-    assert ("site", "127.0.0.1", 6675) in calls
-    assert calls[-1] == ("cleanup",)
+    assert calls == ["robot_created", "nemotron_created", "robot_service", "nemotron_closed"]

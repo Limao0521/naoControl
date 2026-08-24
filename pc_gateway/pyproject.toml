@@ -25,6 +25,7 @@ test = [
 
 [project.scripts]
 nao-nemotron-gateway = "nao_gateway.main:main"
+nao-network-admin = "nao_gateway.network_main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

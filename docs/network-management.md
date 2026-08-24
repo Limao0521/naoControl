@@ -21,7 +21,9 @@ de la cabeza durante tres segundos. Soltarlo antes reinicia el contador.
 | Gateway Nemotron | NAO | `ws://<NAO_IP>:6674` |
 | Broker de red | PC | `http://127.0.0.1:6675` |
 
-El broker forma parte del mismo proceso Python 3 que ejecuta Nemotron. No se
+El broker es un proceso independiente de Nemotron. Solo lee sus seis variables
+de red; no inyecta `NVIDIA_API_KEY` ni `NAO_GATEWAY_SECRET` en su proceso, no
+carga el registro de acciones ni establece el WebSocket de inteligencia. No se
 debe publicar el puerto 6675 en la LAN ni cambiar su host de loopback.
 
 ## Configuración inicial, una sola vez
@@ -39,12 +41,13 @@ El comando:
    pública.
 3. Verifica una conexión posterior sin contraseña y con comprobación estricta
    de la identidad del host.
-4. Actualiza el `.env` ignorado por Git con la IP, la ruta de la clave, el
-   origen permitido y `NAO_NETWORK_BROKER_ENABLED=true`.
+4. Actualiza el `.env` ignorado por Git con `NAO_NETWORK_HOST`, la ruta de la
+   clave SSH, el origen permitido y el puerto local. También elimina la antigua
+   variable `NAO_NETWORK_BROKER_ENABLED`, que ya no se usa.
 
 El script conserva las demás variables del `.env` y no copia la clave privada
-dentro del proyecto. Si el `.env` era nuevo, abre el archivo local y completa
-`NVIDIA_API_KEY` y `NAO_GATEWAY_SECRET` antes de arrancar el gateway.
+dentro del proyecto. El gestor de red no requiere credenciales NVIDIA ni el
+secreto compartido del gateway Nemotron.
 
 ## Compilar y desplegar
 
@@ -67,10 +70,11 @@ El instalador valida con Python 2 el gateway, el control server y
 `network_admin.py` antes de considerar exitoso el despliegue. No copia `.env`,
 la clave SSH privada ni credenciales NVIDIA.
 
-En otra terminal inicia el gateway del PC y conserva sus logs visibles:
+En otra terminal inicia únicamente el gestor de red del PC y conserva sus logs
+visibles. Nemotron puede permanecer apagado:
 
 ```powershell
-.\.venv\Scripts\python.exe -u -m nao_gateway.main --env-file .env --registry config\action_registry.json
+.\.venv\Scripts\python.exe -u -m nao_gateway.network_main --env-file .env
 ```
 
 Debe aparecer:

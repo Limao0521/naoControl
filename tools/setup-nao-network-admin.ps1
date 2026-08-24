@@ -50,6 +50,18 @@ function Set-EnvValue([string]$Path, [string]$Name, [string]$Value) {
     )
 }
 
+function Remove-EnvValue([string]$Path, [string]$Name) {
+    if (-not (Test-Path -LiteralPath $Path)) { return }
+    $remaining = [System.IO.File]::ReadAllLines($Path) | Where-Object {
+        $_ -notmatch "^$([regex]::Escape($Name))="
+    }
+    [System.IO.File]::WriteAllLines(
+        $Path,
+        [string[]]$remaining,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+}
+
 if (-not (Get-Command $SshCommand -ErrorAction SilentlyContinue)) {
     throw "Missing SSH command: $SshCommand"
 }
@@ -108,8 +120,8 @@ if (-not (Test-Path -LiteralPath $resolvedEnvFile)) {
     }
 }
 
-Set-EnvValue $resolvedEnvFile 'NAO_GATEWAY_URL' "ws://$NaoIp`:6674"
-Set-EnvValue $resolvedEnvFile 'NAO_NETWORK_BROKER_ENABLED' 'true'
+Remove-EnvValue $resolvedEnvFile 'NAO_NETWORK_BROKER_ENABLED'
+Set-EnvValue $resolvedEnvFile 'NAO_NETWORK_HOST' $NaoIp
 Set-EnvValue $resolvedEnvFile 'NAO_NETWORK_BROKER_PORT' '6675'
 Set-EnvValue $resolvedEnvFile 'NAO_SSH_USER' $User
 Set-EnvValue $resolvedEnvFile 'NAO_SSH_KEY' $resolvedKeyPath
