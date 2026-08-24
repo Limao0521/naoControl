@@ -3,7 +3,7 @@ import io
 import wave
 
 from nao.scripts.runtime.intelligence.audio_capture import AudioCapture, audio_diagnostics
-from nao.scripts.runtime.intelligence.gateway_server import GatewayCore
+from nao.scripts.runtime.intelligence.gateway_server import GatewayCore, create_entry_gate
 from nao.scripts.runtime.intelligence.protocol import ReplayGuard, sign_envelope
 
 
@@ -153,3 +153,27 @@ def test_turn_finished_invokes_system_handler():
     assert result["message_type"] == "event_result"
     assert result["payload"]["status"] == "ok"
     assert events == ["TURN_FINISHED"]
+
+
+def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp_path):
+    target = tmp_path / "target.json"
+    bundle = tmp_path / "bundle.tar.gz"
+    target.write_text('{"pc_ip":"192.168.10.25"}', encoding="utf-8")
+    bundle.write_bytes(b"bundle")
+    requests = []
+
+    class Safety:
+        def check_intelligent_entry(self):
+            return True, []
+
+    gate = create_entry_gate(
+        Safety(),
+        b"x" * 32,
+        target_path=str(target),
+        bundle_path=str(bundle),
+        transport=lambda *args: requests.append(args) or {"status": "ready"},
+        now_ms=lambda: 1000,
+    )
+
+    assert gate() is True
+    assert requests[0][0] == "http://192.168.10.25:6676/start"

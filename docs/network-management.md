@@ -30,6 +30,8 @@ gateway del PC ni el puerto `6675`.
 | Control y gestión de red | NAO | `ws://<NAO_IP>:6671` |
 | Cámara | NAO | `http://<NAO_IP>:8080/video.mjpeg` |
 | Gateway Nemotron opcional | NAO | `ws://<NAO_IP>:6674` |
+| Bundle del gateway | NAO | `http://<NAO_IP>:6677/pc_gateway_bundle.tar.gz` |
+| Lanzador autenticado | PC | `http://<PC_IP>:6676/start` |
 
 ## Despliegue e inicio
 
@@ -52,6 +54,10 @@ http://<NAO_IP>:3000
 No necesitas ejecutar comandos adicionales en el PC ni preparar claves para
 usar el menú de red.
 
+El mismo menú contiene **IP del PC para Nemotron**. Guardarla requiere la
+confirmación táctil trasera porque cambia el equipo autorizado para recibir la
+solicitud de inicio. El valor se conserva al volver a desplegar el proyecto.
+
 ## Uso del panel
 
 1. Mantén Ethernet conectado durante las primeras pruebas.
@@ -69,6 +75,8 @@ de tres segundos reinicia el contador y agotar el tiempo deja la red intacta.
 
 - El control acepta solo seis operaciones de red tipadas; no acepta comandos de
   shell ni nombres de métodos arbitrarios.
+- La configuración añade dos operaciones tipadas: leer y guardar la IP del PC;
+  solo acepta una dirección IPv4 canónica y nunca una orden de sistema.
 - La contraseña no se devuelve al navegador ni se escribe en logs.
 - El servidor registra únicamente `action`, `operation` y `request_id`, nunca el
   JSON WebSocket completo.

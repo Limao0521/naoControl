@@ -3,7 +3,9 @@ const REQUEST_ID_PATTERN = /^[A-Za-z0-9._-]{1,64}$/;
 const RESULT_STATUSES = new Set([
   'completed', 'rejected', 'confirmation_timeout', 'failed',
 ]);
-const MUTATING_OPERATIONS = new Set(['connect', 'disconnect', 'forget']);
+const MUTATING_OPERATIONS = new Set([
+  'connect', 'disconnect', 'forget', 'set_gateway_target',
+]);
 const GENERIC_ERROR = 'No fue posible contactar el gestor de red.';
 
 
@@ -120,6 +122,10 @@ export const createNetworkApi = (options = {}) => {
     status: () => request({ operation: 'status' }),
     scan: () => request({ operation: 'scan' }),
     profiles: () => request({ operation: 'profiles' }),
+    gatewayTarget: () => request({ operation: 'gateway_target' }),
+    saveGatewayTarget: (pcIp) => request({
+      operation: 'set_gateway_target', pc_ip: pcIp,
+    }),
     mutate: (payload) => request(payload),
   };
 };

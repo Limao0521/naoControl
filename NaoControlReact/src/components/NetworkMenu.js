@@ -35,16 +35,19 @@ const NetworkMenu = () => {
   const [message, setMessage] = useState('');
   const [pendingAction, setPendingAction] = useState(null);
   const [warningAccepted, setWarningAccepted] = useState(false);
+  const [pcIp, setPcIp] = useState('');
 
   const refresh = useCallback(async () => {
     setBrokerState('loading');
     try {
-      const [statusResult, profileResult] = await Promise.all([
+      const [statusResult, profileResult, targetResult] = await Promise.all([
         networkApi.status(),
         networkApi.profiles(),
+        networkApi.gatewayTarget(),
       ]);
       setNetworkState(statusResult.data || {});
       setProfiles(profileResult.data?.profiles || []);
+      setPcIp(targetResult.data?.pc_ip || '');
       setBrokerState('ready');
     } catch (_error) {
       setBrokerState('error');
@@ -127,12 +130,31 @@ const NetworkMenu = () => {
     }
   };
 
+  const savePcTarget = async (event) => {
+    event.preventDefault();
+    if (busy || !pcIp) return;
+    setBusy(true);
+    setMessage('Mantén el sensor trasero por 3 segundos para guardar el destino.');
+    try {
+      const result = await networkApi.saveGatewayTarget(pcIp);
+      setMessage(
+        result.status === 'completed'
+          ? 'Destino del gateway actualizado.'
+          : resultMessage(result)
+      );
+    } catch (_error) {
+      setMessage('No fue posible guardar la IP del PC.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   if (brokerState === 'error') {
     return (
       <section className="network-menu">
         <h3>Red</h3>
         <p className="network-error">Gestor de red no disponible</p>
-        <p>Inicia el gateway del PC con el broker habilitado.</p>
+        <p>Comprueba que el control WebSocket del NAO esté iniciado.</p>
         <button type="button" onClick={refresh}>Reintentar</button>
       </section>
     );
@@ -153,6 +175,27 @@ const NetworkMenu = () => {
               </span>
             ))}
           </div>
+
+          <form className="network-connect-form" onSubmit={savePcTarget}>
+            <strong>PC que ejecutará Nemotron</strong>
+            <label htmlFor="nemotron-pc-ip">IP del PC para Nemotron</label>
+            <input
+              id="nemotron-pc-ip"
+              type="text"
+              inputMode="numeric"
+              autoComplete="off"
+              placeholder="192.168.1.50"
+              value={pcIp}
+              onChange={(event) => setPcIp(event.target.value)}
+              pattern="(?:[0-9]{1,3}\\.){3}[0-9]{1,3}"
+              maxLength={15}
+              required
+            />
+            <span>
+              Al activar el bumper, el NAO solicitará a este PC iniciar el gateway.
+            </span>
+            <button type="submit" disabled={busy}>Guardar IP del PC</button>
+          </form>
 
           <button type="button" onClick={scan} disabled={busy}>
             Escanear redes

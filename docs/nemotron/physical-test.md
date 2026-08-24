@@ -38,9 +38,12 @@ el responsable de iniciar los servicios con la presión larga central.
    los detiene para dejar el robot preparado para Choregraphe.
 2. La interfaz web queda disponible en `http://<ip-del-nao>:3000` y se conecta
    al WebSocket de control del mismo robot en el puerto `6671`.
-3. En el PC, desde la raíz del repositorio, ejecutar
-   `.venv\\Scripts\\python.exe -m nao_gateway.main`.
-4. Mantener presionado el bumper izquierdo 1.5 s para entrar o salir del modo inteligente.
+3. Preparar una sola vez el PC con
+   `tools\setup-nemotron-pc-host.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>` y guardar
+   su IPv4 en el menú **Red**, confirmando con el sensor táctil trasero.
+4. Mantener presionado el bumper izquierdo 1.5 s. El NAO solicita al lanzador
+   autenticado del PC descargar el gateway desde el robot y ejecutarlo; solo
+   entonces entra al modo inteligente. Otra pulsación larga sale del modo.
 5. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
 6. Presionar ambos bumpers para solicitar parada de emergencia.
 
@@ -51,11 +54,11 @@ WAV) por SSH en tiempo real:
 ssh -t nao@<IP_ACTUAL_DEL_NAO> "tail -F /home/nao/logs/naoControl/intelligence.log"
 ```
 
-En una terminal del PC se inicia el componente que llama a NVIDIA y muestra el
-transcript, contexto visual, decisión y resultado de cada acción:
+En el PC, el componente que llama a NVIDIA se inicia automáticamente. Sus logs
+muestran el transcript, contexto visual, decisión y resultado de cada acción:
 
 ```powershell
-.\.venv\Scripts\python.exe -u -m nao_gateway.main --env-file .env --registry config\action_registry.json
+Get-Content "$env:LOCALAPPDATA\naoControlGatewayHost\logs\gateway.log" -Wait
 ```
 
 El PC imprime `TRANSCRIPTION` y el resultado de Nemotron. El robot imprime

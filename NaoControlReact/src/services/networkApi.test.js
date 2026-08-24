@@ -152,3 +152,28 @@ test('uses wss when the control page is served over https', async () => {
   } });
   await pending;
 });
+
+test('reads and saves the PC gateway target through allowlisted operations', async () => {
+  const api = createApi();
+  const read = api.gatewayTarget();
+  let socket = FakeWebSocket.instances[0];
+  socket.open();
+  expect(JSON.parse(socket.sent[0])).toMatchObject({ operation: 'gateway_target' });
+  socket.message({ networkAdmin: {
+    request_id: 'req-1', status: 'completed', operation: 'gateway_target',
+    data: { pc_ip: '192.168.10.25' },
+  } });
+  await expect(read).resolves.toMatchObject({ data: { pc_ip: '192.168.10.25' } });
+
+  const save = api.saveGatewayTarget('192.168.10.30');
+  socket = FakeWebSocket.instances[1];
+  socket.open();
+  expect(JSON.parse(socket.sent[0])).toMatchObject({
+    operation: 'set_gateway_target', pc_ip: '192.168.10.30',
+  });
+  socket.message({ networkAdmin: {
+    request_id: 'req-1', status: 'completed', operation: 'set_gateway_target',
+    data: { pc_ip: '192.168.10.30' },
+  } });
+  await save;
+});

@@ -18,11 +18,14 @@ except NameError:  # pragma: no cover - Python 3 test runtime
 MAX_REQUEST_BYTES = 8192
 ALLOWED_OPERATIONS = frozenset((
     "status", "scan", "profiles", "connect", "disconnect", "forget",
+    "gateway_target", "set_gateway_target",
 ))
 ALLOWED_REQUEST_FIELDS = frozenset((
-    "operation", "service_id", "ssid", "passphrase",
+    "operation", "service_id", "ssid", "passphrase", "pc_ip",
 ))
-MUTATING_OPERATIONS = frozenset(("connect", "disconnect", "forget"))
+MUTATING_OPERATIONS = frozenset((
+    "connect", "disconnect", "forget", "set_gateway_target",
+))
 VISIBLE_SERVICE_FIELDS = (
     "ServiceId", "Name", "Type", "State", "Security", "Strength",
     "Favorite", "AutoConnect", "IPv4", "IPv6", "Nameservers", "Domains",
@@ -205,12 +208,13 @@ class ConnectionManagerAdapter(object):
 
 class NetworkAdminService(object):
     def __init__(self, adapter, tactile_gate, confirmation_timeout=20.0,
-                 notifier=None, audit_log=None):
+                 notifier=None, audit_log=None, gateway_target_store=None):
         self.adapter = adapter
         self.tactile_gate = tactile_gate
         self.confirmation_timeout = float(confirmation_timeout)
         self.notifier = notifier or NullNotifier()
         self.audit_log = audit_log or NullAuditLog()
+        self.gateway_target_store = gateway_target_store
 
     def execute(self, request):
         if not isinstance(request, dict):
@@ -225,10 +229,12 @@ class NetworkAdminService(object):
         service_id = request.get("service_id", "")
         ssid = request.get("ssid", "")
         passphrase = request.get("passphrase", "")
+        pc_ip = request.get("pc_ip", "")
         for name, value, maximum in (
             ("service_id", service_id, 512),
             ("ssid", ssid, 32),
             ("passphrase", passphrase, 63),
+            ("pc_ip", pc_ip, 15),
         ):
             if not isinstance(value, basestring):
                 raise NetworkAdminError(name + " must be a string")
@@ -236,8 +242,12 @@ class NetworkAdminService(object):
                 raise NetworkAdminError(name + " is invalid")
         if passphrase and len(passphrase) < 8:
             raise NetworkAdminError("passphrase is invalid")
-        if operation in MUTATING_OPERATIONS and not service_id:
+        if operation in ("connect", "disconnect", "forget") and not service_id:
             raise NetworkAdminError("service_id is required")
+        if operation == "set_gateway_target" and not pc_ip:
+            raise NetworkAdminError("pc_ip is required")
+        if operation in ("gateway_target", "set_gateway_target") and self.gateway_target_store is None:
+            raise NetworkAdminError("gateway target is unavailable")
 
         if operation in MUTATING_OPERATIONS:
             self.audit_log.write({
@@ -258,7 +268,11 @@ class NetworkAdminService(object):
                 }
 
         try:
-            if operation == "connect":
+            if operation == "gateway_target":
+                data = self.gateway_target_store.load()
+            elif operation == "set_gateway_target":
+                data = self.gateway_target_store.save(pc_ip)
+            elif operation == "connect":
                 data = self.adapter.connect(service_id, passphrase, ssid)
             elif operation in ("disconnect", "forget"):
                 data = getattr(self.adapter, operation)(service_id)
@@ -276,6 +290,8 @@ class NetworkAdminService(object):
 
 
 def build_robot_service(session, audit_log=None):
+    from intelligence.pc_gateway_launch import GatewayTargetStore
+
     manager = session.service("ALConnectionManager")
     memory = session.service("ALMemory")
     tts = session.service("ALTextToSpeech")
@@ -288,6 +304,7 @@ def build_robot_service(session, audit_log=None):
         audit_log=audit_log or JsonAuditLog(
             "/home/nao/logs/naoControl/network_admin.log"
         ),
+        gateway_target_store=GatewayTargetStore(),
     )
 
 

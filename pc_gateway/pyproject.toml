@@ -24,6 +24,7 @@ test = [
 
 [project.scripts]
 nao-nemotron-gateway = "nao_gateway.main:main"
+nao-nemotron-launcher = "nao_gateway.launcher_service:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

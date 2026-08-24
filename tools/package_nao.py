@@ -31,7 +31,12 @@ def include_member(info: tarfile.TarInfo) -> tarfile.TarInfo | None:
 
 def build_archive(repo_root: Path, archive: Path) -> None:
     with tarfile.open(archive, "w:gz", format=tarfile.GNU_FORMAT) as output:
-        for relative in (Path("nao"), Path("config"), Path("NaoControlReact") / "build"):
+        for relative in (
+            Path("nao"),
+            Path("config"),
+            Path("pc_gateway"),
+            Path("NaoControlReact") / "build",
+        ):
             output.add(repo_root / relative, arcname=relative.as_posix(), filter=include_member)
 
 

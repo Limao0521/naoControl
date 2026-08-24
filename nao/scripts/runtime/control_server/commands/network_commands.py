@@ -22,8 +22,9 @@ from network_admin import NetworkAdminError, _redact
 ACTION = "networkAdmin"
 ALLOWED_MESSAGE_FIELDS = frozenset((
     "action", "request_id", "operation", "service_id", "ssid", "passphrase",
+    "pc_ip",
 ))
-SERVICE_FIELDS = ("operation", "service_id", "ssid", "passphrase")
+SERVICE_FIELDS = ("operation", "service_id", "ssid", "passphrase", "pc_ip")
 
 
 class NetworkAdminCommand(BaseCommand):

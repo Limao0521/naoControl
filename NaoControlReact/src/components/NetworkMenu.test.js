@@ -12,6 +12,8 @@ jest.mock('../services/networkApi', () => ({
     scan: jest.fn(),
     profiles: jest.fn(),
     mutate: jest.fn(),
+    gatewayTarget: jest.fn(),
+    saveGatewayTarget: jest.fn(),
   },
 }));
 
@@ -29,6 +31,9 @@ beforeEach(() => {
     })
   );
   networkApi.profiles.mockResolvedValue(completed('profiles', { profiles: [] }));
+  networkApi.gatewayTarget.mockResolvedValue(
+    completed('gateway_target', { pc_ip: '192.168.10.25' })
+  );
 });
 
 
@@ -113,4 +118,22 @@ test('requires explicit warning acknowledgement before disconnecting last path',
   expect(screen.getByRole('button', { name: 'Confirmar desconexión' })).toBeDisabled();
   fireEvent.click(screen.getByLabelText('Entiendo que puedo perder la conexión'));
   expect(screen.getByRole('button', { name: 'Confirmar desconexión' })).toBeEnabled();
+});
+
+
+test('shows and physically confirms the PC destination used by the bumper', async () => {
+  networkApi.saveGatewayTarget.mockResolvedValue(
+    completed('set_gateway_target', { pc_ip: '192.168.10.30' })
+  );
+  render(<NetworkMenu />);
+
+  const input = await screen.findByLabelText('IP del PC para Nemotron');
+  expect(input).toHaveValue('192.168.10.25');
+  fireEvent.change(input, { target: { value: '192.168.10.30' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar IP del PC' }));
+
+  await waitFor(() => expect(networkApi.saveGatewayTarget).toHaveBeenCalledWith(
+    '192.168.10.30'
+  ));
+  expect(await screen.findByText('Destino del gateway actualizado.')).toBeInTheDocument();
 });

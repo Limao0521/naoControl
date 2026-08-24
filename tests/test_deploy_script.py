@@ -12,7 +12,7 @@ def test_deploy_script_preserves_robot_secret_without_transferring_pc_env():
     assert "robot_gateway.secret" in content
     assert ".env" in PACKAGER.read_text(encoding="utf-8")
     assert "autoload.ini" not in content
-    assert 'for service in control web camera intelligence' in content
+    assert 'for service in control web camera pc_bundle intelligence' in content
     assert 'stop_nemotron.sh' not in content
 
 
@@ -25,6 +25,14 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert '"$base/nao/scripts/runtime/network_admin.py"' in content
     assert '"$base/nao/scripts/runtime/control_server/message_security.py"' in content
     assert '"$base/nao/scripts/runtime/control_server/commands/network_commands.py"' in content
+    assert '"$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py"' in content
+
+
+def test_deploy_preserves_the_configured_pc_gateway_target():
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert "pc_gateway_target.json" in content
+    assert 'cp "$base/config/pc_gateway_target.json"' in content
 
 
 def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():
@@ -60,3 +68,24 @@ def test_nao_archive_builder_writes_writable_directories(tmp_path):
         assert contents.getmember("config/action_registry.json").mode == 0o644
         assert "config/robot_gateway.secret" not in contents.getnames()
         assert "nao/scripts/runtime/network_admin.py" in contents.getnames()
+        assert "pc_gateway/src/nao_gateway/launcher_service.py" in contents.getnames()
+
+
+def test_start_script_builds_and_serves_the_pc_gateway_bundle():
+    content = Path("nao/scripts/runtime/start_nemotron.sh").read_text(encoding="utf-8")
+
+    assert "pc_gateway_bundle.tar.gz" in content
+    assert "pc_gateway config/action_registry.json" in content
+    assert "SimpleHTTPServer 6677" in content
+    assert "start_service pc_bundle" in content
+
+
+def test_setup_script_registers_the_authenticated_launcher_without_copying_secrets():
+    content = Path("tools/setup-nemotron-pc-host.ps1").read_text(encoding="utf-8")
+
+    assert "NaoControlNemotronLauncher" in content
+    assert "robot_gateway.secret" in content
+    assert "scp.exe" in content
+    assert "Write-Host $robotSecret" not in content
+    assert "New-NetFirewallRule" in content
+    assert "nao_gateway.launcher_service" in content

@@ -19,6 +19,26 @@ for path in (HERE, RUNTIME, CONTROL, os.path.join(CONTROL, "facades"),
         sys.path.insert(0, path)
 
 from protocol import ProtocolError, ReplayGuard, sign_envelope, verify_envelope
+from pc_gateway_launch import (
+    DEFAULT_BUNDLE_PATH,
+    DEFAULT_TARGET_PATH,
+    GatewayEntryGate,
+    GatewayTargetStore,
+    RemoteGatewayLauncher,
+)
+
+
+def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
+                      bundle_path=DEFAULT_BUNDLE_PATH, transport=None,
+                      now_ms=None):
+    launcher = RemoteGatewayLauncher(
+        GatewayTargetStore(target_path),
+        secret,
+        bundle_path=bundle_path,
+        transport=transport,
+        now_ms=now_ms,
+    )
+    return GatewayEntryGate(safety, launcher)
 
 
 class GatewayCore(object):
@@ -95,9 +115,10 @@ def _load_runtime():
     executor = ActionExecutor(facade, registry)
     safety = SafetySupervisor(facade)
     allowed, reasons = safety.check_intelligent_entry()
+    entry_gate = create_entry_gate(safety, secret)
     manager = ModeManager(
         initial_mode="WEB_CONTROL",
-        entry_check=lambda: safety.check_intelligent_entry()[0],
+        entry_check=entry_gate,
     )
     memory = ALProxy("ALMemory", "127.0.0.1", 9559)
     capture = AudioCapture(ALProxy("ALAudioRecorder", "127.0.0.1", 9559))
@@ -160,6 +181,14 @@ def _load_runtime():
                 if event.name == "MODE_ENTER_REQUESTED":
                     facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
                     facade.say("Modo inteligente listo")
+                elif event.name == "MODE_ENTRY_REJECTED":
+                    facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
+                    if entry_gate.last_reason == "pc_target_not_configured":
+                        facade.say("Configura la dirección del computador en el menú de red")
+                    elif entry_gate.last_reason == "pc_gateway_unavailable":
+                        facade.say("No pude iniciar el sistema Nemotron en el computador")
+                    else:
+                        facade.say("No es seguro iniciar el modo inteligente")
                 elif event.name == "MODE_EXIT_REQUESTED":
                     capture.cancel()
                     facade.set_led_rgb("FaceLeds", 1.0, 1.0, 1.0)

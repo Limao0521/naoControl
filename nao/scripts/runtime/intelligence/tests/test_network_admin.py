@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from io import StringIO
 
+import pytest
+
 from nao.scripts.runtime.network_admin import (
     ConnectionManagerAdapter,
     JsonAuditLog,
@@ -13,6 +15,7 @@ from nao.scripts.runtime.network_admin import (
     main,
     process_stream,
 )
+from nao.scripts.runtime.intelligence.pc_gateway_launch import GatewayTargetStore
 
 
 class FakeClock:
@@ -556,3 +559,37 @@ def test_main_connects_to_local_naoqi_and_processes_one_stdin_request() -> None:
     assert exit_code == 0
     assert session.connections == ["tcp://127.0.0.1:9559"]
     assert json.loads(target.getvalue())["operation"] == "status"
+
+
+def test_gateway_target_can_be_read_and_saved_after_physical_confirmation(tmp_path) -> None:
+    store = GatewayTargetStore(str(tmp_path / "target.json"))
+    service = NetworkAdminService(
+        ConnectionManagerAdapter(FakeConnectionManager()),
+        AcceptingGate(),
+        gateway_target_store=store,
+    )
+
+    saved = service.execute({
+        "operation": "set_gateway_target",
+        "pc_ip": "192.168.10.25",
+    })
+    current = service.execute({"operation": "gateway_target"})
+
+    assert saved["status"] == "completed"
+    assert current["data"] == {"pc_ip": "192.168.10.25"}
+
+
+def test_gateway_target_rejects_command_injection_before_persisting(tmp_path) -> None:
+    store = GatewayTargetStore(str(tmp_path / "target.json"))
+    service = NetworkAdminService(
+        ConnectionManagerAdapter(FakeConnectionManager()),
+        AcceptingGate(),
+        gateway_target_store=store,
+    )
+
+    with pytest.raises(ValueError):
+        service.execute({
+            "operation": "set_gateway_target",
+            "pc_ip": "192.168.10.25 && calc.exe",
+        })
+    assert store.load() == {"pc_ip": ""}
