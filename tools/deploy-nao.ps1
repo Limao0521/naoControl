@@ -82,7 +82,9 @@ rm -rf "$backup"
 echo "DEPLOY_OK base=$base services_started=$start_services"
 '@
     $encodedScript = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
-    $remoteCommand = "echo '$encodedScript' | base64 -d | sh -s -- '$remoteArchive' '$startFlag'"
+    # NAO's BusyBox shell rejects the optional `--` separator after `sh -s`.
+    # The two positional arguments are already literal, validated values.
+    $remoteCommand = "echo '$encodedScript' | base64 -d | sh -s '$remoteArchive' '$startFlag'"
     Invoke-Checked { & ssh.exe -o StrictHostKeyChecking=accept-new $sshTarget $remoteCommand } 'Installing and validating NAO runtime'
     Write-Host "Deployment complete. The tactile launcher remains responsible for normal start/stop."
 }

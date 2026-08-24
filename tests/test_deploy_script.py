@@ -32,6 +32,13 @@ def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():
     assert ".venv\\Scripts\\python.exe" in content
 
 
+def test_deploy_script_uses_nao_shell_compatible_argument_passing():
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert "sh -s --" not in content
+    assert "| sh -s '$remoteArchive' '$startFlag'" in content
+
+
 def test_nao_archive_builder_writes_writable_directories(tmp_path):
     from tools.package_nao import build_archive
 
