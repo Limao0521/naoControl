@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from nao_gateway.config import ConfigurationError, GatewaySettings, NetworkBrokerSettings
+from nao_gateway.config import ConfigurationError, GatewaySettings
 
 
 def valid_environment(**overrides: str) -> dict[str, str]:
@@ -48,59 +48,14 @@ def test_omni_perception_does_not_require_separate_asr_endpoint() -> None:
     assert settings.asr_url == ""
 
 
-def test_standalone_network_broker_uses_host_origin_and_existing_ssh_key(tmp_path) -> None:
-    key_path = tmp_path / "nao_control_ed25519"
-    key_path.write_text("test-key-placeholder", encoding="utf-8")
-
-    settings = NetworkBrokerSettings.from_env(
-        {
-            "NAO_NETWORK_HOST": "169.254.1.2",
-            "NAO_SSH_KEY": str(key_path),
-        }
+def test_legacy_network_broker_values_do_not_affect_gateway_settings() -> None:
+    baseline = GatewaySettings.from_env(valid_environment())
+    with_legacy_values = GatewaySettings.from_env(
+        valid_environment(
+            NAO_NETWORK_HOST="169.254.197.40",
+            NAO_NETWORK_BROKER_PORT="6675",
+            NAO_SSH_KEY="C:/keys/obsolete",
+        )
     )
 
-    assert settings.nao_ssh_host == "169.254.1.2"
-    assert settings.nao_ssh_user == "nao"
-    assert settings.nao_ssh_key == str(key_path.resolve())
-    assert settings.network_allowed_origins == ("http://169.254.1.2:3000",)
-
-
-def test_standalone_network_broker_requires_existing_ssh_key(tmp_path) -> None:
-    with pytest.raises(ConfigurationError, match="NAO_SSH_KEY"):
-        NetworkBrokerSettings.from_env(
-            {
-                "NAO_NETWORK_HOST": "169.254.1.2",
-                "NAO_SSH_KEY": str(tmp_path / "missing"),
-            }
-        )
-
-
-def test_network_origin_must_not_contain_path(tmp_path) -> None:
-    key_path = tmp_path / "nao_control_ed25519"
-    key_path.write_text("test-key-placeholder", encoding="utf-8")
-
-    with pytest.raises(ConfigurationError, match="origin"):
-        NetworkBrokerSettings.from_env(
-            {
-                "NAO_NETWORK_HOST": "169.254.1.2",
-                "NAO_SSH_KEY": str(key_path),
-                "NAO_NETWORK_ALLOWED_ORIGINS": "http://169.254.1.2:3000/admin",
-            }
-        )
-
-
-def test_standalone_network_broker_does_not_require_nvidia_or_robot_gateway(tmp_path) -> None:
-    key_path = tmp_path / "nao_control_ed25519"
-    key_path.write_text("test-key-placeholder", encoding="utf-8")
-
-    settings = NetworkBrokerSettings.from_env(
-        {
-            "NAO_NETWORK_HOST": "169.254.197.40",
-            "NAO_SSH_KEY": str(key_path),
-        }
-    )
-
-    assert settings.nao_ssh_host == "169.254.197.40"
-    assert settings.nao_ssh_user == "nao"
-    assert settings.network_broker_host == "127.0.0.1"
-    assert settings.network_allowed_origins == ("http://169.254.197.40:3000",)
+    assert with_legacy_values == baseline

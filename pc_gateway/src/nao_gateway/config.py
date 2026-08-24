@@ -3,52 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from pathlib import Path
-import re
 from typing import Mapping
 from urllib.parse import urlparse
 
 
 class ConfigurationError(ValueError):
     """Raised when a required or security-sensitive setting is invalid."""
-
-
-def _validated_ssh_user(environ: Mapping[str, str]) -> str:
-    ssh_user = environ.get("NAO_SSH_USER", "nao").strip()
-    if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]{0,31}", ssh_user):
-        raise ConfigurationError("NAO_SSH_USER is invalid")
-    return ssh_user
-
-
-def _validated_network_host(environ: Mapping[str, str]) -> str:
-    host = environ.get("NAO_NETWORK_HOST", "").strip()
-    if not host:
-        legacy_url = environ.get("NAO_GATEWAY_URL", "").strip()
-        host = urlparse(legacy_url).hostname or ""
-    if not host or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9.-]{0,252}", host):
-        raise ConfigurationError("NAO_NETWORK_HOST must be a hostname or IPv4 address")
-    return host
-
-
-def _validated_network_origins(environ: Mapping[str, str], host: str) -> tuple[str, ...]:
-    origins_text = environ.get("NAO_NETWORK_ALLOWED_ORIGINS", f"http://{host}:3000")
-    origins = tuple(item.strip() for item in origins_text.split(",") if item.strip())
-    if not origins:
-        raise ConfigurationError("At least one network broker origin is required")
-    for origin in origins:
-        parsed_origin = urlparse(origin)
-        if (
-            parsed_origin.scheme not in {"http", "https"}
-            or not parsed_origin.hostname
-            or parsed_origin.path not in {"", "/"}
-            or parsed_origin.params
-            or parsed_origin.query
-            or parsed_origin.fragment
-            or parsed_origin.username
-            or parsed_origin.password
-        ):
-            raise ConfigurationError("NAO network origin must be an explicit origin")
-    return origins
 
 
 @dataclass(frozen=True)
@@ -97,40 +57,4 @@ class GatewaySettings:
             asr_url=asr_url,
             robot_url=robot_url,
             robot_shared_secret=environ["NAO_GATEWAY_SECRET"].strip(),
-        )
-
-
-@dataclass(frozen=True)
-class NetworkBrokerSettings:
-    """Minimal configuration for network administration without Nemotron."""
-
-    network_broker_host: str
-    network_broker_port: int
-    nao_ssh_host: str
-    nao_ssh_user: str
-    nao_ssh_key: str
-    network_allowed_origins: tuple[str, ...]
-
-    @classmethod
-    def from_env(cls, environ: Mapping[str, str]) -> "NetworkBrokerSettings":
-        host = _validated_network_host(environ)
-        try:
-            port = int(environ.get("NAO_NETWORK_BROKER_PORT", "6675"))
-        except ValueError as error:
-            raise ConfigurationError("NAO_NETWORK_BROKER_PORT must be an integer") from error
-        if not 1024 <= port <= 65535:
-            raise ConfigurationError("NAO_NETWORK_BROKER_PORT must be between 1024 and 65535")
-
-        ssh_key = environ.get("NAO_SSH_KEY", "").strip()
-        resolved_key = str(Path(ssh_key).expanduser().resolve()) if ssh_key else ""
-        if not ssh_key or not Path(resolved_key).is_file():
-            raise ConfigurationError("NAO_SSH_KEY must name an existing private key")
-
-        return cls(
-            network_broker_host="127.0.0.1",
-            network_broker_port=port,
-            nao_ssh_host=host,
-            nao_ssh_user=_validated_ssh_user(environ),
-            nao_ssh_key=resolved_key,
-            network_allowed_origins=_validated_network_origins(environ, host),
         )

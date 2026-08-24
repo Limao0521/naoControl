@@ -13,7 +13,6 @@ dependencies = [
   "websockets>=13,<16",
   "mcp>=1.12,<2",
   "python-dotenv>=1.0,<2",
-  "aiohttp>=3.10,<4",
 ]
 
 [project.optional-dependencies]
@@ -25,7 +24,6 @@ test = [
 
 [project.scripts]
 nao-nemotron-gateway = "nao_gateway.main:main"
-nao-network-admin = "nao_gateway.network_main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
