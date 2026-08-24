@@ -4,11 +4,15 @@ param(
     [ValidatePattern('^[0-9]{1,3}(\.[0-9]{1,3}){3}$')]
     [string]$NaoIp,
     [string]$NaoUser = 'nao',
-    [string]$RepoRoot = (Split-Path -Parent $PSScriptRoot),
+    [string]$RepoRoot,
     [string]$RuntimeRoot = (Join-Path $env:LOCALAPPDATA 'naoControlGatewayHost')
 )
 
 $ErrorActionPreference = 'Stop'
+
+if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
+    $RepoRoot = Join-Path $PSScriptRoot '..'
+}
 
 function Write-Step([string]$Message) {
     Write-Host "==> $Message" -ForegroundColor Cyan

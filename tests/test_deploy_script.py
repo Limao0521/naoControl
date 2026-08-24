@@ -93,3 +93,12 @@ def test_setup_script_registers_the_authenticated_launcher_without_copying_secre
     assert "RunLevel  = 'Limited'" in content
     assert "RemoteAddress = $NaoIp" in content
     assert "StrictHostKeyChecking=yes" in content
+
+
+def test_setup_script_resolves_repo_root_after_parameter_binding():
+    content = Path("tools/setup-nemotron-pc-host.ps1").read_text(encoding="utf-8")
+    param_block = content.split(")\n\n$ErrorActionPreference", 1)[0]
+
+    assert "$PSScriptRoot" not in param_block
+    assert "if ([string]::IsNullOrWhiteSpace($RepoRoot))" in content
+    assert "Join-Path $PSScriptRoot '..'" in content
