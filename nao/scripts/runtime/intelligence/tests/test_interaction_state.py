@@ -36,3 +36,17 @@ def test_store_rejects_unbounded_or_unknown_interaction_data(tmp_path):
             "interaction_id": "turn-1", "phase": "ready",
             "transcript": "x" * 2001, "response": "", "actions": [],
         })
+
+
+def test_store_accepts_python2_byte_string_identifiers(tmp_path):
+    """A uuid str from Python 2 must not kill the physical bumper loop."""
+    store = InteractionStateStore(str(tmp_path / "interaction.json"), now_ms=lambda: 99)
+
+    saved = store.save({
+        "interaction_id": b"turn-from-python2",
+        "phase": "listening",
+        "transcript": "", "response": "", "actions": [],
+    })
+
+    assert saved["interaction_id"] == "turn-from-python2"
+    assert store.load()["phase"] == "listening"

@@ -4,7 +4,13 @@ import json
 import wave
 
 from nao.scripts.runtime.intelligence.audio_capture import AudioCapture, audio_diagnostics
-from nao.scripts.runtime.intelligence.gateway_server import GatewayCore, create_entry_gate
+from nao.scripts.runtime.intelligence.gateway_server import (
+    CaptureController,
+    GatewayCore,
+    create_entry_gate,
+)
+from nao.scripts.runtime.interaction_state import InteractionStateStore
+from nao.scripts.runtime.intelligence.mode_manager import ModeManager
 from nao.scripts.runtime.intelligence.protocol import ReplayGuard, sign_envelope
 
 
@@ -215,3 +221,38 @@ def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp
 
     assert gate() is True
     assert requests[0][0] == "http://192.168.10.25:6676/start"
+
+
+def test_capture_start_failure_recovers_ready_mode_and_keeps_error_visible(tmp_path):
+    """A recorder failure must not strand the controller in CAPTURING."""
+    class FailingCapture(object):
+        started_at_ms = None
+
+        def start(self, interaction_id, now_ms):
+            raise RuntimeError("recorder busy")
+
+        def cancel(self):
+            return None
+
+    class Facade(object):
+        def __init__(self):
+            self.colors = []
+
+        def set_led_rgb(self, group, red, green, blue):
+            self.colors.append((group, red, green, blue))
+
+    manager = ModeManager(initial_mode="CAPTURING", entry_check=lambda: (True, []))
+    store = InteractionStateStore(str(tmp_path / "interaction.json"), now_ms=lambda: 123)
+    facade = Facade()
+    sent = []
+    controller = CaptureController(
+        manager, FailingCapture(), store, facade,
+        lambda kind, payload: sent.append((kind, payload)),
+        interaction_id_factory=lambda: "turn-1",
+    )
+
+    assert controller.start(100) is False
+    assert manager.mode == "NEMOTRON_READY"
+    assert store.load()["phase"] == "error"
+    assert sent == [("interaction_cancelled", {"reason": "capture_start_failed"})]
+    assert facade.colors[-1] == ("FaceLeds", 0.0, 0.0, 1.0)

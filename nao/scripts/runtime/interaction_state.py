@@ -16,11 +16,17 @@ IDENTIFIER = re.compile(r"^[A-Za-z0-9._-]{0,64}$")
 
 try:
     text_type = unicode
+    binary_type = str
 except NameError:
     text_type = str
+    binary_type = bytes
+
+replace_file = getattr(os, "replace", os.rename)
 
 
 def _text(value, field, maximum):
+    if isinstance(value, binary_type) and not isinstance(value, text_type):
+        value = value.decode("utf-8")
     if not isinstance(value, text_type):
         raise ValueError("{} must be text".format(field))
     if len(value) > maximum:
@@ -82,7 +88,7 @@ class InteractionStateStore(object):
         with open(temporary, "w") as output:
             json.dump(state, output, ensure_ascii=True, separators=(",", ":"))
         os.chmod(temporary, 0o600)
-        os.rename(temporary, self.path)
+        replace_file(temporary, self.path)
         return state
 
     def load(self):

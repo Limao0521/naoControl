@@ -95,6 +95,82 @@ class GatewayCore(object):
         return self.envelope(response_type, result)
 
 
+class CaptureController(object):
+    """Run recorder side effects without leaving the bumper state machine stuck."""
+    def __init__(self, manager, capture, interaction_store, facade, send_all,
+                 interaction_id_factory=None):
+        self.manager = manager
+        self.capture = capture
+        self.interaction_store = interaction_store
+        self.facade = facade
+        self.send_all = send_all
+        self.interaction_id_factory = interaction_id_factory or uuid.uuid4
+        self.interaction_id = None
+
+    def _best_effort(self, operation, label):
+        try:
+            operation()
+        except Exception as error:
+            print("GATEWAY recovery_failed operation={} error={}: {}".format(
+                label, type(error).__name__, error
+            ))
+
+    def recover(self, reason, now_ms, error=None):
+        if error is not None:
+            print("GATEWAY capture_failed reason={} error={}: {}".format(
+                reason, type(error).__name__, error
+            ))
+        self._best_effort(self.capture.cancel, "capture_cancel")
+        self._best_effort(
+            lambda: self.manager.handle_system("INTERACTION_CANCELLED", now_ms),
+            "mode_recovery",
+        )
+        self._best_effort(lambda: self.interaction_store.save({
+            "interaction_id": self.interaction_id or "",
+            "phase": "error", "transcript": "", "response": "", "actions": [],
+        }), "interaction_state")
+        self._best_effort(
+            lambda: self.facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0),
+            "ready_led",
+        )
+        self._best_effort(
+            lambda: self.send_all("interaction_cancelled", {"reason": reason}),
+            "cancel_event",
+        )
+
+    def start(self, now_ms):
+        self.interaction_id = str(self.interaction_id_factory())
+        try:
+            self.interaction_store.save({
+                "interaction_id": self.interaction_id,
+                "phase": "listening",
+                "transcript": "", "response": "", "actions": [],
+            })
+            self.capture.start(self.interaction_id, now_ms)
+            self.facade.set_led_rgb("FaceLeds", 0.0, 1.0, 0.0)
+            return True
+        except Exception as error:
+            self.recover("capture_start_failed", now_ms, error)
+            return False
+
+    def finish(self, now_ms):
+        try:
+            result = self.capture.stop(now_ms)
+            self.interaction_store.save({
+                "interaction_id": self.interaction_id or "",
+                "phase": "processing",
+                "transcript": "", "response": "", "actions": [],
+            })
+            print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
+            print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
+            self.facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)
+            self.send_all("audio_result", result)
+            return True
+        except Exception as error:
+            self.recover("capture_finish_failed", now_ms, error)
+            return False
+
+
 def _load_runtime():
     from naoqi import ALProxy
     from SimpleWebSocketServer import WebSocket, SimpleWebSocketServer
@@ -179,64 +255,60 @@ def _load_runtime():
             json.dump({"mode": manager.mode, "updated_at_ms": core.now_ms()}, output)
         os.rename(temporary, path)
 
+    capture_controller = CaptureController(
+        manager, capture, interaction_store, facade, send_all
+    )
+
+    def poll_bumpers_once():
+        now = core.now_ms()
+        left = memory.getData("LeftBumperPressed") == 1.0
+        right = memory.getData("RightBumperPressed") == 1.0
+        events = manager.handle_bumper(left, right, now)
+        for event in events:
+            print("GATEWAY event={} mode={}".format(event.name, event.mode))
+            if event.name == "MODE_ENTER_REQUESTED":
+                facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
+                facade.say("Modo inteligente listo")
+            elif event.name == "MODE_ENTRY_REJECTED":
+                facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
+                if entry_gate.last_reason == "pc_target_not_configured":
+                    facade.say("Configura la dirección del computador en el menú de red")
+                elif entry_gate.last_reason == "pc_gateway_unavailable":
+                    facade.say("No pude iniciar el sistema inteligente en el computador")
+                else:
+                    facade.say("No es seguro iniciar el modo inteligente")
+            elif event.name == "MODE_EXIT_REQUESTED":
+                capture.cancel()
+                facade.set_led_rgb("FaceLeds", 1.0, 1.0, 1.0)
+                facade.say("Modo control web")
+            elif event.name == "CAPTURE_STARTED":
+                capture_controller.start(now)
+            elif event.name == "CAPTURE_FINISHED":
+                capture_controller.finish(now)
+            elif event.name == "EMERGENCY_REQUESTED":
+                capture.cancel()
+                safety.emergency_stop("both_bumpers")
+                facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
+                send_all("emergency", {"reason": "both_bumpers"})
+            write_mode()
+            send_all("mode_event", event.as_dict())
+        if manager.mode == "CAPTURING" and capture.started_at_ms is not None:
+            if now - capture.started_at_ms >= AudioCapture.MAX_DURATION_MS:
+                capture_controller.recover("audio_limit", now)
+                write_mode()
+
     def bumper_loop():
-        interaction_id = None
         write_mode()
         while True:
-            now = core.now_ms()
-            left = memory.getData("LeftBumperPressed") == 1.0
-            right = memory.getData("RightBumperPressed") == 1.0
-            events = manager.handle_bumper(left, right, now)
-            for event in events:
-                print("GATEWAY event={} mode={}".format(event.name, event.mode))
-                if event.name == "MODE_ENTER_REQUESTED":
-                    facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
-                    facade.say("Modo inteligente listo")
-                elif event.name == "MODE_ENTRY_REJECTED":
-                    facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
-                    if entry_gate.last_reason == "pc_target_not_configured":
-                        facade.say("Configura la dirección del computador en el menú de red")
-                    elif entry_gate.last_reason == "pc_gateway_unavailable":
-                        facade.say("No pude iniciar el sistema Nemotron en el computador")
-                    else:
-                        facade.say("No es seguro iniciar el modo inteligente")
-                elif event.name == "MODE_EXIT_REQUESTED":
-                    capture.cancel()
-                    facade.set_led_rgb("FaceLeds", 1.0, 1.0, 1.0)
-                    facade.say("Modo control web")
-                elif event.name == "CAPTURE_STARTED":
-                    interaction_id = str(uuid.uuid4())
-                    interaction_store.save({
-                        "interaction_id": interaction_id,
-                        "phase": "listening",
-                        "transcript": "", "response": "", "actions": [],
-                    })
-                    capture.start(interaction_id, now)
-                    facade.set_led_rgb("FaceLeds", 0.0, 1.0, 0.0)
-                elif event.name == "CAPTURE_FINISHED":
-                    result = capture.stop(now)
-                    interaction_store.save({
-                        "interaction_id": interaction_id or "",
-                        "phase": "processing",
-                        "transcript": "", "response": "", "actions": [],
-                    })
-                    print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
-                    print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
-                    facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)
-                    send_all("audio_result", result)
-                elif event.name == "EMERGENCY_REQUESTED":
-                    capture.cancel()
-                    safety.emergency_stop("both_bumpers")
-                    facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
-                    send_all("emergency", {"reason": "both_bumpers"})
-                write_mode()
-                send_all("mode_event", event.as_dict())
-            if manager.mode == "CAPTURING" and capture.started_at_ms is not None:
-                if now - capture.started_at_ms >= AudioCapture.MAX_DURATION_MS:
-                    capture.cancel()
-                    manager.handle_system("INTERACTION_CANCELLED", now)
+            try:
+                poll_bumpers_once()
+            except Exception as error:
+                print("GATEWAY bumper_loop_error error={}: {}".format(
+                    type(error).__name__, error
+                ))
+                if manager.mode in ("CAPTURING", "PROCESSING", "RESPONDING"):
+                    capture_controller.recover("bumper_runtime_failed", core.now_ms(), error)
                     write_mode()
-                    send_all("interaction_cancelled", {"reason": "audio_limit"})
             time.sleep(0.05)
 
     thread = threading.Thread(target=bumper_loop)

@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+. (Join-Path $PSScriptRoot 'launcher-task-settings.ps1')
 
 if ([string]::IsNullOrWhiteSpace($RepoRoot)) {
     $RepoRoot = Join-Path $PSScriptRoot '..'
@@ -128,11 +129,13 @@ $principalParameters = @{
     RunLevel  = 'Limited'
 }
 $taskPrincipal = New-ScheduledTaskPrincipal @principalParameters
+$taskSettings = New-NaoLauncherTaskSettings
 $taskParameters = @{
     TaskName  = $taskName
     Action    = $taskAction
     Trigger   = $taskTrigger
     Principal = $taskPrincipal
+    Settings  = $taskSettings
     Force     = $true
 }
 Register-ScheduledTask @taskParameters | Out-Null
