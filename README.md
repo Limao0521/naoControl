@@ -118,24 +118,15 @@ credenciales NVIDIA. La guía operativa actual está en `docs/nemotron/physical-
 
 ### Gestión de red desde la web
 
-La preparación segura de la conexión administrativa se realiza una sola vez:
+El gestor de red forma parte del control WebSocket del NAO y queda disponible
+automáticamente al iniciar los servicios. No necesita un broker en el PC,
+claves SSH adicionales, Nemotron ni credenciales NVIDIA. El menú **Red** usa
+el mismo puerto `6671` para consultar, escanear, conectar, desconectar y
+eliminar perfiles.
 
-```powershell
-.\tools\setup-nao-network-admin.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>
-```
-
-Después inicia el gestor de red independiente en el PC; no requiere arrancar
-Nemotron ni configurar la API NVIDIA:
-
-```powershell
-.\.venv\Scripts\python.exe -u -m nao_gateway.network_main --env-file .env
-```
-
-El broker queda limitado a `http://127.0.0.1:6675`. El menú **Red** permite
-consultar, escanear, conectar, desconectar y eliminar perfiles. Cada cambio
-requiere mantener el sensor táctil trasero durante tres segundos. Consulta
-`docs/network-management.md` para el flujo completo, los límites de seguridad
-y la recuperación tras un cambio de IP.
+Cada cambio requiere mantener el sensor táctil trasero durante tres segundos.
+Consulta `docs/network-management.md` para el flujo completo, los límites de
+seguridad y la recuperación tras un cambio de IP.
 
 ### En el Robot NAO
 - **NAO V6** con NAOqi 2.8

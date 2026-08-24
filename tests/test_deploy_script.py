@@ -23,6 +23,8 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert "python -m py_compile" in content
     assert "start_nemotron.sh" in content
     assert '"$base/nao/scripts/runtime/network_admin.py"' in content
+    assert '"$base/nao/scripts/runtime/control_server/message_security.py"' in content
+    assert '"$base/nao/scripts/runtime/control_server/commands/network_commands.py"' in content
 
 
 def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():

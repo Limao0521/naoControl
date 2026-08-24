@@ -54,6 +54,8 @@ mkdir -p "$staged"
 tar -xzf "$archive" -C "$staged" --no-same-owner --no-same-permissions
 test -f "$staged/nao/scripts/runtime/intelligence/gateway_server.py"
 test -f "$staged/nao/scripts/runtime/network_admin.py"
+test -f "$staged/nao/scripts/runtime/control_server/message_security.py"
+test -f "$staged/nao/scripts/runtime/control_server/commands/network_commands.py"
 test -f "$staged/nao/scripts/runtime/start_nemotron.sh"
 test -f "$staged/NaoControlReact/build/index.html"
 if test -f "$base/config/robot_gateway.secret"; then
@@ -70,7 +72,7 @@ for service in control web camera intelligence; do
 done
 if test -d "$base"; then mv "$base" "$backup"; fi
 mv "$staged" "$base"
-if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/network_admin.py"; then
+if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/control_server/message_security.py" "$base/nao/scripts/runtime/control_server/commands/network_commands.py" "$base/nao/scripts/runtime/network_admin.py"; then
     rm -rf "$base"
     if test -d "$backup"; then mv "$backup" "$base"; fi
     exit 1
