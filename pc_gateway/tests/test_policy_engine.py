@@ -50,3 +50,7 @@ def test_posture_speed_defaults_and_clamps():
     assert policy.authorize("set_posture", {"posture": "Stand"}) == {
         "action": "set_posture", "arguments": {"posture": "Stand", "speed": 0.35},
     }
+    clamped = PolicyEngine(REGISTRY).authorize(
+        "set_posture", {"posture": "Stand", "speed": 0.9}
+    )
+    assert clamped["arguments"]["speed"] == 0.50
