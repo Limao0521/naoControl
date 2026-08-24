@@ -6,6 +6,7 @@ import SettingsMenu from './LanguageMenu';
 import UIMenu from './UIMenu';
 import EmotesMenu from './EmotesMenu';
 import NetworkMenu from './NetworkMenu';
+import NemotronMenu from './NemotronMenu';
 import './MenuContent.css';
 
 const MenuContent = ({ 
@@ -72,6 +73,8 @@ const MenuContent = ({
         );
       case 'network':
         return <NetworkMenu />;
+      case 'nemotron':
+        return <NemotronMenu />;
       case 'lang':
         return (
           <SettingsMenu 

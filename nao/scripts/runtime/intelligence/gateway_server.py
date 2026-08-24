@@ -42,11 +42,13 @@ def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
 
 
 class GatewayCore(object):
-    def __init__(self, secret, executor, now_ms=None, system_handler=None):
+    def __init__(self, secret, executor, now_ms=None, system_handler=None,
+                 interaction_handler=None):
         self.secret = secret
         self.executor = executor
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self.system_handler = system_handler or (lambda name: None)
+        self.interaction_handler = interaction_handler or (lambda payload: None)
         self.replay_guard = ReplayGuard(1000)
 
     def envelope(self, message_type, payload):
@@ -74,6 +76,10 @@ class GatewayCore(object):
                 self.system_handler("TURN_FINISHED")
                 result = {"status": "ok"}
                 response_type = "event_result"
+            elif message_type == "interaction_update":
+                self.interaction_handler(payload)
+                result = {"status": "ok"}
+                response_type = "event_result"
             elif message_type == "command":
                 result = self.executor.execute(payload)
             else:
@@ -95,6 +101,7 @@ def _load_runtime():
     from nao_facade import NAOFacade
     from action_executor import ActionExecutor
     from audio_capture import AudioCapture
+    from interaction_state import InteractionStateStore
     from mode_manager import ModeManager
     from safety_supervisor import SafetySupervisor
 
@@ -123,6 +130,7 @@ def _load_runtime():
     memory = ALProxy("ALMemory", "127.0.0.1", 9559)
     capture = AudioCapture(ALProxy("ALAudioRecorder", "127.0.0.1", 9559))
     clients = set()
+    interaction_store = InteractionStateStore()
 
     def system_handler(name):
         events = manager.handle_system(name, int(time.time() * 1000))
@@ -132,7 +140,10 @@ def _load_runtime():
         for event in events:
             send_all("mode_event", event.as_dict())
 
-    core = GatewayCore(secret, executor, system_handler=system_handler)
+    core = GatewayCore(
+        secret, executor, system_handler=system_handler,
+        interaction_handler=interaction_store.save,
+    )
 
     def send_all(message_type, payload):
         encoded = json.dumps(core.envelope(message_type, payload))
@@ -195,10 +206,20 @@ def _load_runtime():
                     facade.say("Modo control web")
                 elif event.name == "CAPTURE_STARTED":
                     interaction_id = str(uuid.uuid4())
+                    interaction_store.save({
+                        "interaction_id": interaction_id,
+                        "phase": "listening",
+                        "transcript": "", "response": "", "actions": [],
+                    })
                     capture.start(interaction_id, now)
                     facade.set_led_rgb("FaceLeds", 0.0, 1.0, 0.0)
                 elif event.name == "CAPTURE_FINISHED":
                     result = capture.stop(now)
+                    interaction_store.save({
+                        "interaction_id": interaction_id or "",
+                        "phase": "processing",
+                        "transcript": "", "response": "", "actions": [],
+                    })
                     print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
                     print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
                     facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)

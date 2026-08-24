@@ -146,3 +146,147 @@ async def test_explicit_posture_request_allows_matching_body_action():
         ("set_posture", {"posture": "Stand", "speed": 0.3}),
         ("say", {"text": "Me pondré de pie."}),
     ]
+
+
+@pytest.mark.asyncio
+async def test_natural_stand_request_from_real_transcript_executes_posture():
+    class NaturalPostureNemotron(FakeNemotron):
+        async def perceive(self, audio, image):
+            return Perception(
+                "Quiero que te levantes, quiero que hagas la acción de levantarte.",
+                "Una persona", ["persona"], [],
+            )
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision(
+                "Me levantaré ahora mismo.",
+                [ToolCall("set_posture", {"posture": "Stand", "speed": 0.3})],
+            )
+
+    robot = FakeRobot()
+    host = AgentHost(robot, NaturalPostureNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "set_posture": {"risk": "body", "allowed": ["Stand"], "max_speed": 0.5},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-natural-stand"})
+
+    assert robot.actions[0] == ("set_posture", {"posture": "Stand", "speed": 0.3})
+
+
+@pytest.mark.asyncio
+async def test_posture_request_does_not_authorize_a_different_posture(caplog):
+    class MismatchedPostureNemotron(FakeNemotron):
+        async def perceive(self, audio, image):
+            return Perception("Quiero que te levantes.", "Una persona", ["persona"], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision(
+                "Me sentaré.",
+                [ToolCall("set_posture", {"posture": "Sit", "speed": 0.3})],
+            )
+
+    robot = FakeRobot()
+    host = AgentHost(robot, MismatchedPostureNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "set_posture": {"risk": "body", "allowed": ["Sit"], "max_speed": 0.5},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    with caplog.at_level(logging.WARNING):
+        await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-mismatch"})
+
+    assert robot.actions == [("say", {"text": "Me sentaré."})]
+    assert "rejected_tool=set_posture reason=physical_action_not_explicitly_requested" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_negated_posture_request_does_not_authorize_body_action(caplog):
+    class NegatedPostureNemotron(FakeNemotron):
+        async def perceive(self, audio, image):
+            return Perception("No quiero que te levantes.", "Una persona", ["persona"], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision(
+                "De acuerdo, permaneceré donde estoy.",
+                [ToolCall("set_posture", {"posture": "Stand", "speed": 0.3})],
+            )
+
+    robot = FakeRobot()
+    host = AgentHost(robot, NegatedPostureNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "set_posture": {"risk": "body", "allowed": ["Stand"], "max_speed": 0.5},
+            "say": {"risk": "low", "max_text_length": 500},
+        }
+    })
+
+    with caplog.at_level(logging.WARNING):
+        await host.handle_audio({"audio_b64": base64.b64encode(b"RIFF").decode(), "interaction_id": "i-negated"})
+
+    assert robot.actions == [("say", {"text": "De acuerdo, permaneceré donde estoy."})]
+    assert "rejected_tool=set_posture reason=physical_action_not_explicitly_requested" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_turn_state_publishes_transcript_response_and_action_result():
+    updates = []
+
+    async def publish(update):
+        updates.append(update)
+
+    robot = FakeRobot()
+    host = AgentHost(
+        robot, FakeNemotron(), image_provider=lambda: b"jpeg",
+        registry={
+            "actions": {
+                "set_led": {"risk": "low", "groups": ["FaceLeds"], "colors": ["red"]},
+                "say": {"risk": "low", "max_text_length": 500},
+            }
+        },
+        state_publisher=publish,
+    )
+
+    await host.handle_audio({
+        "audio_b64": base64.b64encode(b"RIFF").decode(),
+        "interaction_id": "turn-observable",
+    })
+
+    assert updates[0] == {
+        "interaction_id": "turn-observable", "phase": "processing",
+        "transcript": "¿Qué color tiene?", "response": "", "actions": [],
+    }
+    assert updates[-1] == {
+        "interaction_id": "turn-observable", "phase": "ready",
+        "transcript": "¿Qué color tiene?", "response": "La botella es roja.",
+        "actions": [{"name": "set_led", "status": "completed", "reason": None}],
+    }
+
+
+@pytest.mark.asyncio
+async def test_observability_failure_does_not_block_robot_response(caplog):
+    async def unavailable_state_channel(update):
+        raise ConnectionError("state channel unavailable")
+
+    robot = FakeRobot()
+    host = AgentHost(
+        robot, FakeNemotron(), image_provider=lambda: b"jpeg",
+        registry={
+            "actions": {
+                "set_led": {"risk": "low", "groups": ["FaceLeds"], "colors": ["red"]},
+                "say": {"risk": "low", "max_text_length": 500},
+            }
+        },
+        state_publisher=unavailable_state_channel,
+    )
+
+    with caplog.at_level(logging.WARNING):
+        await host.handle_audio({
+            "audio_b64": base64.b64encode(b"RIFF").decode(),
+            "interaction_id": "turn-state-failure",
+        })
+
+    assert robot.actions[-1] == ("say", {"text": "La botella es roja."})
+    assert "STATE_PUBLISH_FAILED turn=turn-state-failure" in caplog.text

@@ -61,6 +61,24 @@ repite el setup. El script no acepta silenciosamente una identidad nueva.
    inteligente está listo.
 6. Mantén el bumper derecho mientras hablas y suéltalo para enviar el turno.
 
+## Estado visible en el control web
+
+El menú **Nemotron** consulta el estado local del NAO una vez por segundo y
+muestra únicamente el último turno:
+
+- **Escuché**: transcripción recibida después de soltar el bumper;
+- **Respondí**: texto que el modelo entregó al habla del robot;
+- **Acciones**: herramienta física solicitada, estado y razón de rechazo;
+- fase actual: escuchando, procesando, preparando respuesta o listo.
+
+El PC envía estas actualizaciones dentro del WebSocket HMAC ya autenticado. El
+NAO valida longitudes y valores, las guarda atómicamente en
+`/home/nao/run/naoControl/interaction_state.json` con permisos `0600` y el
+control web solo expone ese último registro al cliente cuya IP coincide con el
+PC confirmado mediante el sensor táctil trasero. Cualquier otro cliente recibe
+`forbidden` sin transcripción ni respuesta. No se conserva un historial de
+audio, imágenes o conversaciones.
+
 ## Logs
 
 En el PC:

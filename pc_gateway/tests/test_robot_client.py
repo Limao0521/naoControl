@@ -45,6 +45,22 @@ def test_turn_finished_envelope_is_authenticated():
     assert payload == {}
 
 
+def test_interaction_update_envelope_is_authenticated():
+    client = RobotClient("ws://robot:6674", b"shared-secret", now_ms=lambda: 1000)
+
+    envelope = client.interaction_update_envelope({
+        "interaction_id": "turn-1",
+        "phase": "processing",
+        "transcript": "Hola NAO",
+        "response": "",
+        "actions": [],
+    })
+    payload = verify_envelope(envelope, b"shared-secret", 1000, ReplayGuard())
+
+    assert envelope["message_type"] == "interaction_update"
+    assert payload["transcript"] == "Hola NAO"
+
+
 @pytest.mark.asyncio
 async def test_receive_loop_reports_connection_loss_instead_of_crashing_gateway():
     class BrokenSocket(object):

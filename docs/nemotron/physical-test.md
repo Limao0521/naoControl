@@ -47,6 +47,12 @@ el responsable de iniciar los servicios con la presión larga central.
 5. Ya en modo inteligente, mantener el bumper derecho mientras se habla y soltarlo al terminar.
 6. Presionar ambos bumpers para solicitar parada de emergencia.
 
+Durante la prueba, abre el menú **Nemotron** de la interfaz. Mientras el bumper
+está presionado debe indicar **Escuchando**; después de soltarlo pasa a
+**Procesando audio e imagen** y finalmente muestra la transcripción, el texto
+de respuesta y el resultado de cada acción. La transcripción es por lotes, no
+palabra por palabra.
+
 Para seguir los logs locales del gateway Nemotron (bumpers, captura y diagnóstico
 WAV) por SSH en tiempo real:
 
@@ -92,7 +98,12 @@ terminar no impide responder heartbeats. Si el enlace se pierde de todos modos,
 el gateway del PC conserva el proceso y vuelve a conectar cada dos segundos.
 Las acciones corporales solo se autorizan cuando la transcripción contiene una
 petición explícita compatible; una conversación normal no permite que el modelo
-añada movimientos espontáneos.
+añada movimientos espontáneos. Las variantes naturales `te levantes`,
+`levantarte`, `sentarte` y `agacharte` se comparan con la postura concreta que
+el modelo solicita, por lo que una petición de levantarse no autoriza sentarse.
+Las negaciones directas, por ejemplo `no quiero que te levantes`, se rechazan
+antes de buscar la variante afirmativa para que el verbo contenido en una
+negación nunca habilite movimiento.
 
 Al iniciar el runtime, `ALTextToSpeech` selecciona el idioma `Spanish`. Si esa
 voz no está instalada en el robot, `intelligence.log` registra la advertencia y
@@ -132,4 +143,6 @@ acciones, rangos de articulaciones, presupuesto por turno y parada local.
 
 Para la demo debe haber un operador junto al robot, espacio despejado y acceso
 inmediato a ambos bumpers. El WebSocket de control web heredado no debe exponerse
-a redes distintas del enlace Ethernet directo durante esta prueba.
+a redes distintas del enlace Ethernet directo durante esta prueba. El panel
+Nemotron solo entrega la conversación al origen que coincide con la IP del PC
+confirmada mediante el sensor táctil trasero.

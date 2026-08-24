@@ -102,7 +102,10 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
     async def latest_image() -> bytes:
         return await fetch_latest_jpeg(f"http://{robot_host}:8080/video.mjpeg")
 
-    host = AgentHost(robot, nemotron, latest_image, registry)
+    host = AgentHost(
+        robot, nemotron, latest_image, registry,
+        state_publisher=robot.publish_interaction_state,
+    )
     try:
         await maintain_robot_connection(robot, host)
     finally:

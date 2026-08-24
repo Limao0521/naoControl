@@ -39,6 +39,9 @@ class RobotClient:
     def turn_finished_envelope(self) -> dict:
         return self._envelope("turn_finished", {})
 
+    def interaction_update_envelope(self, payload: dict) -> dict:
+        return self._envelope("interaction_update", payload)
+
     def ingest(self, raw: str) -> tuple[str, dict]:
         envelope = json.loads(raw)
         payload = verify_envelope(envelope, self.secret, self.now_ms(), self.replay_guard)
@@ -84,6 +87,11 @@ class RobotClient:
         if self.socket is None:
             raise RuntimeError("robot client is not connected")
         await self.socket.send(json.dumps(self.turn_finished_envelope()))
+
+    async def publish_interaction_state(self, payload: dict) -> None:
+        if self.socket is None:
+            raise RuntimeError("robot client is not connected")
+        await self.socket.send(json.dumps(self.interaction_update_envelope(payload)))
 
     async def close(self) -> None:
         if self.socket is not None:

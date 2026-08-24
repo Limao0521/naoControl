@@ -92,6 +92,9 @@ async def test_run_gateway_does_not_start_network_administration(monkeypatch, tm
         def __init__(self, *args):
             calls.append("robot_created")
 
+        async def publish_interaction_state(self, payload):
+            calls.append("state_published")
+
     class FakeNemotron:
         def __init__(self, *args):
             calls.append("nemotron_created")
@@ -101,7 +104,7 @@ async def test_run_gateway_does_not_start_network_administration(monkeypatch, tm
 
     monkeypatch.setattr(main_module, "RobotClient", FakeRobot)
     monkeypatch.setattr(main_module, "NemotronClient", FakeNemotron)
-    monkeypatch.setattr(main_module, "AgentHost", lambda *args: object())
+    monkeypatch.setattr(main_module, "AgentHost", lambda *args, **kwargs: object())
 
     async def fake_robot_connection(robot, host):
         calls.append("robot_service")

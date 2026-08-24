@@ -26,6 +26,8 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert '"$base/nao/scripts/runtime/control_server/message_security.py"' in content
     assert '"$base/nao/scripts/runtime/control_server/commands/network_commands.py"' in content
     assert '"$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py"' in content
+    assert '"$base/nao/scripts/runtime/interaction_state.py"' in content
+    assert '"$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py"' in content
 
 
 def test_deploy_preserves_the_configured_pc_gateway_target():

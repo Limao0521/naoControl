@@ -156,6 +156,27 @@ def test_turn_finished_invokes_system_handler():
     assert events == ["TURN_FINISHED"]
 
 
+def test_signed_interaction_update_is_persisted_by_gateway():
+    updates = []
+    core = GatewayCore(
+        b"shared-secret", FakeExecutor(), now_ms=lambda: 1000,
+        interaction_handler=lambda payload: updates.append(payload),
+    )
+    payload = {
+        "interaction_id": "turn-1", "phase": "processing",
+        "transcript": "Hola NAO", "response": "", "actions": [],
+    }
+    envelope = sign_envelope(
+        unsigned("interaction_update", "state-1", payload), b"shared-secret"
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["message_type"] == "event_result"
+    assert result["payload"]["status"] == "ok"
+    assert updates == [payload]
+
+
 def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp_path):
     target = tmp_path / "target.json"
     bundle = tmp_path / "bundle.tar.gz"

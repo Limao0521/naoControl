@@ -46,6 +46,7 @@ from conversation_commands import (
     StartConversationCommand, StopConversationCommand, GetConversationStatusCommand
 )
 from network_commands import NetworkAdminCommand
+from nemotron_commands import NemotronStatusCommand
 
 # Import record system functions
 try:
@@ -173,6 +174,9 @@ class CommandFactory(object):
 
             # Red
             'networkAdmin': NetworkAdminCommand,
+
+            # Observabilidad Nemotron
+            'nemotronStatus': NemotronStatusCommand,
         }
     
     def create_command(self, action):
