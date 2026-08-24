@@ -187,7 +187,7 @@ const NetworkMenu = () => {
               placeholder="192.168.1.50"
               value={pcIp}
               onChange={(event) => setPcIp(event.target.value)}
-              pattern="(?:[0-9]{1,3}\\.){3}[0-9]{1,3}"
+              pattern="(?:[0-9]{1,3}\.){3}[0-9]{1,3}"
               maxLength={15}
               required
             />

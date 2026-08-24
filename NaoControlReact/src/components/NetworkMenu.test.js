@@ -137,3 +137,13 @@ test('shows and physically confirms the PC destination used by the bumper', asyn
   ));
   expect(await screen.findByText('Destino del gateway actualizado.')).toBeInTheDocument();
 });
+
+
+test('accepts the link-local IPv4 address used by the connected PC', async () => {
+  render(<NetworkMenu />);
+
+  const input = await screen.findByLabelText('IP del PC para Nemotron');
+  fireEvent.change(input, { target: { value: '169.254.151.5' } });
+
+  expect(input).toBeValid();
+});
