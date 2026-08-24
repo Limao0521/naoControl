@@ -50,6 +50,12 @@ def test_setup_preserves_empty_passphrase_for_windows_ssh_keygen() -> None:
     assert "-N '\"\"'" in content
 
 
+def test_setup_normalizes_remote_key_installer_to_unix_line_endings() -> None:
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert '$installCommand = $installCommand.Replace("`r`n", "`n")' in content
+
+
 def test_setup_writes_only_safe_broker_values_after_key_verification(tmp_path) -> None:
     key_path = tmp_path / "nao_key"
     key_path.write_text("private-placeholder", encoding="utf-8")

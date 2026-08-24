@@ -110,6 +110,11 @@ chmod 700 "$HOME/.ssh"
 chmod 600 "$HOME/.ssh/authorized_keys"
 '@
 
+# The NAO invokes this command with bash.  PowerShell here-strings inherit the
+# repository's CRLF line endings, which makes bash parse the case pattern as
+# `ssh-ed25519 *\r` and reject it.  Send a POSIX shell payload explicitly.
+$installCommand = $installCommand.Replace("`r`n", "`n")
+
 $publicKey | & $SshCommand -o StrictHostKeyChecking=accept-new $sshTarget $installCommand
 Assert-CommandSucceeded 'Installing public key on NAO'
 
