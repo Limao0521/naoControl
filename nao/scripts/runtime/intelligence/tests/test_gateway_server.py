@@ -1,5 +1,6 @@
 import base64
 import io
+import json
 import wave
 
 from nao.scripts.runtime.intelligence.audio_capture import AudioCapture, audio_diagnostics
@@ -166,12 +167,28 @@ def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp
         def check_intelligent_entry(self):
             return True, []
 
+    def transport(*args):
+        requests.append(args)
+        request = json.loads(args[1])
+        return sign_envelope({
+            "protocol_version": 1,
+            "message_type": "gateway_start_result",
+            "message_id": "result-1",
+            "issued_at_ms": 1000,
+            "expires_at_ms": 31000,
+            "payload": {
+                "request_id": request["message_id"],
+                "status": "ready",
+                "pid": 4321,
+            },
+        }, b"x" * 32)
+
     gate = create_entry_gate(
         Safety(),
         b"x" * 32,
         target_path=str(target),
         bundle_path=str(bundle),
-        transport=lambda *args: requests.append(args) or {"status": "ready"},
+        transport=transport,
         now_ms=lambda: 1000,
     )
 
