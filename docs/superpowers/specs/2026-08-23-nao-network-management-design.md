@@ -1,7 +1,7 @@
 # NAO Web Network Management Design
 
 **Date:** 2026-08-23
-**Status:** Approved
+**Status:** Superseded by `2026-08-24-nao-integrated-network-management-design.md`
 **Branch:** `feature/nemotron-multimodal-agent`
 
 ## Objective
