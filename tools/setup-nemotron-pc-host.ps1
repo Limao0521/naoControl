@@ -21,6 +21,12 @@ if (-not $isAdmin) {
     throw 'Ejecuta PowerShell como administrador para crear la regla de firewall local.'
 }
 
+$route = Test-NetConnection -ComputerName $NaoIp -Port 22 -InformationLevel Detailed
+if (-not $route.TcpTestSucceeded) {
+    throw "El NAO $NaoIp no acepta SSH desde este PC."
+}
+$pcAddress = [string]$route.SourceAddress
+
 $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $package = Join-Path $repo 'pc_gateway'
 $sourceEnv = Join-Path $repo '.env'
@@ -63,7 +69,7 @@ $secretTemp = Join-Path ([System.IO.Path]::GetTempPath()) (
 try {
     $scpArguments = @(
         '-q',
-        '-o', 'StrictHostKeyChecking=accept-new',
+        '-o', 'StrictHostKeyChecking=yes',
         "${NaoUser}@${NaoIp}:/home/nao/naoControl/config/robot_gateway.secret",
         $secretTemp
     )
@@ -109,32 +115,46 @@ $arguments = @(
 $quotedArguments = ($arguments | ForEach-Object {
     if ($_ -match '[\s"]') { '"' + ($_ -replace '"', '\"') + '"' } else { $_ }
 }) -join ' '
-$runCommand = '"' + $python + '" ' + $quotedArguments
-
 Write-Step 'Registrando inicio automático del lanzador'
-$runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
-New-ItemProperty -Path $runKey -Name $taskName -Value $runCommand -PropertyType String -Force | Out-Null
+$taskAction = New-ScheduledTaskAction -Execute $python -Argument $quotedArguments
+$taskTrigger = New-ScheduledTaskTrigger -AtLogOn -User $identity.Name
+$principalParameters = @{
+    UserId    = $identity.Name
+    LogonType = 'Interactive'
+    RunLevel  = 'Limited'
+}
+$taskPrincipal = New-ScheduledTaskPrincipal @principalParameters
+$taskParameters = @{
+    TaskName  = $taskName
+    Action    = $taskAction
+    Trigger   = $taskTrigger
+    Principal = $taskPrincipal
+    Force     = $true
+}
+Register-ScheduledTask @taskParameters | Out-Null
 
 $existingRule = Get-NetFirewallRule -DisplayName $taskName -ErrorAction SilentlyContinue
-if (-not $existingRule) {
-    $firewallParameters = @{
-        DisplayName   = $taskName
-        Direction     = 'Inbound'
-        Action        = 'Allow'
-        Protocol      = 'TCP'
-        LocalPort     = 6676
-        RemoteAddress = 'LocalSubnet'
-        Profile       = 'Private'
-    }
-    New-NetFirewallRule @firewallParameters | Out-Null
+if ($existingRule) {
+    $existingRule | Remove-NetFirewallRule
 }
+$firewallParameters = @{
+    DisplayName   = $taskName
+    Direction     = 'Inbound'
+    Action        = 'Allow'
+    Protocol      = 'TCP'
+    LocalPort     = 6676
+    LocalAddress  = $pcAddress
+    RemoteAddress = $NaoIp
+    Profile       = 'Any'
+}
+New-NetFirewallRule @firewallParameters | Out-Null
 
 Get-CimInstance Win32_Process -Filter "Name = 'python.exe'" |
     Where-Object { $_.CommandLine -like '*nao_gateway.launcher_service*' } |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force }
 
 Write-Step 'Iniciando lanzador autenticado en segundo plano'
-Start-Process -FilePath $python -ArgumentList $quotedArguments -WindowStyle Hidden
+Start-ScheduledTask -TaskName $taskName
 
 $ready = $false
 for ($attempt = 0; $attempt -lt 10; $attempt++) {
@@ -147,7 +167,4 @@ if (-not $ready) {
 }
 
 Write-Host 'Lanzador del PC listo. Configura la IP de este PC en el menú Red del NAO.' -ForegroundColor Green
-Get-NetIPAddress -AddressFamily IPv4 -AddressState Preferred -ErrorAction SilentlyContinue |
-    Where-Object { $_.IPAddress -notlike '127.*' } |
-    Select-Object InterfaceAlias, IPAddress |
-    Format-Table -AutoSize
+Write-Host ("IP del PC para el panel Red: " + $pcAddress) -ForegroundColor Green

@@ -89,3 +89,7 @@ def test_setup_script_registers_the_authenticated_launcher_without_copying_secre
     assert "Write-Host $robotSecret" not in content
     assert "New-NetFirewallRule" in content
     assert "nao_gateway.launcher_service" in content
+    assert "New-ScheduledTaskPrincipal" in content
+    assert "RunLevel  = 'Limited'" in content
+    assert "RemoteAddress = $NaoIp" in content
+    assert "StrictHostKeyChecking=yes" in content

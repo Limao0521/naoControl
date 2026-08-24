@@ -10,7 +10,11 @@ from nao.scripts.runtime.intelligence.pc_gateway_launch import (
     GatewayTargetStore,
     RemoteGatewayLauncher,
 )
-from nao.scripts.runtime.intelligence.protocol import verify_envelope, ReplayGuard
+from nao.scripts.runtime.intelligence.protocol import (
+    ReplayGuard,
+    sign_envelope,
+    verify_envelope,
+)
 
 
 def test_target_store_persists_only_a_valid_ipv4_address(tmp_path):
@@ -34,7 +38,19 @@ def test_remote_launcher_sends_a_signed_bounded_start_request(tmp_path):
 
     def transport(url, body, timeout):
         requests.append((url, body, timeout))
-        return {"status": "ready", "pid": 4321}
+        request = json.loads(body)
+        return sign_envelope({
+            "protocol_version": 1,
+            "message_type": "gateway_start_result",
+            "message_id": "result-1",
+            "issued_at_ms": 1000,
+            "expires_at_ms": 31000,
+            "payload": {
+                "request_id": request["message_id"],
+                "status": "ready",
+                "pid": 4321,
+            },
+        }, b"x" * 32)
 
     launcher = RemoteGatewayLauncher(
         store,
@@ -55,6 +71,23 @@ def test_remote_launcher_sends_a_signed_bounded_start_request(tmp_path):
     assert payload["bundle_sha256"]
     assert payload["bundle_name"] == "pc_gateway_bundle.tar.gz"
     assert set(payload) == {"bundle_name", "bundle_sha256"}
+
+
+def test_remote_launcher_rejects_an_unsigned_pc_response(tmp_path):
+    store = GatewayTargetStore(str(tmp_path / "target.json"))
+    store.save("192.168.10.25")
+    bundle = tmp_path / "bundle.tar.gz"
+    bundle.write_bytes(b"bundle")
+    launcher = RemoteGatewayLauncher(
+        store,
+        b"x" * 32,
+        bundle_path=str(bundle),
+        transport=lambda *_: {"status": "ready", "pid": 5},
+        now_ms=lambda: 1000,
+    )
+
+    with pytest.raises(Exception):
+        launcher.start()
 
 
 def test_remote_launcher_rejects_missing_target_without_network_call(tmp_path):

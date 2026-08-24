@@ -12,7 +12,7 @@ from nao_gateway.launcher_service import (
     LauncherCoordinator,
     _pid_is_running,
 )
-from nao_gateway.protocol import sign_envelope
+from nao_gateway.protocol import ReplayGuard, sign_envelope, verify_envelope
 
 
 def bundle_bytes(entries: dict[str, bytes]) -> bytes:
@@ -89,6 +89,10 @@ def test_coordinator_derives_bundle_source_and_robot_url_from_client_ip(tmp_path
     assert options["env"]["NAO_GATEWAY_URL"] == "ws://192.168.10.40:6674"
     assert options["env"]["PYTHONPATH"].endswith("pc_gateway\\src")
     assert "NVIDIA_API_KEY" not in json.dumps(result)
+
+    response = coordinator.response("launch-1", result)
+    verified = verify_envelope(response, b"x" * 32, 1000, ReplayGuard(10))
+    assert verified == {"request_id": "launch-1", "status": "ready", "pid": 4321}
 
 
 def test_coordinator_rejects_unsigned_or_wrong_message_without_fetching(tmp_path):

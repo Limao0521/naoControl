@@ -37,12 +37,18 @@ El script:
 - instala el lanzador y sus dependencias en un entorno virtual aislado;
 - copia el `.env` local sin mostrar sus valores;
 - obtiene por SCP el secreto HMAC del robot y lo guarda sin imprimirlo;
-- registra el lanzador en el inicio de sesión del usuario;
-- abre únicamente TCP `6676` para el perfil privado y la subred local;
+- registra una tarea de inicio de sesión con privilegios limitados;
+- abre TCP `6676` únicamente desde la IP del NAO hacia la interfaz del PC que
+  realmente alcanza al robot;
 - inicia el proceso oculto y muestra las IPv4 disponibles del PC.
 
 Si no existe `.env`, crea una copia de `.env.example`, la abre en Notepad y se
 detiene. Completa allí las credenciales y vuelve a ejecutar el mismo comando.
+
+El setup usa verificación estricta de la identidad SSH del NAO. En un PC nuevo,
+si todavía no existe una entrada confiable en `known_hosts`, verifica primero
+la huella del robot y realiza una conexión interactiva `ssh nao@<NAO_IP>`; luego
+repite el setup. El script no acepta silenciosamente una identidad nueva.
 
 ## Configurar el destino y probar
 

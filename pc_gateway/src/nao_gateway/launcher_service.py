@@ -20,7 +20,7 @@ from urllib.request import urlopen
 
 from dotenv import load_dotenv
 
-from .protocol import ReplayGuard, verify_envelope
+from .protocol import ReplayGuard, sign_envelope, verify_envelope
 
 
 logger = logging.getLogger(__name__)
@@ -232,6 +232,22 @@ class LauncherCoordinator:
             client_ip, payload["bundle_name"], payload["bundle_sha256"]
         )
 
+    def response(self, request_id: str, result: dict) -> dict:
+        now = self.now_ms()
+        payload = {
+            "request_id": request_id,
+            "status": result["status"],
+            "pid": int(result["pid"]),
+        }
+        return sign_envelope({
+            "protocol_version": 1,
+            "message_type": "gateway_start_result",
+            "message_id": __import__("uuid").uuid4().hex,
+            "issued_at_ms": now,
+            "expires_at_ms": now + 30000,
+            "payload": payload,
+        }, self.secret)
+
 
 def create_handler(coordinator: LauncherCoordinator):
     class Handler(BaseHTTPRequestHandler):
@@ -247,6 +263,7 @@ def create_handler(coordinator: LauncherCoordinator):
                     raise BundleError("invalid request size")
                 envelope = json.loads(self.rfile.read(length).decode("utf-8"))
                 result = coordinator.handle(envelope, self.client_address[0])
+                result = coordinator.response(envelope["message_id"], result)
                 logger.info("Gateway start accepted from %s", self.client_address[0])
                 status = 200
             except Exception:

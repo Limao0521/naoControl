@@ -16,9 +16,9 @@ except ImportError:  # pragma: no cover - Python 2 on the robot
     from urllib2 import Request, urlopen
 
 try:
-    from .protocol import sign_envelope
+    from .protocol import ReplayGuard, sign_envelope, verify_envelope
 except (ImportError, ValueError):  # pragma: no cover - direct robot execution
-    from protocol import sign_envelope
+    from protocol import ReplayGuard, sign_envelope, verify_envelope
 
 
 MAX_RESPONSE_BYTES = 4096
@@ -103,6 +103,7 @@ class RemoteGatewayLauncher(object):
         self.bundle_path = bundle_path
         self.transport = transport or _http_transport
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
+        self.response_replay_guard = ReplayGuard(100)
 
     def _bundle_sha256(self):
         digest = hashlib.sha256()
@@ -122,10 +123,11 @@ class RemoteGatewayLauncher(object):
         if not pc_ip:
             raise GatewayLaunchError("pc target is not configured")
         now = self.now_ms()
+        request_id = str(uuid.uuid4())
         envelope = sign_envelope({
             "protocol_version": 1,
             "message_type": "gateway_start",
-            "message_id": str(uuid.uuid4()),
+            "message_id": request_id,
             "issued_at_ms": now,
             "expires_at_ms": now + 30000,
             "payload": {
@@ -133,14 +135,24 @@ class RemoteGatewayLauncher(object):
                 "bundle_sha256": self._bundle_sha256(),
             },
         }, self.secret)
-        result = self.transport(
+        response = self.transport(
             "http://{}:6676/start".format(pc_ip),
             json.dumps(envelope, separators=(",", ":")),
             20,
         )
+        if not isinstance(response, dict) or response.get("message_type") != "gateway_start_result":
+            raise GatewayLaunchError("pc launcher response is unauthenticated")
+        try:
+            result = verify_envelope(
+                response, self.secret, self.now_ms(), self.response_replay_guard
+            )
+        except Exception:
+            raise GatewayLaunchError("pc launcher response is unauthenticated")
+        if result.get("request_id") != request_id:
+            raise GatewayLaunchError("pc launcher response does not match request")
         if result.get("status") not in ("ready", "already_running"):
             raise GatewayLaunchError("pc launcher rejected the request")
-        return result
+        return dict((key, result[key]) for key in ("status", "pid") if key in result)
 
 
 class GatewayEntryGate(object):
