@@ -84,7 +84,7 @@ la respuesta hablada nunca se toma como autorización para mover el robot.
 
 Cada resultado de acción registra ahora el nombre, los argumentos no sensibles,
 el estado y la razón de rechazo. Para una orden de postura debe verse en el PC
-una línea como `action=set_posture arguments={'posture': 'Stand', 'speed': 0.3}
+una línea como `action=set_posture arguments={'posture': 'Stand', 'speed': 0.35}
 status=accepted reason=None`. `accepted` significa que NAOqi inició la tarea
 asíncrona sin bloquear el canal de control; el movimiento o la locución pueden
 seguir ejecutándose después de recibir ese resultado. Si aparece
@@ -129,9 +129,26 @@ El modelo solo recibe herramientas habilitadas en `config/action_registry.json`.
 No se permiten comandos libres ni locomoción. Las acciones se validan en el PC y
 otra vez en el NAO. La pérdida del PC o de NVIDIA no autoriza ninguna acción.
 
-Los comportamientos estándar `wave`, `yes`, `no` y `thinking` están disponibles.
-Los paquetes personalizados deben instalarse con Choregraphe y conservar el ID
-de paquete configurado en `config/behavior_registry.json`.
+Los comportamientos permitidos se prueban con el ID exacto: `wave`, `yes`, `no`,
+`thinking`, `dance_siu`, `dance_gangnam`, `dance_macarena`, `play_saxophone` y
+`taichi`. Los paquetes deben instalarse con Choregraphe y conservar el ID de
+paquete configurado en `config/behavior_registry.json`. Si aparece
+`unknown_behavior` o `facade_failed`, instalar el paquete faltante desde
+Choregraphe y repetir la prueba.
+
+## Matriz de verificación física
+
+| Acción | Orden explícita | Resultado esperado |
+|---|---|---|
+| FaceLeds rojo | `set_led(group=FaceLeds, color=red)` | Rojo mediante `fadeRGB` |
+| ChestLeds verde | `set_led(group=ChestLeds, color=green)` | Verde mediante `fadeRGB` |
+| EarLeds azul | `set_led(group=EarLeds, color=blue)` | Azul mediante intensidad `1.0` |
+| EarLeds apagado | `set_led(group=EarLeds, color=off)` | Apagado mediante intensidad `0.0` |
+| Postura | `set_posture(posture=Stand, speed=0.35)` | NAO inicia la transición |
+| Behaviors | Una orden para cada ID permitido | Se ejecuta el behavior registrado |
+
+Los colores distintos de `blue` y `off` en `EarLeds` deben rechazarse con
+`invalid_ear_led_color`; no deben afirmarse como ejecutados.
 
 ## Límites de confianza y activos
 

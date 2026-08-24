@@ -43,16 +43,19 @@ class ActionExecutor(object):
                     status = "accepted"
             elif action == "set_led":
                 group = arguments.get("group", "FaceLeds")
-                color = self.COLORS.get(arguments.get("color"))
+                color_name = arguments.get("color")
+                color = self.COLORS.get(color_name)
                 if group not in self.LED_GROUPS or color is None:
                     return self._reject("invalid_led")
+                if group == "EarLeds" and color_name not in ("blue", "off"):
+                    return self._reject("invalid_ear_led_color")
                 if self._facade_failed(self.facade.set_led_rgb(group, color[0], color[1], color[2], 0.3)):
                     return self._reject("facade_failed")
             elif action == "set_posture":
                 posture = arguments.get("posture")
                 if posture not in rule.get("allowed", []):
                     return self._reject("invalid_posture")
-                speed = min(float(arguments.get("speed", 0.3)), rule.get("max_speed", 0.5))
+                speed = min(float(arguments.get("speed", 0.35)), rule.get("max_speed", 0.5))
                 outcome = self.facade.go_to_posture(posture, speed)
                 if self._facade_failed(outcome):
                     return self._reject("facade_failed")

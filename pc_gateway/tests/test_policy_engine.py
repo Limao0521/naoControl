@@ -8,6 +8,7 @@ REGISTRY = {
         "say": {"max_text_length": 500, "risk": "low"},
         "set_led": {"risk": "low", "groups": ["FaceLeds"], "colors": ["blue"]},
         "look": {"risk": "body", "yaw_range": [-1.0, 1.0], "pitch_range": [-0.5, 0.5]},
+        "set_posture": {"risk": "body", "allowed": ["Stand"], "max_speed": 0.5},
     }
 }
 
@@ -33,3 +34,19 @@ def test_turn_allows_at_most_one_body_action():
 def test_led_arguments_must_match_registry():
     with pytest.raises(PolicyViolation):
         PolicyEngine(REGISTRY).authorize("set_led", {"group": "FaceLeds", "color": "purple"})
+
+
+def test_ear_led_rejects_impossible_color():
+    registry = {"actions": {"set_led": {
+        "risk": "low", "groups": ["EarLeds"],
+        "colors": ["off", "red", "blue"],
+    }}}
+    with pytest.raises(PolicyViolation, match="EarLeds only supports blue or off"):
+        PolicyEngine(registry).authorize("set_led", {"group": "EarLeds", "color": "red"})
+
+
+def test_posture_speed_defaults_and_clamps():
+    policy = PolicyEngine(REGISTRY)
+    assert policy.authorize("set_posture", {"posture": "Stand"}) == {
+        "action": "set_posture", "arguments": {"posture": "Stand", "speed": 0.35},
+    }

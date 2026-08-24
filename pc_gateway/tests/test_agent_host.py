@@ -29,6 +29,21 @@ class FakeNemotron(object):
         return AgentDecision("La botella es roja.", [ToolCall("set_led", {"group": "FaceLeds", "color": "red"})])
 
 
+def test_tool_schemas_exposes_sorted_behavior_ids():
+    host = AgentHost(None, None, lambda: None, registry={
+        "actions": {"run_behavior": {"risk": "body"}},
+        "behaviors": {name: {} for name in (
+            "yes", "wave", "dance_siu", "no", "taichi", "thinking",
+            "dance_gangnam", "play_saxophone", "dance_macarena",
+        )},
+    })
+    run_behavior = next(tool for tool in host.tool_schemas() if tool["name"] == "run_behavior")
+    assert run_behavior["constraints"]["allowed_behavior_ids"] == [
+        "dance_gangnam", "dance_macarena", "dance_siu", "no",
+        "play_saxophone", "taichi", "thinking", "wave", "yes",
+    ]
+
+
 @pytest.mark.asyncio
 async def test_audio_event_executes_policy_tools_then_speaks(caplog, capsys):
     robot = FakeRobot()

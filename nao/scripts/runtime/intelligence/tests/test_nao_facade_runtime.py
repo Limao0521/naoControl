@@ -38,8 +38,11 @@ class FakeProxy(object):
     def setLanguage(self, language):
         self.calls.append(("setLanguage", language))
 
-    def fadeRGB(self, group, rgb, duration):
-        self.calls.append(("fadeRGB", group, rgb, duration))
+    def fadeRGB(self, *args):
+        self.calls.append(("fadeRGB",) + args)
+
+    def fade(self, *args):
+        self.calls.append(("fade",) + args)
 
     def getRunningBehaviors(self):
         return []
@@ -93,6 +96,19 @@ def test_led_group_is_native_string_before_naoqi_call(monkeypatch):
     group = facade.leds.calls[0][1]
     assert type(group) is str
     assert group == "FaceLeds"
+
+
+def test_led_rgb_uses_native_float_overloads(monkeypatch):
+    nao_facade = load_facade(monkeypatch)
+    facade = bare_facade(nao_facade)
+    facade.leds = FakeProxy()
+
+    assert facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0, 0.3) is True
+    assert facade.leds.calls[-1] == (
+        "fadeRGB", "FaceLeds", 1.0, 0.0, 0.0, 0.3,
+    )
+    assert facade.set_led_rgb("EarLeds", 0.0, 0.0, 1.0, 0.3) is True
+    assert facade.leds.calls[-1] == ("fade", "EarLeds", 1.0, 0.3)
 
 
 def test_initial_state_selects_spanish_tts(monkeypatch):

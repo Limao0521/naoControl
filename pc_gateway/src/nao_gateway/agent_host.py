@@ -120,11 +120,15 @@ class AgentHost:
             )
 
     def tool_schemas(self) -> list[dict]:
-        return [
-            {"name": name, "constraints": rule}
-            for name, rule in self.registry["actions"].items()
-            if rule.get("enabled", True) and name != "say"
-        ]
+        tools = []
+        for name, rule in self.registry["actions"].items():
+            if not rule.get("enabled", True) or name == "say":
+                continue
+            constraints = dict(rule)
+            if name == "run_behavior":
+                constraints["allowed_behavior_ids"] = sorted(self.registry.get("behaviors", {}).keys())
+            tools.append({"name": name, "constraints": constraints})
+        return tools
 
     async def handle_audio(self, payload: dict) -> None:
         interaction_id = payload.get("interaction_id", "unknown")

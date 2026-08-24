@@ -96,6 +96,15 @@ def test_led_uses_named_safe_color():
     assert facade.calls == [("set_led_rgb", "FaceLeds", 0.0, 0.0, 1.0, 0.3)]
 
 
+def test_ear_led_rejects_non_blue_colors():
+    facade = FakeFacade()
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "set_led", "arguments": {"group": "EarLeds", "color": "red"}}
+    )
+    assert result == {"status": "rejected", "reason": "invalid_ear_led_color"}
+    assert facade.calls == []
+
+
 def test_facade_failure_is_not_reported_as_completed():
     facade = FakeFacade()
     facade.say = lambda text: False

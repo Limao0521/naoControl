@@ -5,12 +5,19 @@ import httpx
 import pytest
 
 from nao_gateway.nemotron import DECISION_SYSTEM_PROMPT, NemotronClient, ToolCall
+from nao_gateway.nemotron import _function_parameters
 
 
 def test_decision_prompt_uses_nao_first_person_and_explicit_physical_actions():
     assert "habla siempre como nao en primera persona" in DECISION_SYSTEM_PROMPT.lower()
     assert "solo si el usuario la pidió explícitamente" in DECISION_SYSTEM_PROMPT
     assert "Me pondré de pie" in DECISION_SYSTEM_PROMPT
+
+
+def test_behavior_ids_are_enum_in_function_schema():
+    allowed = ["dance_siu", "wave"]
+    schema = _function_parameters("run_behavior", {"allowed_behavior_ids": allowed})
+    assert schema["properties"]["behavior_id"]["enum"] == allowed
 
 
 @pytest.mark.asyncio

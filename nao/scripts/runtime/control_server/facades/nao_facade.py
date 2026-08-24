@@ -230,13 +230,14 @@ class NAOFacade(object):
 
         group = str(group)
         
-        rgb_int = (int(r*255) << 16) | (int(g*255) << 8) | int(b*255)
-        
-        if group in ("LeftEarLeds", "RightEarLeds"):
-            intensity = (rgb_int & 0xFF) / 255.0
-            return self._call_succeeded(self.safe_call(self.leds.fade, group, intensity, duration))
-        else:
-            return self._call_succeeded(self.safe_call(self.leds.fadeRGB, group, rgb_int, duration))
+        if group == "EarLeds":
+            intensity = float(b)
+            return self._call_succeeded(
+                self.safe_call(self.leds.fade, str(group), intensity, float(duration))
+            )
+        return self._call_succeeded(self.safe_call(
+            self.leds.fadeRGB, str(group), float(r), float(g), float(b), float(duration)
+        ))
     
     # === TTS METHODS ===
     def say(self, text):

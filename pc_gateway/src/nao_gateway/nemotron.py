@@ -31,8 +31,10 @@ DECISION_SYSTEM_PROMPT = (
     "tool_calls; speech será pronunciado por NAO. Cada llamada tiene exactamente name y "
     "arguments. Nunca prometas una acción física en speech sin emitir la tool_call "
     "correspondiente. Si el usuario pide sentarse, usa exactamente "
-    "{\"name\":\"set_posture\",\"arguments\":{\"posture\":\"Sit\",\"speed\":0.3}}. "
+    "{\"name\":\"set_posture\",\"arguments\":{\"posture\":\"Sit\",\"speed\":0.35}}. "
     "Si pide ponerse de pie, responde por ejemplo 'Me pondré de pie' y usa Stand. "
+    "Si pide saludar, asentir, negar, pensar, bailar, tocar saxofón o hacer taichí, "
+    "usa run_behavior con uno de los behavior_id permitidos por el esquema. "
     "No uses Markdown. Ejemplo conversacional sin acción: "
     "{\"speech\":\"Hola\",\"tool_calls\":[]}."
 )
@@ -125,7 +127,7 @@ def _function_parameters(name: str, constraints: dict) -> dict[str, Any]:
         }, "required": ["yaw", "pitch"], "additionalProperties": False}
     if name == "run_behavior":
         return {"type": "object", "properties": {
-            "behavior_id": {"type": "string"},
+            "behavior_id": {"type": "string", "enum": constraints.get("allowed_behavior_ids", [])},
         }, "required": ["behavior_id"], "additionalProperties": False}
     return {"type": "object", "properties": {}, "additionalProperties": False}
 
