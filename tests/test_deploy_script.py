@@ -83,6 +83,14 @@ def test_start_script_builds_and_serves_the_pc_gateway_bundle():
     assert "start_service pc_bundle" in content
 
 
+def test_start_script_rebuilds_bundle_atomically_on_every_start():
+    content = Path("nao/scripts/runtime/start_nemotron.sh").read_text(encoding="utf-8")
+
+    assert "if [ ! -f \"$BUNDLE_DIR/pc_gateway_bundle.tar.gz\" ]" not in content
+    assert "mktemp \"$BUNDLE_DIR/pc_gateway_bundle.tar.gz.tmp.XXXXXX\"" in content
+    assert "mv \"$bundle_tmp\" \"$BUNDLE_DIR/pc_gateway_bundle.tar.gz\"" in content
+
+
 def test_setup_script_registers_the_authenticated_launcher_without_copying_secrets():
     content = Path("tools/setup-nemotron-pc-host.ps1").read_text(encoding="utf-8")
 

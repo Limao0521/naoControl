@@ -25,10 +25,18 @@ start_service() {
     echo "$name started: $(cat "$pid_file")"
 }
 
-if [ ! -f "$BUNDLE_DIR/pc_gateway_bundle.tar.gz" ]; then
-    tar -czf "$BUNDLE_DIR/pc_gateway_bundle.tar.gz" \
-        -C "$BASE" pc_gateway config/action_registry.json config/behavior_registry.json
-fi
+bundle_tmp="$(mktemp "$BUNDLE_DIR/pc_gateway_bundle.tar.gz.tmp.XXXXXX")"
+cleanup_bundle_tmp() {
+    if [ -n "$bundle_tmp" ]; then
+        rm -f "$bundle_tmp"
+    fi
+}
+trap cleanup_bundle_tmp 0 1 2 3 15
+tar -czf "$bundle_tmp" \
+    -C "$BASE" pc_gateway config/action_registry.json config/behavior_registry.json
+mv "$bundle_tmp" "$BUNDLE_DIR/pc_gateway_bundle.tar.gz"
+bundle_tmp=""
+trap - 0 1 2 3 15
 
 start_service control python -u "$RUNTIME/control_server/server.py"
 start_service web sh -c "cd '$BASE/NaoControlReact/build' && exec python -m SimpleHTTPServer 3000"
