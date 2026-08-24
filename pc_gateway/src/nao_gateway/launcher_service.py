@@ -141,6 +141,7 @@ class GatewayRuntime:
             required = (
                 extracted / "pc_gateway" / "src" / "nao_gateway" / "__init__.py",
                 extracted / "config" / "action_registry.json",
+                extracted / "config" / "behavior_registry.json",
             )
             if not all(path.is_file() for path in required):
                 raise BundleError("gateway bundle is incomplete")

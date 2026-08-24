@@ -27,7 +27,7 @@ start_service() {
 
 if [ ! -f "$BUNDLE_DIR/pc_gateway_bundle.tar.gz" ]; then
     tar -czf "$BUNDLE_DIR/pc_gateway_bundle.tar.gz" \
-        -C "$BASE" pc_gateway config/action_registry.json
+        -C "$BASE" pc_gateway config/action_registry.json config/behavior_registry.json
 fi
 
 start_service control python -u "$RUNTIME/control_server/server.py"

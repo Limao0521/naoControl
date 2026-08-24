@@ -6,6 +6,20 @@ from nao_gateway import main as main_module
 from nao_gateway.config import GatewaySettings
 
 
+def test_load_registry_merges_behavior_catalog_from_sibling_config():
+    registry = main_module.load_registry(
+        Path("config/action_registry.json"),
+    )
+    assert sorted(registry["behaviors"]) == [
+        "dance_gangnam", "dance_macarena", "dance_siu", "no",
+        "play_saxophone", "taichi", "thinking", "wave", "yes",
+    ]
+
+    host = main_module.AgentHost(None, None, lambda: None, registry)
+    run_behavior = next(tool for tool in host.tool_schemas() if tool["name"] == "run_behavior")
+    assert run_behavior["constraints"]["allowed_behavior_ids"] == sorted(registry["behaviors"])
+
+
 class BrokenHost(object):
     async def handle_audio(self, payload):
         raise TimeoutError("model timeout")
@@ -79,6 +93,9 @@ async def test_connection_manager_reconnects_after_robot_session_is_lost():
 async def test_run_gateway_does_not_start_network_administration(monkeypatch, tmp_path):
     registry_path = tmp_path / "registry.json"
     registry_path.write_text("{}", encoding="utf-8")
+    (tmp_path / "behavior_registry.json").write_text(
+        '{"behaviors": {}}', encoding="utf-8"
+    )
     settings = GatewaySettings.from_env(
         {
             "NVIDIA_API_KEY": "test-nvidia-key",

@@ -20,6 +20,15 @@ from .sensor_hub import fetch_latest_jpeg
 logger = logging.getLogger(__name__)
 
 
+def load_registry(registry_path: Path) -> dict:
+    """Load action policy and merge only the behavior catalog mapping."""
+    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    behavior_path = registry_path.parent / "behavior_registry.json"
+    behavior_registry = json.loads(behavior_path.read_text(encoding="utf-8"))
+    registry["behaviors"] = dict(behavior_registry.get("behaviors", {}))
+    return registry
+
+
 async def handle_audio_result(robot, host, payload: dict) -> None:
     """Finish a turn without allowing API or network errors to kill the gateway."""
     try:
@@ -91,7 +100,7 @@ async def maintain_robot_connection(
 
 
 async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
-    registry = json.loads(registry_path.read_text(encoding="utf-8"))
+    registry = load_registry(registry_path)
     robot = RobotClient(settings.robot_url, settings.robot_shared_secret.encode("utf-8"))
     nemotron = NemotronClient(
         settings.nvidia_api_key, settings.nvidia_base_url,

@@ -55,6 +55,7 @@ def test_coordinator_derives_bundle_source_and_robot_url_from_client_ip(tmp_path
     content = bundle_bytes({
         "pc_gateway/src/nao_gateway/__init__.py": b"",
         "config/action_registry.json": b"{}",
+        "config/behavior_registry.json": b'{"behaviors": {}}',
     })
     digest = __import__("hashlib").sha256(content).hexdigest()
     fetched = []
@@ -122,6 +123,7 @@ def test_runtime_does_not_report_ready_when_gateway_exits_during_startup(tmp_pat
     content = bundle_bytes({
         "pc_gateway/src/nao_gateway/__init__.py": b"",
         "config/action_registry.json": b"{}",
+        "config/behavior_registry.json": b'{"behaviors": {}}',
     })
     digest = __import__("hashlib").sha256(content).hexdigest()
     (tmp_path / ".env").write_text("configured=true\n", encoding="utf-8")
