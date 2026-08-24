@@ -116,6 +116,20 @@ Añadir `-StartServices` si se desea iniciar los servicios inmediatamente tras
 el despliegue. El script preserva el secreto del robot y no copia `.env` ni las
 credenciales NVIDIA. La guía operativa actual está en `docs/nemotron/physical-test.md`.
 
+### Gestión de red desde la web
+
+La preparación segura de la conexión administrativa se realiza una sola vez:
+
+```powershell
+.\tools\setup-nao-network-admin.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>
+```
+
+Después, el mismo proceso del gateway Nemotron expone el broker únicamente en
+`http://127.0.0.1:6675`. El menú **Red** permite consultar, escanear, conectar,
+desconectar y eliminar perfiles. Cada cambio requiere mantener el sensor táctil
+trasero durante tres segundos. Consulta `docs/network-management.md` para el
+flujo completo, los límites de seguridad y la recuperación tras un cambio de IP.
+
 ### En el Robot NAO
 - **NAO V6** con NAOqi 2.8
 - **Python 2.7** (preinstalado)

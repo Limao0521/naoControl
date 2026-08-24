@@ -22,6 +22,7 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert "gateway_server.py" in content
     assert "python -m py_compile" in content
     assert "start_nemotron.sh" in content
+    assert '"$base/nao/scripts/runtime/network_admin.py"' in content
 
 
 def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():
@@ -43,3 +44,4 @@ def test_nao_archive_builder_writes_writable_directories(tmp_path):
         assert runtime.mode & 0o200
         assert contents.getmember("config/action_registry.json").mode == 0o644
         assert "config/robot_gateway.secret" not in contents.getnames()
+        assert "nao/scripts/runtime/network_admin.py" in contents.getnames()
