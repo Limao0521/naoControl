@@ -10,8 +10,9 @@ const resultMessage = (result) => {
       return 'Operación de red completada.';
     case 'confirmation_timeout':
       return 'Confirmación física no recibida; no se cambió la red.';
+    case 'transport_lost':
     case 'transport_lost_after_apply':
-      return 'La conexión cambió y se perdió el enlace. Revisa la nueva IP del NAO.';
+      return 'Se perdió el enlace durante la operación. Verifica el estado y la IP del NAO por Ethernet.';
     case 'rejected':
       return 'El NAO rechazó la operación.';
     default:
