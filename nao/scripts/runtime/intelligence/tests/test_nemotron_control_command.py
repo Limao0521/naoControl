@@ -28,9 +28,9 @@ class FakeLogger(object):
 
 
 class FakeSocket(object):
-    def __init__(self, address=("169.254.151.5", 54321)):
+    def __init__(self, address=None):
         self.messages = []
-        self.address = address
+        self.address = address or ["169.254.151.5", 54321]
 
     def sendMessage(self, message):
         self.messages.append(json.loads(message))

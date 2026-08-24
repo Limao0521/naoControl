@@ -46,7 +46,7 @@ class NemotronStatusCommand(BaseCommand):
         try:
             configured_pc = self.target_store.load().get("pc_ip", "")
             address = getattr(websocket, "address", None)
-            peer_ip = address[0] if isinstance(address, tuple) and address else ""
+            peer_ip = address[0] if isinstance(address, (tuple, list)) and address else ""
             if not configured_pc or peer_ip != configured_pc:
                 self.logger.warning(
                     "nemotronStatus denied for peer {}".format(peer_ip or "unknown")
