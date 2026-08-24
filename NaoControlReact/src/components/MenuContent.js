@@ -5,6 +5,7 @@ import LedsMenu from './LedsMenu';
 import SettingsMenu from './LanguageMenu';
 import UIMenu from './UIMenu';
 import EmotesMenu from './EmotesMenu';
+import NetworkMenu from './NetworkMenu';
 import './MenuContent.css';
 
 const MenuContent = ({ 
@@ -69,6 +70,8 @@ const MenuContent = ({
             isEmbedded={true}
           />
         );
+      case 'network':
+        return <NetworkMenu />;
       case 'lang':
         return (
           <SettingsMenu 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { FaMicrophone, FaCamera, FaLightbulb, FaTheaterMasks, FaGamepad, FaCog } from 'react-icons/fa';
+import { FaMicrophone, FaCamera, FaLightbulb, FaTheaterMasks, FaGamepad, FaCog, FaWifi } from 'react-icons/fa';
 import MenuContent from './MenuContent';
 import './SidePanel.css';
 
@@ -22,6 +22,7 @@ const SidePanel = ({
     { id: 'camera', icon: FaCamera, label: 'Cámara' },
     { id: 'leds', icon: FaLightbulb, label: 'LEDs' },
     { id: 'emotes', icon: FaTheaterMasks, label: 'Emotes' },
+    { id: 'network', icon: FaWifi, label: 'Red' },
     { id: 'ui', icon: FaGamepad, label: 'UI Mode' },
     { id: 'lang', icon: FaCog, label: 'Settings' }
   ];
