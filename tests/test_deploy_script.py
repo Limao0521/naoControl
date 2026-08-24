@@ -39,6 +39,12 @@ def test_deploy_script_uses_nao_shell_compatible_argument_passing():
     assert "| sh -s '$remoteArchive' '$startFlag'" in content
 
 
+def test_deploy_script_normalizes_remote_script_to_unix_line_endings():
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert '$remoteScript = $remoteScript.Replace("`r`n", "`n")' in content
+
+
 def test_nao_archive_builder_writes_writable_directories(tmp_path):
     from tools.package_nao import build_archive
 

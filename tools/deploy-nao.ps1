@@ -81,6 +81,9 @@ fi
 rm -rf "$backup"
 echo "DEPLOY_OK base=$base services_started=$start_services"
 '@
+    # The NAO's legacy POSIX shell treats CR from Windows CRLF lines as part of
+    # the option token (for example, `set -eu<CR>`). Send a Unix shell script.
+    $remoteScript = $remoteScript.Replace("`r`n", "`n")
     $encodedScript = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($remoteScript))
     # NAO's BusyBox shell rejects the optional `--` separator after `sh -s`.
     # The two positional arguments are already literal, validated values.
