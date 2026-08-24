@@ -31,7 +31,7 @@ class FakeSocket(object):
     def __init__(self, address=None):
         self.messages = []
         self.address = {"library_specific": True}
-        self.client = FakeClient(address or ["169.254.151.5", 54321])
+        self.client = FakeClient(address or ["::ffff:169.254.151.5", 54321])
 
     def sendMessage(self, message):
         self.messages.append(json.loads(message))
@@ -83,7 +83,7 @@ def test_status_command_returns_last_nemotron_turn_to_web_client():
 
 
 def test_status_command_rejects_clients_other_than_configured_pc_without_text():
-    socket = FakeSocket(address=("169.254.151.99", 54321))
+    socket = FakeSocket(address=("::ffff:169.254.151.99", 54321))
     command = NemotronStatusCommand(
         None, FakeLogger(), state_store=FakeStore(),
         target_store=FakeTargetStore(),

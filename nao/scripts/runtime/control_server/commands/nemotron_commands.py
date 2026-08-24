@@ -40,8 +40,12 @@ def _peer_ip(websocket):
     except (AttributeError, IOError, OSError):
         address = getattr(websocket, "address", None)
     if isinstance(address, (tuple, list)) and address:
-        return address[0]
-    return address if isinstance(address, STRING_TYPES) else ""
+        address = address[0]
+    if not isinstance(address, STRING_TYPES):
+        return ""
+    if address.lower().startswith("::ffff:"):
+        return address[7:]
+    return address
 
 
 class NemotronStatusCommand(BaseCommand):
