@@ -17,17 +17,28 @@ BODY_ACTION_CUES = {
     "look": ("mira", "mirar", "voltea", "gira la cabeza", "look at", "turn your head"),
 }
 
-RUN_BEHAVIOR_CUES = {
-    "wave": ("saluda", "saludar", "saludo", "wave"),
-    "yes": ("asiente", "asentir", "afirma", "nod"),
-    "no": ("niega", "negar", "shake head"),
-    "thinking": ("piensa", "pensar", "pensando", "think"),
-    "dance_siu": ("siu", "ronaldo", "baila", "baile", "bailar", "danza", "dance"),
-    "dance_gangnam": ("gangnam", "baila", "baile", "bailar", "danza", "dance"),
-    "dance_macarena": ("macarena", "baila", "baile", "bailar", "danza", "dance"),
-    "play_saxophone": ("saxofon", "toca saxofon", "saxophone"),
-    "taichi": ("tai chi", "taichi"),
+RUN_BEHAVIOR_PATTERNS = {
+    "wave": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:saluda|saludar|saludo|wave)\b",
+    "yes": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:asiente|asentir|afirma|nod)\b",
+    "no": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:niega(?:\s+con\s+la\s+cabeza)?|negar|shake(?:\s+your)?\s+head)\b",
+    "thinking": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que|sigue)\s*,?\s*)\b(?:piensa|pensar|pensando|think)\b",
+    "play_saxophone": r"(?:^|(?:por favor|please|quiero que)\s*,?\s*)\b(?:toca(?:\s+el)?\s+saxofon|play(?:\s+the)?\s+saxophone)\b",
+    "taichi": r"(?:^|(?:por favor|please|haz|haga|quiero que|do)\s*,?\s*)\b(?:tai\s+chi|taichi)\b",
 }
+
+DANCE_STYLES = {
+    "dance_siu": ("siu", "ronaldo"),
+    "dance_gangnam": ("gangnam",),
+    "dance_macarena": ("macarena",),
+}
+DANCE_COMMAND_PATTERN = r"(?:^|(?:por favor|please)\s*,?\s*)\b(?:baila|bailar|dance)\b"
+DANCE_NAMED_COMMAND_PATTERNS = {
+    behavior_id: r"(?:^|(?:por favor|please)\s*,?\s*)\b(?:baila|bailar|dance)\s+(?:{})\b|(?:^|(?:haz|haga|do)\s+)\b(?:{})\b".format(
+        "|".join(styles), "|".join(styles),
+    )
+    for behavior_id, styles in DANCE_STYLES.items()
+}
+BEHAVIOR_NEGATION_PATTERN = r"\b(?:no|nunca|not|never|don\'t|do not)\b"
 
 POSTURE_CUES = {
     "Stand": (
@@ -91,15 +102,21 @@ def _physical_action_explicitly_requested(
         return any(cue in normalized for cue in cues)
     if action == "run_behavior":
         behavior_id = (arguments or {}).get("behavior_id")
-        cues = RUN_BEHAVIOR_CUES.get(behavior_id, ())
         normalized = _normalized_text(transcript)
-        if not isinstance(behavior_id, str) or not cues:
+        if not isinstance(behavior_id, str) or re.search(BEHAVIOR_NEGATION_PATTERN, normalized):
             return False
         if behavior_id.startswith("dance_"):
-            return any(cue in normalized for cue in cues)
-        return any(cue in normalized for cue in cues if cue not in (
-            "baila", "baile", "bailar", "danza", "dance",
-        ))
+            named_styles = [
+                dance_id for dance_id, styles in DANCE_STYLES.items()
+                if any(re.search(r"\b{}\b".format(style), normalized) for style in styles)
+            ]
+            if len(named_styles) > 1 or (named_styles and named_styles[0] != behavior_id):
+                return False
+            if named_styles:
+                return bool(re.search(DANCE_NAMED_COMMAND_PATTERNS[behavior_id], normalized))
+            return bool(re.search(DANCE_COMMAND_PATTERN, normalized))
+        pattern = RUN_BEHAVIOR_PATTERNS.get(behavior_id)
+        return bool(pattern and re.search(pattern, normalized))
     cues = BODY_ACTION_CUES.get(action)
     if cues is None:
         return True

@@ -73,6 +73,43 @@ def test_run_behavior_rejects_mismatched_behavior_intent():
     ) is False
 
 
+@pytest.mark.parametrize("transcript, behavior_id", [
+    ("No toques saxofón", "play_saxophone"),
+    ("¿Qué piensas de RoboCup?", "thinking"),
+    ("No quiero que bailes macarena", "dance_macarena"),
+    ("Me gusta la macarena", "dance_macarena"),
+    ("Baila macarena", "dance_siu"),
+    ("Baila gangnam", "dance_macarena"),
+])
+def test_run_behavior_rejects_negations_mentions_and_wrong_dance(
+    transcript, behavior_id,
+):
+    assert _physical_action_explicitly_requested(
+        "run_behavior", transcript, {"behavior_id": behavior_id}
+    ) is False
+
+
+@pytest.mark.parametrize("transcript, behavior_id", [
+    ("Toca el saxofón", "play_saxophone"),
+    ("Piensa un momento", "thinking"),
+    ("Saluda", "wave"),
+    ("Asiente", "yes"),
+    ("Niega con la cabeza", "no"),
+    ("Haz tai chi", "taichi"),
+    ("Baila", "dance_siu"),
+    ("Baila", "dance_gangnam"),
+    ("Baila", "dance_macarena"),
+    ("Baila macarena", "dance_macarena"),
+    ("Baila gangnam", "dance_gangnam"),
+])
+def test_run_behavior_accepts_only_affirmative_matching_commands(
+    transcript, behavior_id,
+):
+    assert _physical_action_explicitly_requested(
+        "run_behavior", transcript, {"behavior_id": behavior_id}
+    ) is True
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("behavior_id, transcript", [
     ("wave", "Por favor, saluda"),
@@ -130,6 +167,48 @@ async def test_generic_dance_does_not_authorize_saxophone_behavior():
     })
 
     assert robot.actions == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transcript, behavior_id, expected", [
+    ("No toques saxofón", "play_saxophone", False),
+    ("¿Qué piensas de RoboCup?", "thinking", False),
+    ("No quiero que bailes macarena", "dance_macarena", False),
+    ("Me gusta la macarena", "dance_macarena", False),
+    ("Baila macarena", "dance_siu", False),
+    ("Baila gangnam", "dance_macarena", False),
+    ("Toca el saxofón", "play_saxophone", True),
+    ("Piensa un momento", "thinking", True),
+    ("Saluda", "wave", True),
+    ("Asiente", "yes", True),
+    ("Niega con la cabeza", "no", True),
+    ("Haz tai chi", "taichi", True),
+    ("Baila", "dance_siu", True),
+])
+async def test_behavior_intent_cases_control_robot_execution(
+    transcript, behavior_id, expected,
+):
+    class BehaviorNemotron(object):
+        async def perceive(self, audio, image):
+            return Perception(transcript, "", [], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision("", [ToolCall("run_behavior", {"behavior_id": behavior_id})])
+
+    robot = FakeRobot()
+    host = AgentHost(robot, BehaviorNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "run_behavior": {"risk": "body", "allowed_postures": ["Stand"]},
+        },
+        "behaviors": {behavior_id: {"package": "registered/package"}},
+    })
+
+    await host.handle_audio({
+        "audio_b64": base64.b64encode(b"RIFF").decode(),
+        "interaction_id": "behavior-case",
+    })
+
+    assert bool(robot.actions) is expected
 
 
 @pytest.mark.asyncio
