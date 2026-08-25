@@ -54,3 +54,9 @@ def test_posture_speed_defaults_and_clamps():
         "set_posture", {"posture": "Stand", "speed": 0.9}
     )
     assert clamped["arguments"]["speed"] == 0.50
+
+
+@pytest.mark.parametrize("speed", [-0.1, 0, float("nan"), float("inf"), float("-inf"), "fast"])
+def test_posture_speed_rejects_non_positive_non_finite_or_non_numeric(speed):
+    with pytest.raises(PolicyViolation, match="posture speed must be finite and greater than zero"):
+        PolicyEngine(REGISTRY).authorize("set_posture", {"posture": "Stand", "speed": speed})

@@ -105,6 +105,12 @@ Las negaciones directas, por ejemplo `no quiero que te levantes`, se rechazan
 antes de buscar la variante afirmativa para que el verbo contenido en una
 negación nunca habilite movimiento.
 
+Para `run_behavior`, la intención también debe corresponder al ID solicitado:
+`saluda`/`wave`, `asiente`/`yes`, `niega`/`no`, `piensa`/`thinking`, las danzas
+con `baila` o el nombre de la danza, `toca saxofón`/`play_saxophone` y `tai chi`
+o `taichi`. La palabra genérica `baila` solo autoriza IDs `dance_*`; nunca
+autoriza saxofón, taichí o un saludo.
+
 Al iniciar el runtime, `ALTextToSpeech` selecciona el idioma `Spanish`. Si esa
 voz no está instalada en el robot, `intelligence.log` registra la advertencia y
 la instalación debe completarse desde las preferencias de voz de NAO/Choregraphe.

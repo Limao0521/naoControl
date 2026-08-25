@@ -1,6 +1,8 @@
 """Deterministic authorization boundary for model-selected NAO actions."""
 from __future__ import annotations
 
+import math
+
 
 class PolicyViolation(ValueError):
     pass
@@ -43,10 +45,15 @@ class PolicyEngine:
                 raise PolicyViolation("pitch is outside the safe range")
         normalized = dict(arguments)
         if name == "set_posture":
+            raw_speed = normalized.get("speed", 0.35)
             try:
-                speed = float(normalized.get("speed", 0.35))
+                if isinstance(raw_speed, bool):
+                    raise ValueError
+                speed = float(raw_speed)
             except (TypeError, ValueError):
-                raise PolicyViolation("posture speed is invalid")
+                raise PolicyViolation("posture speed must be finite and greater than zero")
+            if math.isnan(speed) or math.isinf(speed) or speed <= 0:
+                raise PolicyViolation("posture speed must be finite and greater than zero")
             normalized["speed"] = min(speed, float(rule.get("max_speed", 0.5)))
         self.tool_count += 1
         return {"action": name, "arguments": normalized}

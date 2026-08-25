@@ -3,7 +3,7 @@ import logging
 
 import pytest
 
-from nao_gateway.agent_host import AgentHost
+from nao_gateway.agent_host import AgentHost, _physical_action_explicitly_requested
 from nao_gateway.nemotron import AgentDecision, Perception, ToolCall
 
 
@@ -42,6 +42,94 @@ def test_tool_schemas_exposes_sorted_behavior_ids():
         "dance_gangnam", "dance_macarena", "dance_siu", "no",
         "play_saxophone", "taichi", "thinking", "wave", "yes",
     ]
+
+
+@pytest.mark.parametrize("behavior_id, transcript", [
+    ("wave", "Por favor, saluda"),
+    ("yes", "Asiente"),
+    ("no", "Niega"),
+    ("thinking", "Piensa"),
+    ("dance_siu", "Baila siu"),
+    ("dance_gangnam", "Haz gangnam"),
+    ("dance_macarena", "Baila macarena"),
+    ("play_saxophone", "Toca el saxofón"),
+    ("taichi", "Haz tai chi"),
+])
+def test_run_behavior_requires_matching_registered_intent(behavior_id, transcript):
+    assert _physical_action_explicitly_requested(
+        "run_behavior", transcript, {"behavior_id": behavior_id}
+    ) is True
+
+
+def test_run_behavior_rejects_mismatched_behavior_intent():
+    assert _physical_action_explicitly_requested(
+        "run_behavior", "Baila", {"behavior_id": "play_saxophone"}
+    ) is False
+    assert _physical_action_explicitly_requested(
+        "run_behavior", "Toca saxofón", {"behavior_id": "play_saxophone"}
+    ) is True
+    assert _physical_action_explicitly_requested(
+        "run_behavior", "Saluda", {"behavior_id": "unknown"}
+    ) is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("behavior_id, transcript", [
+    ("wave", "Por favor, saluda"),
+    ("yes", "Asiente"),
+    ("no", "Niega"),
+    ("thinking", "Piensa"),
+    ("dance_siu", "Baila siu"),
+    ("dance_gangnam", "Haz gangnam"),
+    ("dance_macarena", "Baila macarena"),
+    ("play_saxophone", "Toca el saxofón"),
+    ("taichi", "Haz tai chi"),
+])
+async def test_explicit_registered_behavior_reaches_robot(behavior_id, transcript):
+    class BehaviorNemotron(object):
+        async def perceive(self, audio, image):
+            return Perception(transcript, "", [], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision("", [ToolCall("run_behavior", {"behavior_id": behavior_id})])
+
+    robot = FakeRobot()
+    host = AgentHost(robot, BehaviorNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "run_behavior": {"risk": "body", "allowed_postures": ["Stand"]},
+        },
+        "behaviors": {behavior_id: {"package": "registered/package"}},
+    })
+
+    await host.handle_audio({
+        "audio_b64": base64.b64encode(b"RIFF").decode(),
+        "interaction_id": "behavior-" + behavior_id,
+    })
+
+    assert robot.actions == [("run_behavior", {"behavior_id": behavior_id})]
+
+
+@pytest.mark.asyncio
+async def test_generic_dance_does_not_authorize_saxophone_behavior():
+    class SaxNemotron(object):
+        async def perceive(self, audio, image):
+            return Perception("Baila", "", [], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision("", [ToolCall("run_behavior", {"behavior_id": "play_saxophone"})])
+
+    robot = FakeRobot()
+    host = AgentHost(robot, SaxNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {"run_behavior": {"risk": "body", "allowed_postures": ["Stand"]}},
+        "behaviors": {"play_saxophone": {"package": "registered/package"}},
+    })
+
+    await host.handle_audio({
+        "audio_b64": base64.b64encode(b"RIFF").decode(),
+        "interaction_id": "behavior-mismatch",
+    })
+
+    assert robot.actions == []
 
 
 @pytest.mark.asyncio

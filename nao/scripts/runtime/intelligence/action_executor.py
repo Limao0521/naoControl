@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """Translate allowlisted semantic actions into exact facade calls."""
 
+import math
+
 
 class ActionExecutor(object):
     COLORS = {
@@ -55,7 +57,16 @@ class ActionExecutor(object):
                 posture = arguments.get("posture")
                 if posture not in rule.get("allowed", []):
                     return self._reject("invalid_posture")
-                speed = min(float(arguments.get("speed", 0.35)), rule.get("max_speed", 0.5))
+                raw_speed = arguments.get("speed", 0.35)
+                if isinstance(raw_speed, bool):
+                    return self._reject("invalid_posture_speed")
+                try:
+                    speed = float(raw_speed)
+                except (TypeError, ValueError):
+                    return self._reject("invalid_posture_speed")
+                if math.isnan(speed) or math.isinf(speed) or speed <= 0:
+                    return self._reject("invalid_posture_speed")
+                speed = min(speed, rule.get("max_speed", 0.5))
                 outcome = self.facade.go_to_posture(posture, speed)
                 if self._facade_failed(outcome):
                     return self._reject("facade_failed")

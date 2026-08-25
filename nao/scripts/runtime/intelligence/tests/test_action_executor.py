@@ -127,6 +127,31 @@ def test_async_facade_action_is_reported_as_accepted():
     assert result == {"status": "accepted", "action": "set_posture"}
 
 
+def test_posture_speed_defaults_to_035_and_clamps_to_050():
+    facade = FakeFacade()
+    executor = ActionExecutor(facade, REGISTRY)
+    assert executor.execute({"action": "set_posture", "arguments": {"posture": "Stand"}}) == {
+        "status": "completed", "action": "set_posture",
+    }
+    assert facade.calls[-1] == ("go_to_posture", "Stand", 0.35)
+    facade = FakeFacade()
+    result = ActionExecutor(facade, REGISTRY).execute(
+        {"action": "set_posture", "arguments": {"posture": "Stand", "speed": 0.9}}
+    )
+    assert result["status"] == "completed"
+    assert facade.calls[-1] == ("go_to_posture", "Stand", 0.5)
+
+
+def test_posture_speed_rejects_invalid_values_before_facade():
+    for speed in (-0.1, 0, float("nan"), float("inf"), float("-inf"), "fast"):
+        facade = FakeFacade()
+        result = ActionExecutor(facade, REGISTRY).execute(
+            {"action": "set_posture", "arguments": {"posture": "Stand", "speed": speed}}
+        )
+        assert result == {"status": "rejected", "reason": "invalid_posture_speed"}
+        assert facade.calls == []
+
+
 def test_look_rejects_angle_outside_registry_range():
     facade = FakeFacade()
     result = ActionExecutor(facade, REGISTRY).execute(

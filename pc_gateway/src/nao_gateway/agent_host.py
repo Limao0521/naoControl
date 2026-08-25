@@ -15,7 +15,18 @@ logger = logging.getLogger(__name__)
 
 BODY_ACTION_CUES = {
     "look": ("mira", "mirar", "voltea", "gira la cabeza", "look at", "turn your head"),
-    "run_behavior": ("baila", "baile", "danza", "dance", "comportamiento", "behavior"),
+}
+
+RUN_BEHAVIOR_CUES = {
+    "wave": ("saluda", "saludar", "saludo", "wave"),
+    "yes": ("asiente", "asentir", "afirma", "nod"),
+    "no": ("niega", "negar", "shake head"),
+    "thinking": ("piensa", "pensar", "pensando", "think"),
+    "dance_siu": ("siu", "ronaldo", "baila", "baile", "bailar", "danza", "dance"),
+    "dance_gangnam": ("gangnam", "baila", "baile", "bailar", "danza", "dance"),
+    "dance_macarena": ("macarena", "baila", "baile", "bailar", "danza", "dance"),
+    "play_saxophone": ("saxofon", "toca saxofon", "saxophone"),
+    "taichi": ("tai chi", "taichi"),
 }
 
 POSTURE_CUES = {
@@ -78,6 +89,17 @@ def _physical_action_explicitly_requested(
         ):
             return False
         return any(cue in normalized for cue in cues)
+    if action == "run_behavior":
+        behavior_id = (arguments or {}).get("behavior_id")
+        cues = RUN_BEHAVIOR_CUES.get(behavior_id, ())
+        normalized = _normalized_text(transcript)
+        if not isinstance(behavior_id, str) or not cues:
+            return False
+        if behavior_id.startswith("dance_"):
+            return any(cue in normalized for cue in cues)
+        return any(cue in normalized for cue in cues if cue not in (
+            "baila", "baile", "bailar", "danza", "dance",
+        ))
     cues = BODY_ACTION_CUES.get(action)
     if cues is None:
         return True
