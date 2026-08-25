@@ -110,6 +110,51 @@ def test_run_behavior_accepts_only_affirmative_matching_commands(
     ) is True
 
 
+@pytest.mark.parametrize("transcript, behavior_id", [
+    ("Macarena es mi canción favorita", "dance_macarena"),
+    ("Pensando en RoboCup recordé algo", "thinking"),
+    ("Saludo cordial para el equipo", "wave"),
+    ("Saludar es importante", "wave"),
+    ("Pensar ayuda", "thinking"),
+    ("Gangnam fue popular", "dance_gangnam"),
+])
+def test_run_behavior_rejects_standalone_mentions_and_non_commands(
+    transcript, behavior_id,
+):
+    assert _physical_action_explicitly_requested(
+        "run_behavior", transcript, {"behavior_id": behavior_id}
+    ) is False
+
+
+@pytest.mark.parametrize("transcript, behavior_id", [
+    ("NAO, saluda", "wave"),
+    ("Haz un saludo", "wave"),
+    ("Quiero que saludes", "wave"),
+    ("Asiente con la cabeza", "yes"),
+    ("Niega con la cabeza", "no"),
+    ("Piensa un momento", "thinking"),
+    ("Quiero que pienses", "thinking"),
+    ("Toca el saxofón", "play_saxophone"),
+    ("Quiero que toques el saxofón", "play_saxophone"),
+    ("Haz tai chi", "taichi"),
+    ("Practica tai chi", "taichi"),
+    ("Baila", "dance_siu"),
+    ("Baila macarena", "dance_macarena"),
+    ("Haz macarena", "dance_macarena"),
+    ("Wave", "wave"),
+    ("Nod your head", "yes"),
+    ("Shake your head", "no"),
+    ("Think for a moment", "thinking"),
+    ("Play the saxophone", "play_saxophone"),
+    ("Do tai chi", "taichi"),
+    ("Dance macarena", "dance_macarena"),
+])
+def test_run_behavior_accepts_anchored_command_forms(transcript, behavior_id):
+    assert _physical_action_explicitly_requested(
+        "run_behavior", transcript, {"behavior_id": behavior_id}
+    ) is True
+
+
 @pytest.mark.asyncio
 @pytest.mark.parametrize("behavior_id, transcript", [
     ("wave", "Por favor, saluda"),
@@ -206,6 +251,55 @@ async def test_behavior_intent_cases_control_robot_execution(
     await host.handle_audio({
         "audio_b64": base64.b64encode(b"RIFF").decode(),
         "interaction_id": "behavior-case",
+    })
+
+    assert bool(robot.actions) is expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("transcript, behavior_id, expected", [
+    ("Macarena es mi canción favorita", "dance_macarena", False),
+    ("Pensando en RoboCup recordé algo", "thinking", False),
+    ("Saludo cordial para el equipo", "wave", False),
+    ("Saludar es importante", "wave", False),
+    ("Pensar ayuda", "thinking", False),
+    ("Gangnam fue popular", "dance_gangnam", False),
+    ("NAO, saluda", "wave", True),
+    ("Haz un saludo", "wave", True),
+    ("Quiero que saludes", "wave", True),
+    ("Asiente con la cabeza", "yes", True),
+    ("Niega con la cabeza", "no", True),
+    ("Piensa un momento", "thinking", True),
+    ("Quiero que pienses", "thinking", True),
+    ("Toca el saxofón", "play_saxophone", True),
+    ("Quiero que toques el saxofón", "play_saxophone", True),
+    ("Haz tai chi", "taichi", True),
+    ("Practica tai chi", "taichi", True),
+    ("Baila", "dance_siu", True),
+    ("Baila macarena", "dance_macarena", True),
+    ("Haz macarena", "dance_macarena", True),
+])
+async def test_anchored_command_forms_control_robot_execution(
+    transcript, behavior_id, expected,
+):
+    class BehaviorNemotron(object):
+        async def perceive(self, audio, image):
+            return Perception(transcript, "", [], [])
+
+        async def decide(self, transcript, scene, tools):
+            return AgentDecision("", [ToolCall("run_behavior", {"behavior_id": behavior_id})])
+
+    robot = FakeRobot()
+    host = AgentHost(robot, BehaviorNemotron(), image_provider=lambda: b"jpeg", registry={
+        "actions": {
+            "run_behavior": {"risk": "body", "allowed_postures": ["Stand"]},
+        },
+        "behaviors": {behavior_id: {"package": "registered/package"}},
+    })
+
+    await host.handle_audio({
+        "audio_b64": base64.b64encode(b"RIFF").decode(),
+        "interaction_id": "anchored-case",
     })
 
     assert bool(robot.actions) is expected

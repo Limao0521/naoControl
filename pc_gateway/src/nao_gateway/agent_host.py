@@ -17,13 +17,22 @@ BODY_ACTION_CUES = {
     "look": ("mira", "mirar", "voltea", "gira la cabeza", "look at", "turn your head"),
 }
 
+COMMAND_PREFIX = (
+    r"^(?:(?:nao|por favor|please)\s*,?\s*)?"
+    r"(?:(?:quiero que|i want you to|can you|could you)\s+)?"
+)
+
 RUN_BEHAVIOR_PATTERNS = {
-    "wave": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:saluda|saludar|saludo|wave)\b",
-    "yes": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:asiente|asentir|afirma|nod)\b",
-    "no": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que)\s*,?\s*)\b(?:niega(?:\s+con\s+la\s+cabeza)?|negar|shake(?:\s+your)?\s+head)\b",
-    "thinking": r"(?:^|(?:por favor|please|haz|haga|puedes|puede|quiero que|sigue)\s*,?\s*)\b(?:piensa|pensar|pensando|think)\b",
-    "play_saxophone": r"(?:^|(?:por favor|please|quiero que)\s*,?\s*)\b(?:toca(?:\s+el)?\s+saxofon|play(?:\s+the)?\s+saxophone)\b",
-    "taichi": r"(?:^|(?:por favor|please|haz|haga|quiero que|do)\s*,?\s*)\b(?:tai\s+chi|taichi)\b",
+    "wave": COMMAND_PREFIX + r"(?:saluda|saludes|wave|haz\s+(?:un\s+)?saludo)\s*[.!?]*$",
+    "yes": COMMAND_PREFIX + r"(?:asiente|asientas)(?:\s+con\s+la\s+cabeza)?\s*[.!?]*$|"
+            + COMMAND_PREFIX + r"nod(?:\s+your\s+head)?\s*[.!?]*$",
+    "no": COMMAND_PREFIX + r"(?:niega|niegues)(?:\s+con\s+la\s+cabeza)?\s*[.!?]*$|"
+           + COMMAND_PREFIX + r"shake(?:\s+your)?\s+head\s*[.!?]*$",
+    "thinking": COMMAND_PREFIX + r"(?:piensa|pienses|think)(?:\s+(?:un\s+momento|for\s+a\s+moment))?\s*[.!?]*$",
+    "play_saxophone": COMMAND_PREFIX + r"(?:toca|toques)(?:\s+el)?\s+saxofon\s*[.!?]*$|"
+                      + COMMAND_PREFIX + r"play(?:\s+the)?\s+saxophone\s*[.!?]*$",
+    "taichi": COMMAND_PREFIX + r"(?:haz|hagas|practica|practiques)\s+(?:tai\s+chi|taichi)\s*[.!?]*$|"
+              + COMMAND_PREFIX + r"(?:do|practice)\s+(?:tai\s+chi|taichi)\s*[.!?]*$",
 }
 
 DANCE_STYLES = {
@@ -31,10 +40,12 @@ DANCE_STYLES = {
     "dance_gangnam": ("gangnam",),
     "dance_macarena": ("macarena",),
 }
-DANCE_COMMAND_PATTERN = r"(?:^|(?:por favor|please)\s*,?\s*)\b(?:baila|bailar|dance)\b"
+DANCE_COMMAND_PATTERN = COMMAND_PREFIX + r"(?:baila|bailes|dance)\s*[.!?]*$"
 DANCE_NAMED_COMMAND_PATTERNS = {
-    behavior_id: r"(?:^|(?:por favor|please)\s*,?\s*)\b(?:baila|bailar|dance)\s+(?:{})\b|(?:^|(?:haz|haga|do)\s+)\b(?:{})\b".format(
-        "|".join(styles), "|".join(styles),
+    behavior_id: COMMAND_PREFIX + r"(?:baila|bailes|dance)\s+(?:{})\s*[.!?]*$|".format(
+        "|".join(styles),
+    ) + COMMAND_PREFIX + r"(?:haz|hagas|do)\s+(?:{})\s*[.!?]*$".format(
+        "|".join(styles),
     )
     for behavior_id, styles in DANCE_STYLES.items()
 }
