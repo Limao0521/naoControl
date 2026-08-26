@@ -23,6 +23,18 @@ def test_settings_require_all_secrets() -> None:
         GatewaySettings.from_env(environment)
 
 
+def test_local_provider_configuration_does_not_require_nvidia_key() -> None:
+    """Forcing an NVIDIA key would prevent an entirely local Gemma deployment."""
+    environment = valid_environment(INTELLIGENCE_PROVIDER="gemma_local")
+    del environment["NVIDIA_API_KEY"]
+
+    settings = GatewaySettings.from_env(environment)
+
+    assert settings.default_provider == "gemma_local"
+    assert settings.nvidia_api_key == ""
+    assert settings.gemma_base_url == "http://127.0.0.1:8080/v1"
+
+
 def test_nvidia_base_url_must_use_https() -> None:
     environment = valid_environment(NVIDIA_BASE_URL="http://example.test/v1")
 
