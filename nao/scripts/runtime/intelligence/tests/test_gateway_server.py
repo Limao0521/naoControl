@@ -233,6 +233,23 @@ def test_signed_interaction_update_is_persisted_by_gateway():
     assert updates == [payload]
 
 
+def test_signed_provider_status_update_is_persisted_without_secret_fields():
+    updates = []
+    core = GatewayCore(
+        b"shared-secret", FakeExecutor(), now_ms=lambda: 1000,
+        provider_status_handler=lambda payload: updates.append(payload),
+    )
+    payload = {"active": "gemma_local", "healthy": True, "error": ""}
+    envelope = sign_envelope(
+        unsigned("provider_status_update", "provider-1", payload), b"shared-secret"
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["payload"]["status"] == "ok"
+    assert updates == [payload]
+
+
 def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp_path):
     target = tmp_path / "target.json"
     bundle = tmp_path / "bundle.tar.gz"

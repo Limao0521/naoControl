@@ -10,6 +10,14 @@ for path in (str(RUNTIME), str(CONTROL), str(COMMANDS)):
         sys.path.insert(0, path)
 
 from nemotron_commands import NemotronStatusCommand
+try:
+    from nemotron_commands import (
+        IntelligenceProviderStatusCommand,
+        SetIntelligenceProviderCommand,
+    )
+except ImportError:
+    IntelligenceProviderStatusCommand = None
+    SetIntelligenceProviderCommand = None
 from command_factory import CommandFactory
 
 
@@ -102,3 +110,82 @@ def test_command_factory_exposes_nemotron_status_to_websocket_clients():
     command = CommandFactory(None, FakeLogger()).create_command("nemotronStatus")
 
     assert isinstance(command, NemotronStatusCommand)
+
+
+class FakeProviderStore(object):
+    def __init__(self):
+        self.state = {
+            "selected": "nemotron", "active": "nemotron", "healthy": True,
+            "error": "", "updated_at_ms": 1234,
+        }
+
+    def load(self):
+        return dict(self.state)
+
+    def save_selected(self, selected):
+        self.state["selected"] = selected
+        return dict(self.state)
+
+
+def test_provider_status_exposes_only_bounded_nonsecret_state_to_configured_pc():
+    assert IntelligenceProviderStatusCommand is not None, "provider status command is missing"
+    socket = FakeSocket()
+    command = IntelligenceProviderStatusCommand(
+        None, FakeLogger(), provider_store=FakeProviderStore(),
+        target_store=FakeTargetStore(),
+    )
+
+    assert command.execute({"action": "intelligenceProviderStatus"}, socket) is True
+    assert socket.messages == [{"intelligenceProviderStatus": {
+        "success": True, "selected": "nemotron", "active": "nemotron",
+        "healthy": True, "error": "", "updated_at_ms": 1234,
+    }}]
+    assert "key" not in json.dumps(socket.messages).lower()
+    assert "url" not in json.dumps(socket.messages).lower()
+
+
+def test_provider_selection_persists_allowlisted_value_from_configured_pc():
+    assert SetIntelligenceProviderCommand is not None, "provider selection command is missing"
+    socket = FakeSocket()
+    provider_store = FakeProviderStore()
+    command = SetIntelligenceProviderCommand(
+        None, FakeLogger(), provider_store=provider_store,
+        target_store=FakeTargetStore(),
+    )
+
+    assert command.execute({
+        "action": "setIntelligenceProvider", "provider": "gemma_local",
+    }, socket) is True
+    assert provider_store.state["selected"] == "gemma_local"
+    assert socket.messages[0]["setIntelligenceProvider"]["selected"] == "gemma_local"
+
+
+def test_provider_selection_rejects_unconfigured_peer_without_mutation():
+    assert SetIntelligenceProviderCommand is not None, "provider selection command is missing"
+    socket = FakeSocket(address=("169.254.151.99", 5555))
+    provider_store = FakeProviderStore()
+    command = SetIntelligenceProviderCommand(
+        None, FakeLogger(), provider_store=provider_store,
+        target_store=FakeTargetStore(),
+    )
+
+    assert command.execute({
+        "action": "setIntelligenceProvider", "provider": "gemma_local",
+    }, socket) is False
+    assert provider_store.state["selected"] == "nemotron"
+    assert socket.messages == [{
+        "setIntelligenceProvider": {"success": False, "error": "forbidden"}
+    }]
+
+
+def test_command_factory_exposes_provider_status_and_selection_commands():
+    factory = CommandFactory(None, FakeLogger())
+
+    assert isinstance(
+        factory.create_command("intelligenceProviderStatus"),
+        IntelligenceProviderStatusCommand,
+    )
+    assert isinstance(
+        factory.create_command("setIntelligenceProvider"),
+        SetIntelligenceProviderCommand,
+    )

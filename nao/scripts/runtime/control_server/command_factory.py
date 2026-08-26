@@ -46,7 +46,11 @@ from conversation_commands import (
     StartConversationCommand, StopConversationCommand, GetConversationStatusCommand
 )
 from network_commands import NetworkAdminCommand
-from nemotron_commands import NemotronStatusCommand
+from nemotron_commands import (
+    IntelligenceProviderStatusCommand,
+    NemotronStatusCommand,
+    SetIntelligenceProviderCommand,
+)
 
 # Import record system functions
 try:
@@ -177,6 +181,8 @@ class CommandFactory(object):
 
             # Observabilidad Nemotron
             'nemotronStatus': NemotronStatusCommand,
+            'intelligenceProviderStatus': IntelligenceProviderStatusCommand,
+            'setIntelligenceProvider': SetIntelligenceProviderCommand,
         }
     
     def create_command(self, action):

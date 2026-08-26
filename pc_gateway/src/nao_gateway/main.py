@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from .agent_host import AgentHost
 from .config import GatewaySettings
 from .nemotron import NemotronClient
+from .providers import GemmaLocalClient, ProviderActivationError, ProviderRouter
 from .robot_client import RobotClient
 from .sensor_hub import fetch_latest_jpeg
 
@@ -52,6 +53,21 @@ async def handle_audio_result(robot, host, payload: dict) -> None:
             )
 
 
+async def handle_provider_config(robot, providers, payload: dict) -> None:
+    """Activate an allowlisted provider and report bounded status to the NAO."""
+    selected = payload.get("selected", "") if isinstance(payload, dict) else ""
+    try:
+        status = await providers.activate(selected)
+    except Exception as error:
+        status = providers.status()
+        status["error"] = (str(error) or type(error).__name__)[:200]
+    await robot.publish_provider_status({
+        "active": status.get("active", ""),
+        "healthy": bool(status.get("healthy", False)),
+        "error": str(status.get("error", ""))[:200],
+    })
+
+
 async def run_robot_session(robot, host) -> dict:
     """Process one connected robot session until the socket is lost."""
     receiver = asyncio.create_task(robot.receive_forever())
@@ -65,6 +81,8 @@ async def run_robot_session(robot, host) -> dict:
                 return payload
             if message_type == "audio_result":
                 await handle_audio_result(robot, host, payload)
+            elif message_type == "provider_config":
+                await handle_provider_config(robot, host.nemotron, payload)
             elif message_type == "emergency":
                 print("Emergency stop requested on robot.")
     finally:
@@ -102,23 +120,34 @@ async def maintain_robot_connection(
 async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
     registry = load_registry(registry_path)
     robot = RobotClient(settings.robot_url, settings.robot_shared_secret.encode("utf-8"))
-    nemotron = NemotronClient(
-        settings.nvidia_api_key, settings.nvidia_base_url,
-        settings.agent_model, settings.vision_model,
-    )
+    def create_nemotron():
+        if not settings.nvidia_api_key:
+            raise ProviderActivationError("NVIDIA_API_KEY is not configured")
+        return NemotronClient(
+            settings.nvidia_api_key, settings.nvidia_base_url,
+            settings.agent_model, settings.vision_model,
+        )
+
+    providers = ProviderRouter({
+        "nemotron": create_nemotron,
+        "gemma_local": lambda: GemmaLocalClient(
+            settings.gemma_base_url, settings.gemma_model,
+        ),
+    })
+    await providers.activate(settings.default_provider)
     robot_host = settings.robot_url.split("//", 1)[1].split(":", 1)[0]
 
     async def latest_image() -> bytes:
         return await fetch_latest_jpeg(f"http://{robot_host}:8080/video.mjpeg")
 
     host = AgentHost(
-        robot, nemotron, latest_image, registry,
+        robot, providers, latest_image, registry,
         state_publisher=robot.publish_interaction_state,
     )
     try:
         await maintain_robot_connection(robot, host)
     finally:
-        await nemotron.close()
+        await providers.close()
 
 
 def main() -> None:

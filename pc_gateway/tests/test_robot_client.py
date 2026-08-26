@@ -61,6 +61,22 @@ def test_interaction_update_envelope_is_authenticated():
     assert payload["transcript"] == "Hola NAO"
 
 
+def test_provider_status_update_envelope_contains_no_configuration_or_secret():
+    client = RobotClient("ws://robot:6674", b"shared-secret", now_ms=lambda: 1000)
+    builder = getattr(client, "provider_status_envelope", None)
+    assert builder is not None, "provider status envelope is missing"
+
+    envelope = builder({
+        "active": "gemma_local", "healthy": True, "error": "",
+    })
+    payload = verify_envelope(envelope, b"shared-secret", 1000, ReplayGuard())
+
+    assert envelope["message_type"] == "provider_status_update"
+    assert payload == {"active": "gemma_local", "healthy": True, "error": ""}
+    assert "url" not in json.dumps(envelope).lower()
+    assert "key" not in json.dumps(envelope).lower()
+
+
 @pytest.mark.asyncio
 async def test_receive_loop_reports_connection_loss_instead_of_crashing_gateway():
     class BrokenSocket(object):

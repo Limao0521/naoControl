@@ -54,12 +54,13 @@ def apply_mode_led(led_controller, event_name, mode):
 
 class GatewayCore(object):
     def __init__(self, secret, executor, now_ms=None, system_handler=None,
-                 interaction_handler=None):
+                 interaction_handler=None, provider_status_handler=None):
         self.secret = secret
         self.executor = executor
         self.now_ms = now_ms or (lambda: int(time.time() * 1000))
         self.system_handler = system_handler or (lambda name: None)
         self.interaction_handler = interaction_handler or (lambda payload: None)
+        self.provider_status_handler = provider_status_handler or (lambda payload: None)
         self.replay_guard = ReplayGuard(1000)
 
     def envelope(self, message_type, payload):
@@ -89,6 +90,10 @@ class GatewayCore(object):
                 response_type = "event_result"
             elif message_type == "interaction_update":
                 self.interaction_handler(payload)
+                result = {"status": "ok"}
+                response_type = "event_result"
+            elif message_type == "provider_status_update":
+                self.provider_status_handler(payload)
                 result = {"status": "ok"}
                 response_type = "event_result"
             elif message_type == "command":
@@ -203,6 +208,7 @@ def _load_runtime():
     from interaction_state import InteractionStateStore
     from led_controller import IntelligenceLedController
     from mode_manager import ModeManager
+    from provider_config import ProviderConfigBroadcaster, ProviderConfigStore
     from safety_supervisor import SafetySupervisor
 
     base = os.environ.get("NAO_CONTROL_HOME", "/home/nao/naoControl")
@@ -232,6 +238,9 @@ def _load_runtime():
     capture = AudioCapture(ALProxy("ALAudioRecorder", "127.0.0.1", 9559))
     clients = set()
     interaction_store = InteractionStateStore()
+    provider_store = ProviderConfigStore(
+        os.path.join(base, "config", "intelligence_provider.json")
+    )
 
     def system_handler(name):
         events = manager.handle_system(name, int(time.time() * 1000))
@@ -244,6 +253,7 @@ def _load_runtime():
     core = GatewayCore(
         secret, executor, system_handler=system_handler,
         interaction_handler=interaction_store.save,
+        provider_status_handler=provider_store.save_status,
     )
 
     def send_all(message_type, payload):
@@ -254,6 +264,8 @@ def _load_runtime():
             except Exception:
                 clients.discard(client)
 
+    provider_broadcaster = ProviderConfigBroadcaster(provider_store, send_all)
+
     class GatewaySocket(WebSocket):
         def handleConnected(self):
             clients.add(self)
@@ -261,6 +273,7 @@ def _load_runtime():
             self.sendMessage(json.dumps(core.envelope("hello_result", {
                 "status": "ready", "mode": manager.mode, "entry_reasons": reasons
             })))
+            provider_broadcaster.sync(force=True)
 
         def handleMessage(self):
             try:
@@ -286,6 +299,7 @@ def _load_runtime():
     )
 
     def poll_bumpers_once():
+        provider_broadcaster.sync()
         now = core.now_ms()
         left = memory.getData("LeftBumperPressed") == 1.0
         right = memory.getData("RightBumperPressed") == 1.0

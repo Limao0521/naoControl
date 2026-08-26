@@ -131,3 +131,23 @@ async def test_run_gateway_does_not_start_network_administration(monkeypatch, tm
     await main_module.run_gateway(settings, Path(registry_path))
 
     assert calls == ["robot_created", "nemotron_created", "robot_service", "nemotron_closed"]
+
+
+@pytest.mark.asyncio
+async def test_provider_config_event_activates_router_and_reports_status_to_robot():
+    handler = getattr(main_module, "handle_provider_config", None)
+    assert handler is not None, "provider config handler is missing"
+    published = []
+
+    class Robot:
+        async def publish_provider_status(self, payload):
+            published.append(payload)
+
+    class Router:
+        async def activate(self, name):
+            assert name == "gemma_local"
+            return {"active": name, "healthy": True, "error": ""}
+
+    await handler(Robot(), Router(), {"selected": "gemma_local"})
+
+    assert published == [{"active": "gemma_local", "healthy": True, "error": ""}]
