@@ -11,9 +11,10 @@ class ActionExecutor(object):
         "yellow": (1.0, 1.0, 0.0), "white": (1.0, 1.0, 1.0),
     }
     LED_GROUPS = ("FaceLeds", "ChestLeds", "EarLeds")
-    def __init__(self, facade, registry):
+    def __init__(self, facade, registry, led_controller=None):
         self.facade = facade
         self.registry = registry
+        self.led_controller = led_controller
 
     def _reject(self, reason):
         return {"status": "rejected", "reason": reason}
@@ -51,7 +52,12 @@ class ActionExecutor(object):
                     return self._reject("invalid_led")
                 if group == "EarLeds" and color_name not in ("blue", "off"):
                     return self._reject("invalid_ear_led_color")
-                if self._facade_failed(self.facade.set_led_rgb(group, color[0], color[1], color[2], 0.3)):
+                led_target = self.led_controller or self.facade
+                led_method = (
+                    led_target.show_action if self.led_controller
+                    else led_target.set_led_rgb
+                )
+                if self._facade_failed(led_method(group, color[0], color[1], color[2], 0.3)):
                     return self._reject("facade_failed")
             elif action == "set_posture":
                 posture = arguments.get("posture")

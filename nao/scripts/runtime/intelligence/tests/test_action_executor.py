@@ -96,6 +96,28 @@ def test_led_uses_named_safe_color():
     assert facade.calls == [("set_led_rgb", "FaceLeds", 0.0, 0.0, 1.0, 0.3)]
 
 
+def test_led_action_uses_intelligence_led_owner_when_available():
+    """Removing LED ownership would make face commands invisible at turn end."""
+    class LedOwner(object):
+        def __init__(self):
+            self.calls = []
+
+        def show_action(self, group, red, green, blue, duration=0.3):
+            self.calls.append((group, red, green, blue, duration))
+            return True
+
+    facade = FakeFacade()
+    owner = LedOwner()
+
+    result = ActionExecutor(facade, REGISTRY, led_controller=owner).execute(
+        {"action": "set_led", "arguments": {"group": "FaceLeds", "color": "green"}}
+    )
+
+    assert result["status"] == "completed"
+    assert owner.calls == [("FaceLeds", 0.0, 1.0, 0.0, 0.3)]
+    assert facade.calls == []
+
+
 def test_ear_led_rejects_non_blue_colors():
     facade = FakeFacade()
     result = ActionExecutor(facade, REGISTRY).execute(

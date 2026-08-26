@@ -41,6 +41,17 @@ def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
     return GatewayEntryGate(safety, launcher)
 
 
+def apply_mode_led(led_controller, event_name, mode):
+    """Apply a mode indicator without erasing a live user LED override."""
+    if event_name == "TURN_FINISHED":
+        return led_controller.set_mode(mode, preserve_override=True)
+    if event_name == "MODE_ENTRY_REJECTED":
+        return led_controller.set_mode("ERROR")
+    if event_name == "EMERGENCY_REQUESTED":
+        return led_controller.set_mode("EMERGENCY")
+    return led_controller.set_mode(mode)
+
+
 class GatewayCore(object):
     def __init__(self, secret, executor, now_ms=None, system_handler=None,
                  interaction_handler=None):
@@ -98,14 +109,26 @@ class GatewayCore(object):
 class CaptureController(object):
     """Run recorder side effects without leaving the bumper state machine stuck."""
     def __init__(self, manager, capture, interaction_store, facade, send_all,
-                 interaction_id_factory=None):
+                 interaction_id_factory=None, led_controller=None):
         self.manager = manager
         self.capture = capture
         self.interaction_store = interaction_store
         self.facade = facade
         self.send_all = send_all
+        self.led_controller = led_controller
         self.interaction_id_factory = interaction_id_factory or uuid.uuid4
         self.interaction_id = None
+
+    def _set_mode_led(self, mode, preserve_override=False):
+        if self.led_controller is not None:
+            return self.led_controller.set_mode(mode, preserve_override)
+        colors = {
+            "NEMOTRON_READY": (0.0, 0.0, 1.0),
+            "CAPTURING": (0.0, 1.0, 0.0),
+            "PROCESSING": (1.0, 0.5, 0.0),
+        }
+        color = colors[mode]
+        return self.facade.set_led_rgb("FaceLeds", color[0], color[1], color[2])
 
     def _best_effort(self, operation, label):
         try:
@@ -130,7 +153,7 @@ class CaptureController(object):
             "phase": "error", "transcript": "", "response": "", "actions": [],
         }), "interaction_state")
         self._best_effort(
-            lambda: self.facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0),
+            lambda: self._set_mode_led("NEMOTRON_READY"),
             "ready_led",
         )
         self._best_effort(
@@ -147,7 +170,7 @@ class CaptureController(object):
                 "transcript": "", "response": "", "actions": [],
             })
             self.capture.start(self.interaction_id, now_ms)
-            self.facade.set_led_rgb("FaceLeds", 0.0, 1.0, 0.0)
+            self._set_mode_led("CAPTURING")
             return True
         except Exception as error:
             self.recover("capture_start_failed", now_ms, error)
@@ -163,7 +186,7 @@ class CaptureController(object):
             })
             print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
             print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
-            self.facade.set_led_rgb("FaceLeds", 1.0, 0.5, 0.0)
+            self._set_mode_led("PROCESSING")
             self.send_all("audio_result", result)
             return True
         except Exception as error:
@@ -178,6 +201,7 @@ def _load_runtime():
     from action_executor import ActionExecutor
     from audio_capture import AudioCapture
     from interaction_state import InteractionStateStore
+    from led_controller import IntelligenceLedController
     from mode_manager import ModeManager
     from safety_supervisor import SafetySupervisor
 
@@ -195,7 +219,8 @@ def _load_runtime():
         raise RuntimeError("gateway secret must contain at least 32 bytes")
 
     facade = NAOFacade("127.0.0.1", 9559)
-    executor = ActionExecutor(facade, registry)
+    led_controller = IntelligenceLedController(facade)
+    executor = ActionExecutor(facade, registry, led_controller=led_controller)
     safety = SafetySupervisor(facade)
     allowed, reasons = safety.check_intelligent_entry()
     entry_gate = create_entry_gate(safety, secret)
@@ -212,7 +237,7 @@ def _load_runtime():
         events = manager.handle_system(name, int(time.time() * 1000))
         write_mode()
         if name == "TURN_FINISHED":
-            facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
+            apply_mode_led(led_controller, name, manager.mode)
         for event in events:
             send_all("mode_event", event.as_dict())
 
@@ -256,7 +281,8 @@ def _load_runtime():
         os.rename(temporary, path)
 
     capture_controller = CaptureController(
-        manager, capture, interaction_store, facade, send_all
+        manager, capture, interaction_store, facade, send_all,
+        led_controller=led_controller,
     )
 
     def poll_bumpers_once():
@@ -267,10 +293,10 @@ def _load_runtime():
         for event in events:
             print("GATEWAY event={} mode={}".format(event.name, event.mode))
             if event.name == "MODE_ENTER_REQUESTED":
-                facade.set_led_rgb("FaceLeds", 0.0, 0.0, 1.0)
+                apply_mode_led(led_controller, event.name, event.mode)
                 facade.say("Modo inteligente listo")
             elif event.name == "MODE_ENTRY_REJECTED":
-                facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
+                apply_mode_led(led_controller, event.name, event.mode)
                 if entry_gate.last_reason == "pc_target_not_configured":
                     facade.say("Configura la dirección del computador en el menú de red")
                 elif entry_gate.last_reason == "pc_gateway_unavailable":
@@ -279,7 +305,7 @@ def _load_runtime():
                     facade.say("No es seguro iniciar el modo inteligente")
             elif event.name == "MODE_EXIT_REQUESTED":
                 capture.cancel()
-                facade.set_led_rgb("FaceLeds", 1.0, 1.0, 1.0)
+                apply_mode_led(led_controller, event.name, event.mode)
                 facade.say("Modo control web")
             elif event.name == "CAPTURE_STARTED":
                 capture_controller.start(now)
@@ -288,7 +314,7 @@ def _load_runtime():
             elif event.name == "EMERGENCY_REQUESTED":
                 capture.cancel()
                 safety.emergency_stop("both_bumpers")
-                facade.set_led_rgb("FaceLeds", 1.0, 0.0, 0.0)
+                apply_mode_led(led_controller, event.name, event.mode)
                 send_all("emergency", {"reason": "both_bumpers"})
             write_mode()
             send_all("mode_event", event.as_dict())

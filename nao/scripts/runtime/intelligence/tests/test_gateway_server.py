@@ -9,6 +9,7 @@ from nao.scripts.runtime.intelligence.gateway_server import (
     GatewayCore,
     create_entry_gate,
 )
+import nao.scripts.runtime.intelligence.gateway_server as gateway_server
 from nao.scripts.runtime.interaction_state import InteractionStateStore
 from nao.scripts.runtime.intelligence.mode_manager import ModeManager
 from nao.scripts.runtime.intelligence.protocol import ReplayGuard, sign_envelope
@@ -160,6 +161,55 @@ def test_turn_finished_invokes_system_handler():
     assert result["message_type"] == "event_result"
     assert result["payload"]["status"] == "ok"
     assert events == ["TURN_FINISHED"]
+
+
+def test_turn_finished_preserves_temporary_face_override():
+    """The end-of-turn ready signal must not erase a requested eye color."""
+    calls = []
+
+    class Leds(object):
+        def set_mode(self, mode, preserve_override=False):
+            calls.append((mode, preserve_override))
+
+    apply_mode_led = getattr(gateway_server, "apply_mode_led", None)
+    assert apply_mode_led is not None, "gateway mode LED integration is missing"
+
+    apply_mode_led(Leds(), "TURN_FINISHED", "NEMOTRON_READY")
+
+    assert calls == [("NEMOTRON_READY", True)]
+
+
+def test_capture_controller_routes_capture_colors_through_led_owner(tmp_path):
+    class Capture(object):
+        started_at_ms = None
+
+        def start(self, interaction_id, now_ms):
+            self.started_at_ms = now_ms
+
+        def cancel(self):
+            return None
+
+    class Facade(object):
+        pass
+
+    class Leds(object):
+        def __init__(self):
+            self.modes = []
+
+        def set_mode(self, mode, preserve_override=False):
+            self.modes.append((mode, preserve_override))
+            return True
+
+    manager = ModeManager(initial_mode="CAPTURING")
+    store = InteractionStateStore(str(tmp_path / "interaction.json"), now_ms=lambda: 123)
+    leds = Leds()
+    controller = CaptureController(
+        manager, Capture(), store, Facade(), lambda kind, payload: None,
+        interaction_id_factory=lambda: "turn-1", led_controller=leds,
+    )
+
+    assert controller.start(100) is True
+    assert leds.modes == [("CAPTURING", False)]
 
 
 def test_signed_interaction_update_is_persisted_by_gateway():
