@@ -1,5 +1,10 @@
 # Inicio automático del gateway Nemotron en el PC
 
+La selección entre Nemotron y Gemma local se realiza desde el panel web y está
+documentada en [provider-switching.md](provider-switching.md). El launcher sigue
+siendo común a ambos proveedores: descarga el mismo gateway y las credenciales
+permanecen exclusivamente en el `.env` del PC.
+
 ## Arquitectura operativa
 
 El NAO conserva el código Python 3 del gateway dentro de

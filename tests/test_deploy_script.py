@@ -28,6 +28,8 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert '"$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py"' in content
     assert '"$base/nao/scripts/runtime/interaction_state.py"' in content
     assert '"$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py"' in content
+    assert '"$base/nao/scripts/runtime/intelligence/provider_config.py"' in content
+    assert '"$base/nao/scripts/runtime/intelligence/led_controller.py"' in content
 
 
 def test_deploy_preserves_the_configured_pc_gateway_target():
@@ -35,6 +37,13 @@ def test_deploy_preserves_the_configured_pc_gateway_target():
 
     assert "pc_gateway_target.json" in content
     assert 'cp "$base/config/pc_gateway_target.json"' in content
+
+
+def test_deploy_preserves_the_selected_intelligence_provider():
+    content = SCRIPT.read_text(encoding="utf-8")
+
+    assert "intelligence_provider.json" in content
+    assert 'cp "$base/config/intelligence_provider.json"' in content
 
 
 def test_deploy_script_does_not_apply_windows_archive_permissions_on_nao():

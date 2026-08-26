@@ -54,6 +54,8 @@ mkdir -p "$staged"
 tar -xzf "$archive" -C "$staged" --no-same-owner --no-same-permissions
 test -f "$staged/nao/scripts/runtime/intelligence/gateway_server.py"
 test -f "$staged/nao/scripts/runtime/intelligence/pc_gateway_launch.py"
+test -f "$staged/nao/scripts/runtime/intelligence/provider_config.py"
+test -f "$staged/nao/scripts/runtime/intelligence/led_controller.py"
 test -f "$staged/nao/scripts/runtime/interaction_state.py"
 test -f "$staged/nao/scripts/runtime/network_admin.py"
 test -f "$staged/pc_gateway/src/nao_gateway/launcher_service.py"
@@ -69,6 +71,9 @@ fi
 if test -f "$base/config/pc_gateway_target.json"; then
     cp "$base/config/pc_gateway_target.json" "$staged/config/pc_gateway_target.json"
 fi
+if test -f "$base/config/intelligence_provider.json"; then
+    cp "$base/config/intelligence_provider.json" "$staged/config/intelligence_provider.json"
+fi
 for service in control web camera pc_bundle intelligence; do
     pid_file="/home/nao/run/naoControl/$service.pid"
     if test -f "$pid_file"; then
@@ -79,7 +84,7 @@ for service in control web camera pc_bundle intelligence; do
 done
 if test -d "$base"; then mv "$base" "$backup"; fi
 mv "$staged" "$base"
-if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py" "$base/nao/scripts/runtime/interaction_state.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/control_server/message_security.py" "$base/nao/scripts/runtime/control_server/commands/network_commands.py" "$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py" "$base/nao/scripts/runtime/network_admin.py"; then
+if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py" "$base/nao/scripts/runtime/intelligence/provider_config.py" "$base/nao/scripts/runtime/intelligence/led_controller.py" "$base/nao/scripts/runtime/interaction_state.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/control_server/message_security.py" "$base/nao/scripts/runtime/control_server/commands/network_commands.py" "$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py" "$base/nao/scripts/runtime/network_admin.py"; then
     rm -rf "$base"
     if test -d "$backup"; then mv "$backup" "$base"; fi
     exit 1
