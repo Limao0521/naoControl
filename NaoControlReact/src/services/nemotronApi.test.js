@@ -63,3 +63,55 @@ test('rejects malformed interaction state instead of rendering it', async () => 
 
   await expect(pending).rejects.toThrow('Estado Nemotron no disponible.');
 });
+
+
+test('reads selected and active intelligent provider from the control socket', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '169.254.197.40' },
+    timeoutMs: 1000,
+  });
+
+  const pending = api.providerStatus();
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+
+  expect(socket.sent.map(JSON.parse)).toEqual([
+    { action: 'intelligenceProviderStatus' },
+  ]);
+  socket.message({ intelligenceProviderStatus: {
+    success: true, selected: 'gemma_local', active: 'nemotron',
+    healthy: true, error: '', selection_version: 2, updated_at_ms: 1234,
+  } });
+
+  await expect(pending).resolves.toEqual({
+    selected: 'gemma_local', active: 'nemotron', healthy: true,
+    error: '', updated_at_ms: 1234,
+  });
+});
+
+
+test('saves only an allowlisted provider identifier', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '169.254.197.40' },
+    timeoutMs: 1000,
+  });
+
+  const pending = api.setProvider('gemma_local');
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+  expect(socket.sent.map(JSON.parse)).toEqual([{
+    action: 'setIntelligenceProvider', provider: 'gemma_local',
+  }]);
+  socket.message({ setIntelligenceProvider: {
+    success: true, selected: 'gemma_local', active: 'nemotron',
+    healthy: true, error: '', selection_version: 2, updated_at_ms: 1234,
+  } });
+
+  await expect(pending).resolves.toMatchObject({ selected: 'gemma_local' });
+  await expect(api.setProvider('http://attacker.test')).rejects.toThrow(
+    'Proveedor inteligente no disponible.'
+  );
+  expect(FakeWebSocket.instances).toHaveLength(1);
+});

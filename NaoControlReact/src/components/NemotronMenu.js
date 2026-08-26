@@ -22,12 +22,24 @@ const ACTION_LABELS = {
   unknown: 'Desconocida',
 };
 
+const PROVIDER_LABELS = {
+  nemotron: 'Nemotron NVIDIA',
+  gemma_local: 'Gemma local',
+};
+
 
 const NemotronMenu = () => {
   const [state, setState] = useState({
     phase: 'idle', transcript: '', response: '', actions: [],
   });
   const [connected, setConnected] = useState(true);
+  const [provider, setProvider] = useState({
+    selected: 'nemotron', active: '', healthy: false, error: '', updated_at_ms: 0,
+  });
+  const [providerChoice, setProviderChoice] = useState('nemotron');
+  const [providerTouched, setProviderTouched] = useState(false);
+  const [providerBusy, setProviderBusy] = useState(false);
+  const [providerMessage, setProviderMessage] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -36,9 +48,13 @@ const NemotronMenu = () => {
       if (requestPending) return;
       requestPending = true;
       try {
-        const next = await nemotronApi.status();
+        const [next, nextProvider] = await Promise.all([
+          nemotronApi.status(), nemotronApi.providerStatus(),
+        ]);
         if (active) {
           setState(next);
+          setProvider(nextProvider);
+          if (!providerTouched) setProviderChoice(nextProvider.selected);
           setConnected(true);
         }
       } catch (_error) {
@@ -53,15 +69,58 @@ const NemotronMenu = () => {
       active = false;
       clearInterval(interval);
     };
-  }, []);
+  }, [providerTouched]);
+
+  const saveProvider = async (event) => {
+    event.preventDefault();
+    setProviderBusy(true);
+    setProviderMessage('');
+    try {
+      const next = await nemotronApi.setProvider(providerChoice);
+      setProvider(next);
+      setProviderTouched(false);
+      setProviderMessage('Cambio solicitado. Se aplicará antes del siguiente turno.');
+    } catch (_error) {
+      setProviderMessage('No fue posible cambiar el proveedor.');
+    } finally {
+      setProviderBusy(false);
+    }
+  };
 
   return (
     <section className="nemotron-menu">
-      <h3>Nemotron</h3>
+      <h3>Sistema inteligente</h3>
       <div className={`nemotron-phase phase-${state.phase}`} role="status">
         <span className="nemotron-indicator" aria-hidden="true" />
         <strong>{connected ? PHASE_LABELS[state.phase] : 'Sin conexión'}</strong>
       </div>
+
+      <form className="nemotron-card provider-card" onSubmit={saveProvider}>
+        <h4>Proveedor</h4>
+        <label htmlFor="intelligence-provider">Proveedor de inteligencia</label>
+        <select
+          id="intelligence-provider"
+          value={providerChoice}
+          onChange={(event) => {
+            setProviderChoice(event.target.value);
+            setProviderTouched(true);
+          }}
+          disabled={providerBusy}
+        >
+          <option value="nemotron">Nemotron NVIDIA</option>
+          <option value="gemma_local">Gemma local</option>
+        </select>
+        <p>Seleccionado: {PROVIDER_LABELS[provider.selected]}</p>
+        <p>Activo: {provider.active ? PROVIDER_LABELS[provider.active] : 'ninguno'}</p>
+        <p className={provider.healthy ? 'provider-ok' : 'provider-offline'}>
+          {provider.healthy ? 'Proveedor disponible' : 'Proveedor no disponible'}
+        </p>
+        {provider.error && <p className="provider-error">{provider.error}</p>}
+        <button type="submit" disabled={providerBusy || !connected}>
+          {providerBusy ? 'Guardando…' : 'Guardar proveedor'}
+        </button>
+        {providerMessage && <p role="status">{providerMessage}</p>}
+      </form>
 
       <article className="nemotron-card">
         <h4>Escuché</h4>

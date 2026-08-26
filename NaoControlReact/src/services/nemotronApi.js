@@ -4,9 +4,12 @@ const ACTION_STATUSES = new Set([
   'pending', 'accepted', 'completed', 'rejected', 'failed', 'unknown',
 ]);
 const ERROR_MESSAGE = 'Estado Nemotron no disponible.';
+const PROVIDER_ERROR_MESSAGE = 'Proveedor inteligente no disponible.';
+const PROVIDERS = new Set(['nemotron', 'gemma_local']);
 
 
 const invalid = () => new Error(ERROR_MESSAGE);
+const invalidProvider = () => new Error(PROVIDER_ERROR_MESSAGE);
 
 
 const normalize = (raw) => {
@@ -33,16 +36,32 @@ const normalize = (raw) => {
 };
 
 
+const normalizeProvider = (raw) => {
+  if (!raw || raw.success !== true) throw invalidProvider();
+  if (!PROVIDERS.has(raw.selected)) throw invalidProvider();
+  if (raw.active !== '' && !PROVIDERS.has(raw.active)) throw invalidProvider();
+  if (typeof raw.healthy !== 'boolean') throw invalidProvider();
+  if (typeof raw.error !== 'string' || raw.error.length > 200) throw invalidProvider();
+  return {
+    selected: raw.selected,
+    active: raw.active,
+    healthy: raw.healthy,
+    error: raw.error,
+    updated_at_ms: Number.isFinite(raw.updated_at_ms) ? raw.updated_at_ms : 0,
+  };
+};
+
+
 export const createNemotronApi = (options = {}) => {
   const browserWindow = typeof window === 'undefined' ? {} : window;
   const WebSocketImpl = options.WebSocketImpl || browserWindow.WebSocket;
   const locationObject = options.locationObject || browserWindow.location || {};
   const timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
 
-  return {
-    status: () => new Promise((resolve, reject) => {
+  const request = (payload, responseKey, normalizer, errorFactory) => (
+    new Promise((resolve, reject) => {
       if (!WebSocketImpl || !locationObject.hostname) {
-        reject(invalid());
+        reject(errorFactory());
         return;
       }
       const scheme = locationObject.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -55,7 +74,7 @@ export const createNemotronApi = (options = {}) => {
         try { socket?.close(); } catch (_error) { /* best effort */ }
         callback(value);
       };
-      const fail = () => finish(reject, invalid());
+      const fail = () => finish(reject, errorFactory());
       let timer;
       try {
         socket = new WebSocketImpl(`${scheme}//${locationObject.hostname}:6671`);
@@ -65,7 +84,7 @@ export const createNemotronApi = (options = {}) => {
       }
       timer = setTimeout(fail, timeoutMs);
       socket.onopen = () => {
-        try { socket.send(JSON.stringify({ action: 'nemotronStatus' })); }
+        try { socket.send(JSON.stringify(payload)); }
         catch (_error) { fail(); }
       };
       socket.onmessage = (event) => {
@@ -73,13 +92,30 @@ export const createNemotronApi = (options = {}) => {
         let message;
         try { message = JSON.parse(event.data); }
         catch (_error) { fail(); return; }
-        if (!message?.nemotronStatus) return;
-        try { finish(resolve, normalize(message.nemotronStatus)); }
+        if (!message?.[responseKey]) return;
+        try { finish(resolve, normalizer(message[responseKey])); }
         catch (_error) { fail(); }
       };
       socket.onerror = fail;
       socket.onclose = fail;
-    }),
+    })
+  );
+
+  return {
+    status: () => request(
+      { action: 'nemotronStatus' }, 'nemotronStatus', normalize, invalid,
+    ),
+    providerStatus: () => request(
+      { action: 'intelligenceProviderStatus' },
+      'intelligenceProviderStatus', normalizeProvider, invalidProvider,
+    ),
+    setProvider: (provider) => {
+      if (!PROVIDERS.has(provider)) return Promise.reject(invalidProvider());
+      return request(
+        { action: 'setIntelligenceProvider', provider },
+        'setIntelligenceProvider', normalizeProvider, invalidProvider,
+      );
+    },
   };
 };
 

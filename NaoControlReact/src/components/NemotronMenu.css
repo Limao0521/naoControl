@@ -38,6 +38,29 @@
 .nemotron-card h4 { margin: 0 0 0.45rem; }
 .nemotron-card p { line-height: 1.4; margin: 0; overflow-wrap: anywhere; }
 
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.provider-card label { color: #d8d8d8; font-weight: 600; }
+
+.provider-card select,
+.provider-card button {
+  border: 1px solid #666;
+  border-radius: 0.35rem;
+  font: inherit;
+  padding: 0.55rem;
+}
+
+.provider-card select { background: #171717; color: #fff; }
+.provider-card button { background: #2867b2; color: #fff; cursor: pointer; }
+.provider-card button:disabled { cursor: not-allowed; opacity: 0.6; }
+.provider-ok { color: #43d17a; }
+.provider-offline,
+.provider-error { color: #ff8b8b; }
+
 .nemotron-actions {
   display: flex;
   flex-direction: column;
