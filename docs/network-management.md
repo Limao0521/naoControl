@@ -54,9 +54,10 @@ http://<NAO_IP>:3000
 No necesitas ejecutar comandos adicionales en el PC ni preparar claves para
 usar el menú de red.
 
-El mismo menú contiene **IP del PC para Nemotron**. Guardarla requiere la
-confirmación táctil trasera porque cambia el equipo autorizado para recibir la
-solicitud de inicio. El valor se conserva al volver a desplegar el proyecto.
+La IP del PC gateway ya no se introduce en este menú. Cuando un PC privado abre
+el control y guarda el proveedor inteligente, el NAO infiere esa IP desde la
+conexión y la conserva como destino del launcher. Para Gemma, la única IP que
+se escribe manualmente es la del PC que aloja el modelo.
 
 ## Uso del panel
 

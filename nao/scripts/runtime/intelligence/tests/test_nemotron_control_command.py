@@ -73,6 +73,10 @@ class FakeTargetStore(object):
     def load(self):
         return {"pc_ip": self.pc_ip}
 
+    def save(self, pc_ip):
+        self.pc_ip = pc_ip
+        return {"pc_ip": pc_ip}
+
 
 def test_status_command_returns_last_nemotron_turn_to_web_client():
     socket = FakeSocket()
@@ -185,13 +189,29 @@ def test_gemma_endpoint_is_configured_from_the_allowed_pc_without_a_key():
 
     assert command.execute({
         "action": "setGemmaEndpoint",
-        "gemma_base_url": "http://192.168.23.1:8080/v1",
+        "gemma_ip": "192.168.23.1",
     }, socket) is True
     assert provider_store.state["gemma_base_url"] == "http://192.168.23.1:8080/v1"
     assert "key" not in json.dumps(socket.messages).lower()
 
 
-def test_provider_selection_rejects_unconfigured_peer_without_mutation():
+def test_gemma_configuration_separates_browser_gateway_ip_from_model_ip():
+    socket = FakeSocket(address=("192.168.23.233", 5555))
+    target_store = FakeTargetStore("192.168.23.99")
+    provider_store = FakeProviderStore()
+    command = SetGemmaEndpointCommand(
+        None, FakeLogger(), provider_store=provider_store,
+        target_store=target_store,
+    )
+
+    assert command.execute({
+        "action": "setGemmaEndpoint", "gemma_ip": "192.168.23.1",
+    }, socket) is True
+    assert target_store.pc_ip == "192.168.23.233"
+    assert provider_store.state["gemma_base_url"] == "http://192.168.23.1:8080/v1"
+
+
+def test_provider_selection_infers_gateway_target_from_private_browser_peer():
     assert SetIntelligenceProviderCommand is not None, "provider selection command is missing"
     socket = FakeSocket(address=("169.254.151.99", 5555))
     provider_store = FakeProviderStore()
@@ -202,11 +222,9 @@ def test_provider_selection_rejects_unconfigured_peer_without_mutation():
 
     assert command.execute({
         "action": "setIntelligenceProvider", "provider": "gemma_local",
-    }, socket) is False
-    assert provider_store.state["selected"] == "nemotron"
-    assert socket.messages == [{
-        "setIntelligenceProvider": {"success": False, "error": "forbidden"}
-    }]
+    }, socket) is True
+    assert provider_store.state["selected"] == "gemma_local"
+    assert command.target_store.pc_ip == "169.254.151.99"
 
 
 def test_command_factory_exposes_provider_status_and_selection_commands():

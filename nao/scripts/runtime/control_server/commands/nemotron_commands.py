@@ -4,10 +4,16 @@
 from __future__ import absolute_import
 
 import json
+import os
+import socket
 
 from base_command import BaseCommand
 from interaction_state import InteractionStateStore
-from intelligence.provider_config import ProviderConfigError, ProviderConfigStore
+from intelligence.provider_config import (
+    ALLOWED_PROVIDERS,
+    ProviderConfigError,
+    ProviderConfigStore,
+)
 
 
 DEFAULT_TARGET_PATH = "/home/nao/naoControl/config/pc_gateway_target.json"
@@ -19,7 +25,7 @@ except NameError:  # pragma: no cover - Python 3 tests
 
 
 class PcTargetStore(object):
-    """Minimal read-only target store to keep web control gateway-independent."""
+    """Persist the gateway PC inferred from the web client's network peer."""
 
     def __init__(self, path=DEFAULT_TARGET_PATH):
         self.path = path
@@ -32,6 +38,25 @@ class PcTargetStore(object):
             return {"pc_ip": pc_ip if isinstance(pc_ip, STRING_TYPES) else ""}
         except (IOError, OSError, TypeError, ValueError):
             return {"pc_ip": ""}
+
+    def save(self, pc_ip):
+        if not _private_peer_ip(pc_ip):
+            raise ValueError("invalid PC target")
+        directory = os.path.dirname(self.path)
+        if directory and not os.path.isdir(directory):
+            os.makedirs(directory)
+        temporary = self.path + ".tmp"
+        with open(temporary, "wb") as target:
+            target.write(json.dumps(
+                {"pc_ip": pc_ip}, separators=(",", ":")
+            ).encode("utf-8"))
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass
+        replace = getattr(os, "replace", os.rename)
+        replace(temporary, self.path)
+        return {"pc_ip": pc_ip}
 
 
 def _peer_ip(websocket):
@@ -47,6 +72,25 @@ def _peer_ip(websocket):
     if address.lower().startswith("::ffff:"):
         return address[7:]
     return address
+
+
+def _private_peer_ip(value):
+    """Accept RFC1918 and link-local IPv4 peers used by the robot control LAN."""
+    if not isinstance(value, STRING_TYPES):
+        return False
+    try:
+        packed = socket.inet_aton(value)
+        if socket.inet_ntoa(packed) != value:
+            return False
+        parts = [int(part) for part in value.split(".")]
+        return (
+            parts[0] == 10
+            or (parts[0] == 172 and 16 <= parts[1] <= 31)
+            or (parts[0] == 192 and parts[1] == 168)
+            or (parts[0] == 169 and parts[1] == 254)
+        )
+    except (ValueError, socket.error):
+        return False
 
 
 class NemotronStatusCommand(BaseCommand):
@@ -92,6 +136,17 @@ class _ProviderCommand(BaseCommand):
         configured_pc = self.target_store.load().get("pc_ip", "")
         return bool(configured_pc and _peer_ip(websocket) == configured_pc)
 
+    def _bind_requesting_pc(self, websocket):
+        """Use the private browser peer as the gateway target for this session."""
+        peer_ip = _peer_ip(websocket)
+        if not _private_peer_ip(peer_ip):
+            return False
+        try:
+            self.target_store.save(peer_ip)
+            return True
+        except (IOError, OSError, TypeError, ValueError):
+            return False
+
     def _send(self, websocket, action, payload):
         websocket.sendMessage(json.dumps({action: payload}, separators=(",", ":")))
 
@@ -103,7 +158,7 @@ class IntelligenceProviderStatusCommand(_ProviderCommand):
         return self.ACTION
 
     def execute(self, message, websocket):
-        if not self._authorized(websocket):
+        if not _private_peer_ip(_peer_ip(websocket)):
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "forbidden",
             })
@@ -121,14 +176,19 @@ class SetIntelligenceProviderCommand(_ProviderCommand):
         return self.ACTION
 
     def execute(self, message, websocket):
-        if not self._authorized(websocket):
-            self._send(websocket, self.ACTION, {
-                "success": False, "error": "forbidden",
-            })
-            return False
         if not isinstance(message, dict) or set(message) != {"action", "provider"}:
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "invalid_request",
+            })
+            return False
+        if message.get("provider") not in ALLOWED_PROVIDERS:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "unsupported_provider",
+            })
+            return False
+        if not self._bind_requesting_pc(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
             })
             return False
         try:
@@ -151,21 +211,27 @@ class SetGemmaEndpointCommand(_ProviderCommand):
         return self.ACTION
 
     def execute(self, message, websocket):
-        if not self._authorized(websocket):
-            self._send(websocket, self.ACTION, {
-                "success": False, "error": "forbidden",
-            })
-            return False
         if not isinstance(message, dict) or set(message) != {
-            "action", "gemma_base_url"
+            "action", "gemma_ip"
         }:
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "invalid_request",
             })
             return False
+        gemma_ip = message.get("gemma_ip")
+        if not _private_peer_ip(gemma_ip):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_gemma_endpoint",
+            })
+            return False
+        if not self._bind_requesting_pc(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
+            })
+            return False
         try:
             state = self.provider_store.save_gemma_base_url(
-                message.get("gemma_base_url")
+                "http://{}:8080/v1".format(gemma_ip)
             )
         except ProviderConfigError:
             self._send(websocket, self.ACTION, {
@@ -185,11 +251,6 @@ class SetIntelligenceLanguageCommand(_ProviderCommand):
         return self.ACTION
 
     def execute(self, message, websocket):
-        if not self._authorized(websocket):
-            self._send(websocket, self.ACTION, {
-                "success": False, "error": "forbidden",
-            })
-            return False
         if not isinstance(message, dict) or set(message) != {"action", "language"}:
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "invalid_request",
@@ -200,6 +261,11 @@ class SetIntelligenceLanguageCommand(_ProviderCommand):
         if tts_language is None:
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "unsupported_language",
+            })
+            return False
+        if not self._bind_requesting_pc(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
             })
             return False
         if not self.nao.set_language(tts_language):

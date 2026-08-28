@@ -27,6 +27,11 @@ const PROVIDER_LABELS = {
   gemma_local: 'Gemma LAN autenticado',
 };
 
+const gemmaIpFromEndpoint = (endpoint) => {
+  try { return new URL(endpoint).hostname; }
+  catch (_error) { return ''; }
+};
+
 
 const NemotronMenu = () => {
   const [state, setState] = useState({
@@ -44,7 +49,7 @@ const NemotronMenu = () => {
   const [providerMessage, setProviderMessage] = useState('');
   const [languageChoice, setLanguageChoice] = useState('es');
   const [languageTouched, setLanguageTouched] = useState(false);
-  const [gemmaEndpoint, setGemmaEndpoint] = useState('');
+  const [gemmaIp, setGemmaIp] = useState('');
   const [gemmaEndpointTouched, setGemmaEndpointTouched] = useState(false);
 
   useEffect(() => {
@@ -54,16 +59,21 @@ const NemotronMenu = () => {
       if (requestPending) return;
       requestPending = true;
       try {
-        const [next, nextProvider] = await Promise.all([
+        const [turnResult, providerResult] = await Promise.allSettled([
           nemotronApi.status(), nemotronApi.providerStatus(),
         ]);
         if (active) {
-          setState(next);
-          setProvider(nextProvider);
-          if (!providerTouched) setProviderChoice(nextProvider.selected);
-          if (!languageTouched) setLanguageChoice(nextProvider.language);
-          if (!gemmaEndpointTouched) setGemmaEndpoint(nextProvider.gemma_base_url);
-          setConnected(true);
+          if (turnResult.status === 'fulfilled') setState(turnResult.value);
+          if (providerResult.status === 'fulfilled') {
+            const nextProvider = providerResult.value;
+            setProvider(nextProvider);
+            if (!providerTouched) setProviderChoice(nextProvider.selected);
+            if (!languageTouched) setLanguageChoice(nextProvider.language);
+            if (!gemmaEndpointTouched) {
+              setGemmaIp(gemmaIpFromEndpoint(nextProvider.gemma_base_url));
+            }
+          }
+          setConnected(providerResult.status === 'fulfilled');
         }
       } catch (_error) {
         if (active) setConnected(false);
@@ -85,7 +95,7 @@ const NemotronMenu = () => {
     setProviderMessage('');
     try {
       let next = provider;
-      if (gemmaEndpointTouched) next = await nemotronApi.setGemmaEndpoint(gemmaEndpoint);
+      if (gemmaEndpointTouched) next = await nemotronApi.setGemmaEndpoint(gemmaIp);
       if (providerTouched) next = await nemotronApi.setProvider(providerChoice);
       if (languageTouched) next = await nemotronApi.setLanguage(languageChoice);
       setProvider(next);
@@ -125,22 +135,26 @@ const NemotronMenu = () => {
         </select>
         {providerChoice === 'gemma_local' && (
           <>
-            <label htmlFor="gemma-base-url">Endpoint de Gemma LAN</label>
+            <label htmlFor="gemma-server-ip">IP del PC con Gemma</label>
             <input
-              id="gemma-base-url"
-              type="url"
-              inputMode="url"
+              id="gemma-server-ip"
+              type="text"
+              inputMode="numeric"
               autoComplete="off"
-              placeholder="http://192.168.23.1:8080/v1"
-              value={gemmaEndpoint}
+              placeholder="192.168.23.1"
+              value={gemmaIp}
               onChange={(event) => {
-                setGemmaEndpoint(event.target.value);
+                setGemmaIp(event.target.value);
                 setGemmaEndpointTouched(true);
               }}
+              pattern="(?:[0-9]{1,3}\.){3}[0-9]{1,3}"
+              maxLength={15}
               disabled={providerBusy}
               required
             />
-            <p>Solo se guarda una dirección privada; la clave permanece en el PC de Gemma.</p>
+            <p>
+              Se usará http://{gemmaIp || 'IP'}:8080/v1. La clave permanece en el PC gateway.
+            </p>
           </>
         )}
         <label htmlFor="intelligence-language">Idioma de respuesta</label>

@@ -76,12 +76,12 @@ test('configures Gemma LAN endpoint from the intelligent control panel without e
   const selector = await screen.findByLabelText('Proveedor de inteligencia');
   expect(screen.getByRole('option', { name: 'Gemma LAN autenticado' })).toBeInTheDocument();
   fireEvent.change(selector, { target: { value: 'gemma_local' } });
-  const endpoint = screen.getByLabelText('Endpoint de Gemma LAN');
-  fireEvent.change(endpoint, { target: { value: 'http://192.168.23.1:8080/v1' } });
+  const endpoint = screen.getByLabelText('IP del PC con Gemma');
+  fireEvent.change(endpoint, { target: { value: '192.168.23.1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
   await waitFor(() => {
-    expect(nemotronApi.setGemmaEndpoint).toHaveBeenCalledWith('http://192.168.23.1:8080/v1');
+    expect(nemotronApi.setGemmaEndpoint).toHaveBeenCalledWith('192.168.23.1');
     expect(nemotronApi.setProvider).toHaveBeenCalledWith('gemma_local');
   });
   expect(screen.getByText('Cambio solicitado. Se aplicará antes del siguiente turno.')).toBeInTheDocument();

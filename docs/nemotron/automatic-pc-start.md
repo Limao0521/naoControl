@@ -19,7 +19,8 @@ El PC mantiene únicamente un lanzador pequeño en segundo plano. Cuando el
 bumper izquierdo solicita entrar al modo inteligente:
 
 1. El NAO comprueba primero las condiciones de seguridad física.
-2. Lee la IP guardada desde el menú **Red**.
+2. Lee la IP que se infirió automáticamente cuando ese PC guardó el proveedor
+   desde el control web.
 3. Firma una solicitud de arranque con el mismo secreto HMAC del gateway.
 4. El lanzador del PC verifica firma, vigencia y protección contra replay.
 5. El PC descarga el bundle directamente del NAO y verifica el SHA-256 firmado.
@@ -62,13 +63,13 @@ repite el setup. El script no acepta silenciosamente una identidad nueva.
 ## Configurar el destino y probar
 
 1. Despliega el NAO con `deploy-nao.ps1 -StartServices`.
-2. Abre `http://<NAO_IP>:3000` y entra en **Red**.
-3. Introduce una de las IPv4 mostradas por el setup del PC.
-4. Pulsa **Guardar IP del PC** y mantén el sensor táctil trasero durante tres
-   segundos.
-5. Mantén el bumper izquierdo 1.5 segundos. El robot debe anunciar que el modo
+2. Desde el PC que ejecuta el launcher, abre `http://<NAO_IP>:3000` y entra en
+   **Sistema inteligente**.
+3. Selecciona el proveedor y guarda. El NAO infiere la IP del gateway desde esa
+   conexión; para Gemma solo debes escribir la IP del PC del modelo.
+4. Mantén el bumper izquierdo 1.5 segundos. El robot debe anunciar que el modo
    inteligente está listo.
-6. Mantén el bumper derecho mientras hablas y suéltalo para enviar el turno.
+5. Mantén el bumper derecho mientras hablas y suéltalo para enviar el turno.
 
 ## Estado visible en el control web
 
@@ -84,7 +85,7 @@ El PC envía estas actualizaciones dentro del WebSocket HMAC ya autenticado. El
 NAO valida longitudes y valores, las guarda atómicamente en
 `/home/nao/run/naoControl/interaction_state.json` con permisos `0600` y el
 control web solo expone ese último registro al cliente cuya IP coincide con el
-PC confirmado mediante el sensor táctil trasero. Cualquier otro cliente recibe
+PC inferido al guardar el proveedor. Cualquier otro cliente recibe
 `forbidden` sin transcripción ni respuesta. No se conserva un historial de
 audio, imágenes o conversaciones.
 

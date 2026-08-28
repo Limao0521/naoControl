@@ -12,16 +12,15 @@ const LANGUAGES = new Set(['es', 'en']);
 const invalid = () => new Error(ERROR_MESSAGE);
 const invalidProvider = () => new Error(PROVIDER_ERROR_MESSAGE);
 
-const validGemmaEndpoint = (value) => {
+const validPrivateIpv4 = (value) => {
   try {
-    const url = new URL(value);
-    const octets = url.hostname.split('.').map(Number);
-    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
-      || url.pathname !== '/v1' || url.search || url.hash || octets.length !== 4
+    const octets = value.split('.').map(Number);
+    if (octets.length !== 4
       || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return false;
     return octets[0] === 10
       || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
-      || (octets[0] === 192 && octets[1] === 168);
+      || (octets[0] === 192 && octets[1] === 168)
+      || (octets[0] === 169 && octets[1] === 254);
   } catch (_error) {
     return false;
   }
@@ -145,10 +144,10 @@ export const createNemotronApi = (options = {}) => {
         'setIntelligenceLanguage', normalizeProvider, invalidProvider,
       );
     },
-    setGemmaEndpoint: (gemmaBaseUrl) => {
-      if (!validGemmaEndpoint(gemmaBaseUrl)) return Promise.reject(invalidProvider());
+    setGemmaEndpoint: (gemmaIp) => {
+      if (!validPrivateIpv4(gemmaIp)) return Promise.reject(invalidProvider());
       return request(
-        { action: 'setGemmaEndpoint', gemma_base_url: gemmaBaseUrl },
+        { action: 'setGemmaEndpoint', gemma_ip: gemmaIp },
         'setGemmaEndpoint', normalizeProvider, invalidProvider,
       );
     },

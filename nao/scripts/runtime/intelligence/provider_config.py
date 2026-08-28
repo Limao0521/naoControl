@@ -48,7 +48,8 @@ def valid_gemma_base_url(value):
             return False
         private = (parts[0] == 10 or
                    (parts[0] == 172 and 16 <= parts[1] <= 31) or
-                   (parts[0] == 192 and parts[1] == 168))
+                   (parts[0] == 192 and parts[1] == 168) or
+                   (parts[0] == 169 and parts[1] == 254))
         port = parsed.port
         return private and (port is None or 1 <= port <= 65535)
     except (AttributeError, TypeError, ValueError, socket.error):

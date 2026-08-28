@@ -67,10 +67,11 @@ solo instala y ejecuta el gateway recibido desde el NAO.
 1. Inicie el control web y abra `http://<IP_DEL_NAO>:3000`.
 2. Abra el panel **Nemotron**, cuyo contenido se titula **Sistema inteligente**.
 3. En **Proveedor de inteligencia**, seleccione **Nemotron NVIDIA** o
-   **Gemma LAN autenticado**. Al seleccionar Gemma, introduzca su endpoint, por
-   ejemplo `http://192.168.23.1:8080/v1`.
-4. En el menú **Red**, configure la IP del PC que ejecuta el launcher del
-   gateway. Puede ser el mismo PC que Gemma, pero no tiene que serlo.
+   **Gemma LAN autenticado**. Al seleccionar Gemma, introduzca únicamente la IP
+   privada del PC del modelo, por ejemplo `192.168.23.1`. El NAO construye el
+   endpoint fijo `http://192.168.23.1:8080/v1`.
+4. El NAO toma automáticamente como destino del gateway la IP privada del PC
+   que abrió el control y guardó la configuración. No se ingresa manualmente.
 5. En **Idioma de respuesta**, seleccione **Español** o **English**. Este valor
    controla tanto la respuesta del modelo como la voz del NAO.
 6. Pulse **Guardar configuración**.

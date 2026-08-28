@@ -138,8 +138,9 @@ desde PowerShell con permisos de administrador:
 powershell -NoProfile -ExecutionPolicy Bypass -File ".\tools\setup-nemotron-pc-host.ps1" -NaoIp <NAO_IP>
 ```
 
-Luego, en el menú **Red**, se guarda la IP de ese PC confirmando con el sensor
-táctil trasero. Al mantener el bumper izquierdo durante 1.5 segundos, el NAO
+Luego, ese PC abre el control web y guarda el proveedor; el NAO infiere su IP
+automáticamente como destino del gateway. Al mantener el bumper izquierdo
+durante 1.5 segundos, el NAO
 envía una solicitud HMAC al puerto `6676`; el PC descarga del NAO el bundle
 verificado por el puerto `6677` y arranca el gateway. Ya no es necesario lanzar
 `nao_gateway.main` manualmente. Consulta `docs/nemotron/automatic-pc-start.md`.

@@ -39,8 +39,8 @@ el responsable de iniciar los servicios con la presión larga central.
 2. La interfaz web queda disponible en `http://<ip-del-nao>:3000` y se conecta
    al WebSocket de control del mismo robot en el puerto `6671`.
 3. Preparar una sola vez el PC con
-   `tools\setup-nemotron-pc-host.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>` y guardar
-   su IPv4 en el menú **Red**, confirmando con el sensor táctil trasero.
+   `tools\setup-nemotron-pc-host.ps1 -NaoIp <IP_ACTUAL_DEL_NAO>`. Desde ese PC,
+   abrir el control web y guardar el proveedor para que el NAO infiera su IPv4.
 4. Mantener presionado el bumper izquierdo 1.5 s. El NAO solicita al lanzador
    autenticado del PC descargar el gateway desde el robot y ejecutarlo; solo
    entonces entra al modo inteligente. Otra pulsación larga sale del modo.

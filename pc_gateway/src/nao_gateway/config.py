@@ -32,6 +32,7 @@ def validate_gemma_base_url(value: str) -> str:
         IPv4Network("10.0.0.0/8"),
         IPv4Network("172.16.0.0/12"),
         IPv4Network("192.168.0.0/16"),
+        IPv4Network("169.254.0.0/16"),
     )
     is_private_lan = (
         isinstance(gemma_address, IPv4Address)
@@ -90,6 +91,7 @@ class GatewaySettings:
             IPv4Network("10.0.0.0/8"),
             IPv4Network("172.16.0.0/12"),
             IPv4Network("192.168.0.0/16"),
+            IPv4Network("169.254.0.0/16"),
         )
         is_private_lan = (
             isinstance(gemma_address, IPv4Address)

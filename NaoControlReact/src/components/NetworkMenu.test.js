@@ -31,9 +31,7 @@ beforeEach(() => {
     })
   );
   networkApi.profiles.mockResolvedValue(completed('profiles', { profiles: [] }));
-  networkApi.gatewayTarget.mockResolvedValue(
-    completed('gateway_target', { pc_ip: '192.168.10.25' })
-  );
+  networkApi.gatewayTarget.mockResolvedValue(completed('gateway_target', {}));
 });
 
 
@@ -121,29 +119,10 @@ test('requires explicit warning acknowledgement before disconnecting last path',
 });
 
 
-test('shows and physically confirms the PC destination used by the bumper', async () => {
-  networkApi.saveGatewayTarget.mockResolvedValue(
-    completed('set_gateway_target', { pc_ip: '192.168.10.30' })
-  );
+test('explains that the gateway PC is inferred from the control browser', async () => {
   render(<NetworkMenu />);
 
-  const input = await screen.findByLabelText('IP del PC para Nemotron');
-  expect(input).toHaveValue('192.168.10.25');
-  fireEvent.change(input, { target: { value: '192.168.10.30' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Guardar IP del PC' }));
-
-  await waitFor(() => expect(networkApi.saveGatewayTarget).toHaveBeenCalledWith(
-    '192.168.10.30'
-  ));
-  expect(await screen.findByText('Destino del gateway actualizado.')).toBeInTheDocument();
-});
-
-
-test('accepts the link-local IPv4 address used by the connected PC', async () => {
-  render(<NetworkMenu />);
-
-  const input = await screen.findByLabelText('IP del PC para Nemotron');
-  fireEvent.change(input, { target: { value: '169.254.151.5' } });
-
-  expect(input).toBeValid();
+  expect(await screen.findByText('PC gateway automático')).toBeInTheDocument();
+  expect(screen.getByText(/IP del PC que abrió este control/i)).toBeInTheDocument();
+  expect(networkApi.gatewayTarget).not.toHaveBeenCalled();
 });

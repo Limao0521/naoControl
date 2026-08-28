@@ -143,3 +143,31 @@ test('saves only Spanish or English as intelligent response language', async () 
     'Proveedor inteligente no disponible.'
   );
 });
+
+
+test('sends only a private Gemma host IP and keeps the endpoint syntax fixed', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '192.168.23.66' },
+    timeoutMs: 1000,
+  });
+
+  const pending = api.setGemmaEndpoint('192.168.23.1');
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+  expect(socket.sent.map(JSON.parse)).toEqual([{
+    action: 'setGemmaEndpoint', gemma_ip: '192.168.23.1',
+  }]);
+  socket.message({ setGemmaEndpoint: {
+    success: true, selected: 'nemotron', active: '', healthy: false,
+    error: '', language: 'es', gemma_base_url: 'http://192.168.23.1:8080/v1',
+    updated_at_ms: 1234,
+  } });
+
+  await expect(pending).resolves.toMatchObject({
+    gemma_base_url: 'http://192.168.23.1:8080/v1',
+  });
+  await expect(api.setGemmaEndpoint('8.8.8.8')).rejects.toThrow(
+    'Proveedor inteligente no disponible.'
+  );
+});
