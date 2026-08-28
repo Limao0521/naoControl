@@ -90,6 +90,7 @@ ipynb_checkpoints/
 secrets.yml
 credentials.json
 config/robot_gateway.secret
+config/nvidia_api_key
 work/
 
 # Contenedores / empaquetadores

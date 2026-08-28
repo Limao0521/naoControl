@@ -3,7 +3,8 @@ param(
     [ValidatePattern('^[0-9a-fA-F:.]+$')]
     [string]$NaoIp = '169.254.186.141',
     [string]$User = 'nao',
-    [switch]$StartServices
+    [switch]$StartServices,
+    [switch]$ConfigureNemotron
 )
 
 $ErrorActionPreference = 'Stop'
@@ -56,6 +57,7 @@ test -f "$staged/nao/scripts/runtime/intelligence/gateway_server.py"
 test -f "$staged/nao/scripts/runtime/intelligence/pc_gateway_launch.py"
 test -f "$staged/nao/scripts/runtime/intelligence/provider_config.py"
 test -f "$staged/nao/scripts/runtime/intelligence/led_controller.py"
+test -f "$staged/nao/scripts/runtime/intelligence/native_nemotron.py"
 test -f "$staged/nao/scripts/runtime/interaction_state.py"
 test -f "$staged/nao/scripts/runtime/network_admin.py"
 test -f "$staged/pc_gateway/src/nao_gateway/launcher_service.py"
@@ -68,6 +70,11 @@ test -f "$staged/config/agent_knowledge.json"
 if test -f "$base/config/robot_gateway.secret"; then
     mkdir -p "$staged/config"
     cp "$base/config/robot_gateway.secret" "$staged/config/robot_gateway.secret"
+fi
+if test -f "$base/config/nvidia_api_key"; then
+    mkdir -p "$staged/config"
+    cp "$base/config/nvidia_api_key" "$staged/config/nvidia_api_key"
+    chmod 600 "$staged/config/nvidia_api_key"
 fi
 if test -f "$base/config/pc_gateway_target.json"; then
     cp "$base/config/pc_gateway_target.json" "$staged/config/pc_gateway_target.json"
@@ -85,7 +92,7 @@ for service in control web camera pc_bundle intelligence; do
 done
 if test -d "$base"; then mv "$base" "$backup"; fi
 mv "$staged" "$base"
-if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py" "$base/nao/scripts/runtime/intelligence/provider_config.py" "$base/nao/scripts/runtime/intelligence/led_controller.py" "$base/nao/scripts/runtime/interaction_state.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/control_server/message_security.py" "$base/nao/scripts/runtime/control_server/commands/network_commands.py" "$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py" "$base/nao/scripts/runtime/network_admin.py"; then
+if ! python -m py_compile "$base/nao/scripts/runtime/intelligence/gateway_server.py" "$base/nao/scripts/runtime/intelligence/pc_gateway_launch.py" "$base/nao/scripts/runtime/intelligence/provider_config.py" "$base/nao/scripts/runtime/intelligence/led_controller.py" "$base/nao/scripts/runtime/intelligence/native_nemotron.py" "$base/nao/scripts/runtime/interaction_state.py" "$base/nao/scripts/runtime/control_server/server.py" "$base/nao/scripts/runtime/control_server/message_security.py" "$base/nao/scripts/runtime/control_server/commands/network_commands.py" "$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py" "$base/nao/scripts/runtime/network_admin.py"; then
     rm -rf "$base"
     if test -d "$backup"; then mv "$backup" "$base"; fi
     exit 1
@@ -104,6 +111,10 @@ echo "DEPLOY_OK base=$base services_started=$start_services"
     # The two positional arguments are already literal, validated values.
     $remoteCommand = "echo '$encodedScript' | base64 -d | sh -s '$remoteArchive' '$startFlag'"
     Invoke-Checked { & ssh.exe -o StrictHostKeyChecking=accept-new $sshTarget $remoteCommand } 'Installing and validating NAO runtime'
+    if ($ConfigureNemotron) {
+        & (Join-Path $repoRoot 'tools\configure-nao-nemotron.ps1') -NaoIp $NaoIp -NaoUser $User
+        if (-not $?) { throw 'Configuring robot-native Nemotron failed.' }
+    }
     Write-Host "Deployment complete. The tactile launcher remains responsible for normal start/stop."
 }
 finally {

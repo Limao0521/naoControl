@@ -504,6 +504,13 @@ class RobustLauncher:
             log("ERROR", "Error iniciando servicios: " + str(e), "SERVICES")
             self.services_running = False
             return False
+
+    def ensure_services_started(self):
+        """Boot into web control automatically; the head sensor still toggles it."""
+        if self.services_running:
+            return True
+        log("INFO", "Inicio automático de NAO Control", "SERVICES")
+        return self.start_services()
     
     def stop_services(self):
         """Detiene web, cámara y gateway Nemotron mediante el script desplegado."""
@@ -761,6 +768,9 @@ def main():
             print("Error: No se pudo establecer conexión con NAOqi")
             print("Verifica que NAOqi esté ejecutándose y la IP sea correcta")
             return
+
+        if not launcher.ensure_services_started():
+            log("ERROR", "No fue posible iniciar NAO Control automáticamente", "LAUNCHER")
         
         # Mostrar modo de operación
         if launcher.use_events:

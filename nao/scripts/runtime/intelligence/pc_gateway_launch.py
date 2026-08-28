@@ -178,3 +178,30 @@ class GatewayEntryGate(object):
             return False
         self.last_reason = "ready"
         return True
+
+
+class IntelligentEntryGate(object):
+    """Use robot-native Nemotron, retaining the PC launcher only for Gemma."""
+
+    def __init__(self, safety, provider_store, native_ready, pc_gate):
+        self.safety = safety
+        self.provider_store = provider_store
+        self.native_ready = native_ready
+        self.pc_gate = pc_gate
+        self.last_reason = "not_checked"
+
+    def __call__(self):
+        allowed, reasons = self.safety.check_intelligent_entry()
+        if not allowed:
+            self.last_reason = reasons[0] if reasons else "robot_not_ready"
+            return False
+        selected = self.provider_store.load().get("selected", "nemotron")
+        if selected == "nemotron":
+            if not self.native_ready():
+                self.last_reason = "native_nemotron_not_configured"
+                return False
+            self.last_reason = "ready"
+            return True
+        result = self.pc_gate()
+        self.last_reason = self.pc_gate.last_reason
+        return result

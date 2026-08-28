@@ -24,13 +24,14 @@ from pc_gateway_launch import (
     DEFAULT_TARGET_PATH,
     GatewayEntryGate,
     GatewayTargetStore,
+    IntelligentEntryGate,
     RemoteGatewayLauncher,
 )
 
 
 def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
                       bundle_path=DEFAULT_BUNDLE_PATH, transport=None,
-                      now_ms=None):
+                      now_ms=None, provider_store=None, native_ready=None):
     launcher = RemoteGatewayLauncher(
         GatewayTargetStore(target_path),
         secret,
@@ -38,7 +39,10 @@ def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
         transport=transport,
         now_ms=now_ms,
     )
-    return GatewayEntryGate(safety, launcher)
+    pc_gate = GatewayEntryGate(safety, launcher)
+    if provider_store is None or native_ready is None:
+        return pc_gate
+    return IntelligentEntryGate(safety, provider_store, native_ready, pc_gate)
 
 
 def apply_mode_led(led_controller, event_name, mode):
@@ -114,13 +118,16 @@ class GatewayCore(object):
 class CaptureController(object):
     """Run recorder side effects without leaving the bumper state machine stuck."""
     def __init__(self, manager, capture, interaction_store, facade, send_all,
-                 interaction_id_factory=None, led_controller=None):
+                 interaction_id_factory=None, led_controller=None,
+                 native_dispatch=None, provider_store=None):
         self.manager = manager
         self.capture = capture
         self.interaction_store = interaction_store
         self.facade = facade
         self.send_all = send_all
         self.led_controller = led_controller
+        self.native_dispatch = native_dispatch
+        self.provider_store = provider_store
         self.interaction_id_factory = interaction_id_factory or uuid.uuid4
         self.interaction_id = None
 
@@ -192,7 +199,14 @@ class CaptureController(object):
             print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
             print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
             self._set_mode_led("PROCESSING")
-            self.send_all("audio_result", result)
+            selected = (
+                self.provider_store.load().get("selected")
+                if self.provider_store is not None else ""
+            )
+            if selected == "nemotron" and self.native_dispatch is not None:
+                self.native_dispatch(result)
+            else:
+                self.send_all("audio_result", result)
             return True
         except Exception as error:
             self.recover("capture_finish_failed", now_ms, error)
@@ -208,6 +222,11 @@ def _load_runtime():
     from interaction_state import InteractionStateStore
     from led_controller import IntelligenceLedController
     from mode_manager import ModeManager
+    from native_nemotron import (
+        CurlJsonTransport, FallbackJsonTransport, NativeAgent,
+        NativeCloudConfig, NativeNemotronClient, UrllibJsonTransport,
+        fetch_latest_jpeg,
+    )
     from provider_config import ProviderConfigBroadcaster, ProviderConfigStore
     from safety_supervisor import SafetySupervisor
 
@@ -229,7 +248,23 @@ def _load_runtime():
     executor = ActionExecutor(facade, registry, led_controller=led_controller)
     safety = SafetySupervisor(facade)
     allowed, reasons = safety.check_intelligent_entry()
-    entry_gate = create_entry_gate(safety, secret)
+    provider_store = ProviderConfigStore(
+        os.path.join(base, "config", "intelligence_provider.json")
+    )
+    native_config = NativeCloudConfig(
+        os.path.join(base, "config", "nvidia_api_key")
+    )
+    bundled_curl = os.path.join(base, "nao", "vendor", "curl", "curl")
+    curl_transport = CurlJsonTransport(
+        bundled_curl if os.path.isfile(bundled_curl) else None
+    )
+    native_transport = FallbackJsonTransport(
+        UrllibJsonTransport(), curl_transport if curl_transport.ready() else None
+    )
+    entry_gate = create_entry_gate(
+        safety, secret, provider_store=provider_store,
+        native_ready=native_config.ready,
+    )
     manager = ModeManager(
         initial_mode="WEB_CONTROL",
         entry_check=entry_gate,
@@ -238,9 +273,6 @@ def _load_runtime():
     capture = AudioCapture(ALProxy("ALAudioRecorder", "127.0.0.1", 9559))
     clients = set()
     interaction_store = InteractionStateStore()
-    provider_store = ProviderConfigStore(
-        os.path.join(base, "config", "intelligence_provider.json")
-    )
 
     def system_handler(name):
         events = manager.handle_system(name, int(time.time() * 1000))
@@ -265,6 +297,16 @@ def _load_runtime():
                 clients.discard(client)
 
     provider_broadcaster = ProviderConfigBroadcaster(provider_store, send_all)
+    native_agent = NativeAgent(
+        NativeNemotronClient(
+            native_config, transport=native_transport,
+            knowledge_path=os.path.join(base, "config", "agent_knowledge.json"),
+        ),
+        executor, registry,
+        state_publisher=interaction_store.save,
+        image_provider=fetch_latest_jpeg,
+        language_provider=lambda: provider_store.load().get("language", "es"),
+    )
 
     class GatewaySocket(WebSocket):
         def handleConnected(self):
@@ -293,9 +335,36 @@ def _load_runtime():
             json.dump({"mode": manager.mode, "updated_at_ms": core.now_ms()}, output)
         os.rename(temporary, path)
 
+    def run_native_turn(result):
+        try:
+            native_agent.handle_audio(result)
+            provider_store.save_status({
+                "active": "nemotron", "healthy": True, "error": "",
+            })
+            system_handler("TURN_FINISHED")
+        except Exception as error:
+            safe_error = (str(error) or type(error).__name__)[:200]
+            print("GATEWAY native_turn_failed error={}: {}".format(
+                type(error).__name__, safe_error
+            ))
+            provider_store.save_status({
+                "active": "", "healthy": False, "error": safe_error,
+            })
+            facade.say("No pude procesar la solicitud")
+            capture_controller.recover(
+                "native_processing_failed", core.now_ms(), error
+            )
+            write_mode()
+
+    def dispatch_native(result):
+        worker = threading.Thread(target=run_native_turn, args=(result,))
+        worker.daemon = True
+        worker.start()
+
     capture_controller = CaptureController(
         manager, capture, interaction_store, facade, send_all,
-        led_controller=led_controller,
+        led_controller=led_controller, native_dispatch=dispatch_native,
+        provider_store=provider_store,
     )
 
     def poll_bumpers_once():
@@ -315,6 +384,8 @@ def _load_runtime():
                     facade.say("Configura la dirección del computador en el menú de red")
                 elif entry_gate.last_reason == "pc_gateway_unavailable":
                     facade.say("No pude iniciar el sistema inteligente en el computador")
+                elif entry_gate.last_reason == "native_nemotron_not_configured":
+                    facade.say("Nemotron no está configurado en el robot")
                 else:
                     facade.say("No es seguro iniciar el modo inteligente")
             elif event.name == "MODE_EXIT_REQUESTED":

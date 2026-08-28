@@ -12,7 +12,10 @@ from pathlib import Path
 
 
 EXCLUDED_NAMES = {".git", ".venv", ".pytest_cache", "__pycache__"}
-EXCLUDED_PATHS = {Path("config") / "robot_gateway.secret"}
+EXCLUDED_PATHS = {
+    Path("config") / "robot_gateway.secret",
+    Path("config") / "nvidia_api_key",
+}
 
 
 def include_member(info: tarfile.TarInfo) -> tarfile.TarInfo | None:

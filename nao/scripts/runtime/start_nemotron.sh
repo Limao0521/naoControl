@@ -42,7 +42,7 @@ trap - 0 1 2 3 15
 start_service control python -u "$RUNTIME/control_server/server.py"
 start_service web sh -c "cd '$BASE/NaoControlReact/build' && exec python -m SimpleHTTPServer 3000"
 start_service camera python -u "$RUNTIME/control_server/video_stream.py" \
-    --nao_ip 127.0.0.1 --server_ip 169.254.151.5 --server_port 6666 \
+    --nao_ip 127.0.0.1 --server_ip 127.0.0.1 --server_port 6666 \
     --http_port 8080 --fps 5 --resolution 1
 start_service pc_bundle sh -c "cd '$BUNDLE_DIR' && exec python -m SimpleHTTPServer 6677"
 start_service intelligence python -u "$RUNTIME/intelligence/gateway_server.py"

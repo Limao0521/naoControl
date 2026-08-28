@@ -45,6 +45,7 @@ test('shows what Nemotron heard, answered, and physically executed', async () =>
   expect(screen.getByText('Me levantaré ahora mismo.')).toBeInTheDocument();
   expect(screen.getByText('set_posture')).toBeInTheDocument();
   expect(screen.getByText('Completada')).toBeInTheDocument();
+  expect(screen.getByText(/cliente cloud dentro del NAO \(sin PC\)/i)).toBeInTheDocument();
 });
 
 

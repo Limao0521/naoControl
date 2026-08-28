@@ -1,9 +1,13 @@
 # Cambio de proveedor: Nemotron y Gemma local
 
 El control inteligente puede usar NVIDIA Nemotron en la nube o un servidor
-Gemma local o autenticado dentro de la red privada. El audio, la cámara, la
-validación de herramientas y la ejecución NAOqi son compartidos; cambiar el
-proveedor no cambia el espacio de acciones ni permite acceso directo al robot.
+Gemma local o autenticado dentro de la red privada. Nemotron utiliza el cliente
+ligero dentro del propio robot y no necesita PC; Gemma conserva el gateway del
+PC porque el modelo vive en otra máquina. El audio, la cámara, la validación de
+herramientas y la ejecución NAOqi comparten el mismo espacio de acciones.
+
+La instalación autónoma de Nemotron está documentada en
+[nao-native-runtime.md](nao-native-runtime.md).
 
 ## Configuración del PC
 

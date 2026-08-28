@@ -212,6 +212,42 @@ def test_capture_controller_routes_capture_colors_through_led_owner(tmp_path):
     assert leds.modes == [("CAPTURING", False)]
 
 
+def test_capture_controller_dispatches_nemotron_locally_without_pc(tmp_path):
+    class Capture(object):
+        started_at_ms = 100
+
+        def stop(self, now_ms):
+            return {
+                "interaction_id": "turn-native", "duration_ms": 500,
+                "audio_b64": "d2F2", "audio_diagnostics": {},
+            }
+
+        def cancel(self):
+            return None
+
+    class ProviderStore(object):
+        def load(self):
+            return {"selected": "nemotron"}
+
+    class Facade(object):
+        def set_led_rgb(self, *args):
+            return True
+
+    local = []
+    remote = []
+    store = InteractionStateStore(str(tmp_path / "interaction.json"), now_ms=lambda: 123)
+    controller = CaptureController(
+        ModeManager(initial_mode="PROCESSING"), Capture(), store, Facade(),
+        lambda kind, payload: remote.append((kind, payload)),
+        native_dispatch=lambda payload: local.append(payload),
+        provider_store=ProviderStore(),
+    )
+
+    assert controller.finish(600) is True
+    assert local[0]["interaction_id"] == "turn-native"
+    assert remote == []
+
+
 def test_signed_interaction_update_is_persisted_by_gateway():
     updates = []
     core = GatewayCore(
@@ -288,6 +324,30 @@ def test_gateway_server_entry_gate_uses_persisted_target_and_remote_launcher(tmp
 
     assert gate() is True
     assert requests[0][0] == "http://192.168.10.25:6676/start"
+
+
+def test_entry_gate_does_not_contact_pc_for_native_nemotron(tmp_path):
+    class Safety:
+        def check_intelligent_entry(self):
+            return True, []
+
+    class ProviderStore:
+        def load(self):
+            return {"selected": "nemotron"}
+
+    requests = []
+    gate = create_entry_gate(
+        Safety(), b"x" * 32,
+        target_path=str(tmp_path / "missing-target.json"),
+        bundle_path=str(tmp_path / "missing-bundle.tar.gz"),
+        transport=lambda *args: requests.append(args),
+        now_ms=lambda: 1000,
+        provider_store=ProviderStore(),
+        native_ready=lambda: True,
+    )
+
+    assert gate() is True
+    assert requests == []
 
 
 def test_capture_start_failure_recovers_ready_mode_and_keeps_error_visible(tmp_path):

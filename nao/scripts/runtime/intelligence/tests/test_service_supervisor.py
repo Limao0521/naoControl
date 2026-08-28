@@ -66,3 +66,13 @@ def test_launcher_delegates_the_touch_transition_to_deployed_supervisor():
 
 def test_launcher_declares_naoqi_site_packages_for_standalone_execution():
     assert launcher.NAOQI_SITE_PACKAGES == "/opt/aldebaran/lib/python2.7/site-packages"
+
+
+def test_launcher_autostarts_control_services_after_boot():
+    target = launcher.RobustLauncher.__new__(launcher.RobustLauncher)
+    target.services_running = False
+    calls = []
+    target.start_services = lambda: calls.append("start") or True
+
+    assert target.ensure_services_started() is True
+    assert calls == ["start"]

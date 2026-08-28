@@ -132,6 +132,11 @@ const NemotronMenu = () => {
         </select>
         <p>Controla el idioma y voz del robot para las respuestas inteligentes.</p>
         <p>Seleccionado: {PROVIDER_LABELS[provider.selected]}</p>
+        <p>
+          Ejecución: {providerChoice === 'nemotron'
+            ? 'cliente cloud dentro del NAO (sin PC)'
+            : 'gateway en el PC que aloja o alcanza Gemma'}
+        </p>
         <p>Activo: {provider.active ? PROVIDER_LABELS[provider.active] : 'ninguno'}</p>
         <p className={provider.healthy ? 'provider-ok' : 'provider-offline'}>
           {provider.healthy ? 'Proveedor disponible' : 'Proveedor no disponible'}

@@ -14,6 +14,9 @@ def test_deploy_script_preserves_robot_secret_without_transferring_pc_env():
     assert "autoload.ini" not in content
     assert 'for service in control web camera pc_bundle intelligence' in content
     assert 'stop_nemotron.sh' not in content
+    assert 'cp "$base/config/nvidia_api_key"' in content
+    assert '[switch]$ConfigureNemotron' in content
+    assert "'tools\\configure-nao-nemotron.ps1'" in content
 
 
 def test_deploy_script_validates_nemotron_runtime_before_success():
@@ -31,6 +34,7 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert '"$base/nao/scripts/runtime/intelligence/provider_config.py"' in content
     assert '"$base/nao/scripts/runtime/intelligence/led_controller.py"' in content
     assert 'test -f "$staged/config/agent_knowledge.json"' in content
+    assert '"$base/nao/scripts/runtime/intelligence/native_nemotron.py"' in content
 
 
 def test_deploy_preserves_the_configured_pc_gateway_target():
@@ -79,6 +83,7 @@ def test_nao_archive_builder_writes_writable_directories(tmp_path):
         assert runtime.mode & 0o200
         assert contents.getmember("config/action_registry.json").mode == 0o644
         assert "config/robot_gateway.secret" not in contents.getnames()
+        assert "config/nvidia_api_key" not in contents.getnames()
         assert "nao/scripts/runtime/network_admin.py" in contents.getnames()
         assert "pc_gateway/src/nao_gateway/launcher_service.py" in contents.getnames()
 
@@ -92,6 +97,8 @@ def test_start_script_builds_and_serves_the_pc_gateway_bundle():
     assert "config/agent_knowledge.json" in content
     assert "SimpleHTTPServer 6677" in content
     assert "start_service pc_bundle" in content
+    assert "--server_ip 127.0.0.1" in content
+    assert "169.254.151.5" not in content
 
 
 def test_start_script_rebuilds_bundle_atomically_on_every_start():

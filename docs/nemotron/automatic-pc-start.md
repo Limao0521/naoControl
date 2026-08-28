@@ -1,9 +1,13 @@
-# Inicio automático del gateway Nemotron en el PC
+# Launcher opcional de PC para Gemma LAN
+
+> Este documento describe el modo de compatibilidad para **Gemma LAN**. Nemotron
+> se ejecuta ahora con un cliente ligero dentro del robot y no necesita este
+> launcher. Consulte [nao-native-runtime.md](nao-native-runtime.md).
 
 La selección entre Nemotron y Gemma local se realiza desde el panel web y está
-documentada en [provider-switching.md](provider-switching.md). El launcher sigue
-siendo común a ambos proveedores: descarga el mismo gateway y las credenciales
-permanecen exclusivamente en el `.env` del PC.
+documentada en [provider-switching.md](provider-switching.md). El launcher se
+conserva únicamente para Gemma; sus credenciales permanecen en el `.env` del PC
+que ejecuta o alcanza ese modelo.
 
 ## Arquitectura operativa
 
