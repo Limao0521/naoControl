@@ -81,12 +81,13 @@ test('reads selected and active intelligent provider from the control socket', a
   ]);
   socket.message({ intelligenceProviderStatus: {
     success: true, selected: 'gemma_local', active: 'nemotron',
-    healthy: true, error: '', language: 'es', selection_version: 2, updated_at_ms: 1234,
+    healthy: true, error: '', language: 'es', selection_version: 2,
+    gemma_base_url: 'http://192.168.23.1:8080/v1', updated_at_ms: 1234,
   } });
 
   await expect(pending).resolves.toEqual({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
-    error: '', language: 'es', updated_at_ms: 1234,
+    error: '', language: 'es', gemma_base_url: 'http://192.168.23.1:8080/v1', updated_at_ms: 1234,
   });
 });
 
@@ -106,7 +107,8 @@ test('saves only an allowlisted provider identifier', async () => {
   }]);
   socket.message({ setIntelligenceProvider: {
     success: true, selected: 'gemma_local', active: 'nemotron',
-    healthy: true, error: '', language: 'es', selection_version: 2, updated_at_ms: 1234,
+    healthy: true, error: '', language: 'es', selection_version: 2,
+    gemma_base_url: 'http://192.168.23.1:8080/v1', updated_at_ms: 1234,
   } });
 
   await expect(pending).resolves.toMatchObject({ selected: 'gemma_local' });
@@ -132,7 +134,8 @@ test('saves only Spanish or English as intelligent response language', async () 
   }]);
   socket.message({ setIntelligenceLanguage: {
     success: true, selected: 'gemma_local', active: 'nemotron',
-    healthy: true, error: '', language: 'en', updated_at_ms: 1234,
+    healthy: true, error: '', language: 'en',
+    gemma_base_url: 'http://192.168.23.1:8080/v1', updated_at_ms: 1234,
   } });
 
   await expect(pending).resolves.toMatchObject({ language: 'en' });

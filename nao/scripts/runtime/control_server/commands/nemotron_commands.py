@@ -143,6 +143,40 @@ class SetIntelligenceProviderCommand(_ProviderCommand):
         return True
 
 
+class SetGemmaEndpointCommand(_ProviderCommand):
+    """Store a non-secret private-LAN Gemma endpoint for the PC gateway."""
+    ACTION = "setGemmaEndpoint"
+
+    def get_action_name(self):
+        return self.ACTION
+
+    def execute(self, message, websocket):
+        if not self._authorized(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
+            })
+            return False
+        if not isinstance(message, dict) or set(message) != {
+            "action", "gemma_base_url"
+        }:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
+            })
+            return False
+        try:
+            state = self.provider_store.save_gemma_base_url(
+                message.get("gemma_base_url")
+            )
+        except ProviderConfigError:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_gemma_endpoint",
+            })
+            return False
+        state["success"] = True
+        self._send(websocket, self.ACTION, state)
+        return True
+
+
 class SetIntelligenceLanguageCommand(_ProviderCommand):
     ACTION = "setIntelligenceLanguage"
     TTS_LANGUAGES = {"es": "Spanish", "en": "English"}

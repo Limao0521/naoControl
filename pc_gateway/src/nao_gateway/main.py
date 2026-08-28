@@ -11,7 +11,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from .agent_host import AgentHost
-from .config import GatewaySettings
+from .config import GatewaySettings, validate_gemma_base_url
 from .nemotron import NemotronClient
 from .providers import GemmaLocalClient, ProviderActivationError, ProviderRouter
 from .robot_client import RobotClient
@@ -53,11 +53,22 @@ async def handle_audio_result(robot, host, payload: dict) -> None:
             )
 
 
-async def handle_provider_config(robot, providers, payload: dict) -> None:
+async def handle_provider_config(robot, providers, payload: dict, settings=None) -> None:
     """Activate an allowlisted provider and report bounded status to the NAO."""
     selected = payload.get("selected", "") if isinstance(payload, dict) else ""
     language = payload.get("language", "es") if isinstance(payload, dict) else "es"
     try:
+        gemma_base_url = payload.get("gemma_base_url", "")
+        gateway_settings = settings or getattr(providers, "gemma_settings", None)
+        if selected == "gemma_local" and gemma_base_url and gateway_settings is not None:
+            normalized_url = validate_gemma_base_url(gemma_base_url)
+            await providers.replace_factory(
+                "gemma_local",
+                lambda: GemmaLocalClient(
+                    normalized_url, gateway_settings.gemma_model,
+                    gateway_settings.gemma_api_key,
+                ),
+            )
         providers.set_language(language)
         status = await providers.activate(selected)
     except Exception as error:
@@ -136,6 +147,7 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
             settings.gemma_base_url, settings.gemma_model, settings.gemma_api_key,
         ),
     })
+    providers.gemma_settings = settings
     await providers.activate(settings.default_provider)
     robot_host = settings.robot_url.split("//", 1)[1].split(":", 1)[0]
 

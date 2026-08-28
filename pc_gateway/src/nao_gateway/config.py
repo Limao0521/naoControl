@@ -12,6 +12,38 @@ class ConfigurationError(ValueError):
     """Raised when a required or security-sensitive setting is invalid."""
 
 
+def validate_gemma_base_url(value: str) -> str:
+    """Return a safe private-LAN Gemma endpoint or reject it before any request."""
+    gemma_base_url = value.strip().rstrip("/")
+    parsed_gemma = urlparse(gemma_base_url)
+    if parsed_gemma.scheme not in {"http", "https"} or not parsed_gemma.hostname:
+        raise ConfigurationError("GEMMA_BASE_URL must be an HTTP URL")
+    if parsed_gemma.username is not None or parsed_gemma.password is not None:
+        raise ConfigurationError("GEMMA_BASE_URL must not contain credentials")
+    if parsed_gemma.query or parsed_gemma.fragment or parsed_gemma.path != "/v1":
+        raise ConfigurationError("GEMMA_BASE_URL must end in /v1")
+    gemma_host = parsed_gemma.hostname
+    try:
+        gemma_address = ip_address(gemma_host)
+    except ValueError:
+        raise ConfigurationError("GEMMA_BASE_URL must use a literal IPv4 address")
+    is_loopback = gemma_address.is_loopback
+    private_networks = (
+        IPv4Network("10.0.0.0/8"),
+        IPv4Network("172.16.0.0/12"),
+        IPv4Network("192.168.0.0/16"),
+    )
+    is_private_lan = (
+        isinstance(gemma_address, IPv4Address)
+        and any(gemma_address in network for network in private_networks)
+    )
+    if not is_loopback and not is_private_lan:
+        raise ConfigurationError(
+            "GEMMA_BASE_URL must use loopback or a private network IPv4 address"
+        )
+    return gemma_base_url
+
+
 @dataclass(frozen=True)
 class GatewaySettings:
     nvidia_api_key: str
@@ -49,24 +81,11 @@ class GatewaySettings:
         if asr_url and urlparse(asr_url).scheme != "https":
             raise ConfigurationError("NVIDIA_ASR_URL must use HTTPS")
 
-        gemma_base_url = environ.get(
+        gemma_base_url = validate_gemma_base_url(environ.get(
             "GEMMA_BASE_URL", "http://127.0.0.1:8080/v1"
-        ).rstrip("/")
-        parsed_gemma = urlparse(gemma_base_url)
-        if parsed_gemma.scheme not in {"http", "https"} or not parsed_gemma.hostname:
-            raise ConfigurationError("GEMMA_BASE_URL must be an HTTP URL")
-        if parsed_gemma.username is not None or parsed_gemma.password is not None:
-            raise ConfigurationError("GEMMA_BASE_URL must not contain credentials")
-        gemma_host = parsed_gemma.hostname
-        gemma_address = None
-        try:
-            gemma_address = ip_address(gemma_host)
-        except ValueError:
-            pass
-        is_loopback = (
-            gemma_host == "localhost"
-            or (gemma_address is not None and gemma_address.is_loopback)
-        )
+        ))
+        gemma_address = ip_address(urlparse(gemma_base_url).hostname)
+        is_loopback = gemma_address.is_loopback
         private_networks = (
             IPv4Network("10.0.0.0/8"),
             IPv4Network("172.16.0.0/12"),

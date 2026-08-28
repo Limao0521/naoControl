@@ -13,6 +13,7 @@ from nemotron_commands import NemotronStatusCommand
 try:
     from nemotron_commands import (
         IntelligenceProviderStatusCommand,
+        SetGemmaEndpointCommand,
         SetIntelligenceLanguageCommand,
         SetIntelligenceProviderCommand,
     )
@@ -20,6 +21,7 @@ except ImportError:
     IntelligenceProviderStatusCommand = None
     SetIntelligenceProviderCommand = None
     SetIntelligenceLanguageCommand = None
+    SetGemmaEndpointCommand = None
 from command_factory import CommandFactory
 
 
@@ -119,6 +121,7 @@ class FakeProviderStore(object):
         self.state = {
             "selected": "nemotron", "active": "nemotron", "healthy": True,
             "error": "", "language": "es", "updated_at_ms": 1234,
+            "gemma_base_url": "", "gemma_endpoint_version": 0,
         }
 
     def load(self):
@@ -130,6 +133,10 @@ class FakeProviderStore(object):
 
     def save_language(self, language):
         self.state["language"] = language
+        return dict(self.state)
+
+    def save_gemma_base_url(self, endpoint):
+        self.state["gemma_base_url"] = endpoint
         return dict(self.state)
 
 
@@ -145,9 +152,10 @@ def test_provider_status_exposes_only_bounded_nonsecret_state_to_configured_pc()
     assert socket.messages == [{"intelligenceProviderStatus": {
         "success": True, "selected": "nemotron", "active": "nemotron",
         "healthy": True, "error": "", "language": "es", "updated_at_ms": 1234,
+        "gemma_base_url": "", "gemma_endpoint_version": 0,
     }}]
     assert "key" not in json.dumps(socket.messages).lower()
-    assert "url" not in json.dumps(socket.messages).lower()
+    assert "api_key" not in json.dumps(socket.messages).lower()
 
 
 def test_provider_selection_persists_allowlisted_value_from_configured_pc():
@@ -164,6 +172,23 @@ def test_provider_selection_persists_allowlisted_value_from_configured_pc():
     }, socket) is True
     assert provider_store.state["selected"] == "gemma_local"
     assert socket.messages[0]["setIntelligenceProvider"]["selected"] == "gemma_local"
+
+
+def test_gemma_endpoint_is_configured_from_the_allowed_pc_without_a_key():
+    assert SetGemmaEndpointCommand is not None, "Gemma endpoint command is missing"
+    socket = FakeSocket()
+    provider_store = FakeProviderStore()
+    command = SetGemmaEndpointCommand(
+        None, FakeLogger(), provider_store=provider_store,
+        target_store=FakeTargetStore(),
+    )
+
+    assert command.execute({
+        "action": "setGemmaEndpoint",
+        "gemma_base_url": "http://192.168.23.1:8080/v1",
+    }, socket) is True
+    assert provider_store.state["gemma_base_url"] == "http://192.168.23.1:8080/v1"
+    assert "key" not in json.dumps(socket.messages).lower()
 
 
 def test_provider_selection_rejects_unconfigured_peer_without_mutation():
@@ -199,6 +224,7 @@ def test_command_factory_exposes_provider_status_and_selection_commands():
         factory.create_command("setIntelligenceLanguage"),
         SetIntelligenceLanguageCommand,
     )
+    assert isinstance(factory.create_command("setGemmaEndpoint"), SetGemmaEndpointCommand)
 
 
 def test_intelligence_language_updates_tts_and_persisted_agent_language():

@@ -9,7 +9,7 @@ import { nemotronApi } from '../services/nemotronApi';
 jest.mock('../services/nemotronApi', () => ({
   nemotronApi: {
     status: jest.fn(), providerStatus: jest.fn(), setProvider: jest.fn(),
-    setLanguage: jest.fn(),
+    setLanguage: jest.fn(), setGemmaEndpoint: jest.fn(),
   },
 }));
 
@@ -26,14 +26,22 @@ beforeEach(() => {
   nemotronApi.providerStatus.mockResolvedValue({
     selected: 'nemotron', active: 'nemotron', healthy: true,
     error: '', language: 'es', updated_at_ms: 1234,
+    gemma_base_url: '',
   });
   nemotronApi.setProvider.mockResolvedValue({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
     error: '', language: 'es', updated_at_ms: 1235,
+    gemma_base_url: 'http://192.168.23.1:8080/v1',
   });
   nemotronApi.setLanguage.mockResolvedValue({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
     error: '', language: 'en', updated_at_ms: 1236,
+    gemma_base_url: 'http://192.168.23.1:8080/v1',
+  });
+  nemotronApi.setGemmaEndpoint.mockResolvedValue({
+    selected: 'nemotron', active: 'nemotron', healthy: true,
+    error: '', language: 'es', gemma_base_url: 'http://192.168.23.1:8080/v1',
+    updated_at_ms: 1235,
   });
 });
 
@@ -62,19 +70,21 @@ test('shows listening state before a batch transcription exists', async () => {
 });
 
 
-test('selects Gemma local from the intelligent control panel without exposing endpoint or key', async () => {
+test('configures Gemma LAN endpoint from the intelligent control panel without exposing its key', async () => {
   render(<NemotronMenu />);
 
   const selector = await screen.findByLabelText('Proveedor de inteligencia');
   expect(screen.getByRole('option', { name: 'Gemma LAN autenticado' })).toBeInTheDocument();
   fireEvent.change(selector, { target: { value: 'gemma_local' } });
+  const endpoint = screen.getByLabelText('Endpoint de Gemma LAN');
+  fireEvent.change(endpoint, { target: { value: 'http://192.168.23.1:8080/v1' } });
   fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
   await waitFor(() => {
+    expect(nemotronApi.setGemmaEndpoint).toHaveBeenCalledWith('http://192.168.23.1:8080/v1');
     expect(nemotronApi.setProvider).toHaveBeenCalledWith('gemma_local');
   });
   expect(screen.getByText('Cambio solicitado. Se aplicará antes del siguiente turno.')).toBeInTheDocument();
-  expect(screen.queryByLabelText(/url/i)).not.toBeInTheDocument();
   expect(screen.queryByLabelText(/api key/i)).not.toBeInTheDocument();
 });
 
@@ -97,6 +107,7 @@ test('shows provider activation error while preserving visible active provider',
   nemotronApi.providerStatus.mockResolvedValue({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
     error: 'Gemma local no responde', language: 'es', updated_at_ms: 1236,
+    gemma_base_url: 'http://192.168.23.1:8080/v1',
   });
 
   render(<NemotronMenu />);

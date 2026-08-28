@@ -35,6 +35,7 @@ const NemotronMenu = () => {
   const [connected, setConnected] = useState(true);
   const [provider, setProvider] = useState({
     selected: 'nemotron', active: '', healthy: false, error: '', language: 'es',
+    gemma_base_url: '',
     updated_at_ms: 0,
   });
   const [providerChoice, setProviderChoice] = useState('nemotron');
@@ -43,6 +44,8 @@ const NemotronMenu = () => {
   const [providerMessage, setProviderMessage] = useState('');
   const [languageChoice, setLanguageChoice] = useState('es');
   const [languageTouched, setLanguageTouched] = useState(false);
+  const [gemmaEndpoint, setGemmaEndpoint] = useState('');
+  const [gemmaEndpointTouched, setGemmaEndpointTouched] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -59,6 +62,7 @@ const NemotronMenu = () => {
           setProvider(nextProvider);
           if (!providerTouched) setProviderChoice(nextProvider.selected);
           if (!languageTouched) setLanguageChoice(nextProvider.language);
+          if (!gemmaEndpointTouched) setGemmaEndpoint(nextProvider.gemma_base_url);
           setConnected(true);
         }
       } catch (_error) {
@@ -73,7 +77,7 @@ const NemotronMenu = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [providerTouched, languageTouched]);
+  }, [providerTouched, languageTouched, gemmaEndpointTouched]);
 
   const saveConfiguration = async (event) => {
     event.preventDefault();
@@ -81,11 +85,13 @@ const NemotronMenu = () => {
     setProviderMessage('');
     try {
       let next = provider;
+      if (gemmaEndpointTouched) next = await nemotronApi.setGemmaEndpoint(gemmaEndpoint);
       if (providerTouched) next = await nemotronApi.setProvider(providerChoice);
       if (languageTouched) next = await nemotronApi.setLanguage(languageChoice);
       setProvider(next);
       setProviderTouched(false);
       setLanguageTouched(false);
+      setGemmaEndpointTouched(false);
       setProviderMessage('Cambio solicitado. Se aplicará antes del siguiente turno.');
     } catch (_error) {
       setProviderMessage('No fue posible cambiar el proveedor.');
@@ -117,6 +123,26 @@ const NemotronMenu = () => {
           <option value="nemotron">Nemotron NVIDIA</option>
           <option value="gemma_local">Gemma LAN autenticado</option>
         </select>
+        {providerChoice === 'gemma_local' && (
+          <>
+            <label htmlFor="gemma-base-url">Endpoint de Gemma LAN</label>
+            <input
+              id="gemma-base-url"
+              type="url"
+              inputMode="url"
+              autoComplete="off"
+              placeholder="http://192.168.23.1:8080/v1"
+              value={gemmaEndpoint}
+              onChange={(event) => {
+                setGemmaEndpoint(event.target.value);
+                setGemmaEndpointTouched(true);
+              }}
+              disabled={providerBusy}
+              required
+            />
+            <p>Solo se guarda una dirección privada; la clave permanece en el PC de Gemma.</p>
+          </>
+        )}
         <label htmlFor="intelligence-language">Idioma de respuesta</label>
         <select
           id="intelligence-language"

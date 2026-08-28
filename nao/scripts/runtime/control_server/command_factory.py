@@ -49,6 +49,7 @@ from network_commands import NetworkAdminCommand
 from nemotron_commands import (
     IntelligenceProviderStatusCommand,
     NemotronStatusCommand,
+    SetGemmaEndpointCommand,
     SetIntelligenceLanguageCommand,
     SetIntelligenceProviderCommand,
 )
@@ -184,6 +185,7 @@ class CommandFactory(object):
             'nemotronStatus': NemotronStatusCommand,
             'intelligenceProviderStatus': IntelligenceProviderStatusCommand,
             'setIntelligenceProvider': SetIntelligenceProviderCommand,
+            'setGemmaEndpoint': SetGemmaEndpointCommand,
             'setIntelligenceLanguage': SetIntelligenceLanguageCommand,
         }
     

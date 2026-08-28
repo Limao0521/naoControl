@@ -109,6 +109,21 @@ class ProviderRouter:
         self.clients.clear()
         self.active_name = ""
 
+    async def replace_factory(self, name: str, factory: Callable[[], Any]) -> None:
+        """Discard a stale provider client before changing its network endpoint."""
+        if name not in self.factories:
+            raise ProviderActivationError("unsupported provider")
+        previous = self.clients.pop(name, None)
+        if self.active_name == name:
+            self.active_name = ""
+        if previous is not None:
+            close = getattr(previous, "close", None)
+            if close is not None:
+                result = close()
+                if inspect.isawaitable(result):
+                    await result
+        self.factories[name] = factory
+
 
 class GemmaLocalClient:
     """OpenAI-compatible adapter for authenticated local or private-LAN Gemma."""

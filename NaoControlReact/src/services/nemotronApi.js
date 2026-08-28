@@ -12,6 +12,21 @@ const LANGUAGES = new Set(['es', 'en']);
 const invalid = () => new Error(ERROR_MESSAGE);
 const invalidProvider = () => new Error(PROVIDER_ERROR_MESSAGE);
 
+const validGemmaEndpoint = (value) => {
+  try {
+    const url = new URL(value);
+    const octets = url.hostname.split('.').map(Number);
+    if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password
+      || url.pathname !== '/v1' || url.search || url.hash || octets.length !== 4
+      || octets.some((octet) => !Number.isInteger(octet) || octet < 0 || octet > 255)) return false;
+    return octets[0] === 10
+      || (octets[0] === 172 && octets[1] >= 16 && octets[1] <= 31)
+      || (octets[0] === 192 && octets[1] === 168);
+  } catch (_error) {
+    return false;
+  }
+};
+
 
 const normalize = (raw) => {
   if (!raw || raw.success !== true || !PHASES.has(raw.phase)) throw invalid();
@@ -44,12 +59,16 @@ const normalizeProvider = (raw) => {
   if (typeof raw.healthy !== 'boolean') throw invalidProvider();
   if (typeof raw.error !== 'string' || raw.error.length > 200) throw invalidProvider();
   if (!LANGUAGES.has(raw.language)) throw invalidProvider();
+  if (typeof raw.gemma_base_url !== 'string' || raw.gemma_base_url.length > 120) {
+    throw invalidProvider();
+  }
   return {
     selected: raw.selected,
     active: raw.active,
     healthy: raw.healthy,
     error: raw.error,
     language: raw.language,
+    gemma_base_url: raw.gemma_base_url,
     updated_at_ms: Number.isFinite(raw.updated_at_ms) ? raw.updated_at_ms : 0,
   };
 };
@@ -124,6 +143,13 @@ export const createNemotronApi = (options = {}) => {
       return request(
         { action: 'setIntelligenceLanguage', language },
         'setIntelligenceLanguage', normalizeProvider, invalidProvider,
+      );
+    },
+    setGemmaEndpoint: (gemmaBaseUrl) => {
+      if (!validGemmaEndpoint(gemmaBaseUrl)) return Promise.reject(invalidProvider());
+      return request(
+        { action: 'setGemmaEndpoint', gemma_base_url: gemmaBaseUrl },
+        'setGemmaEndpoint', normalizeProvider, invalidProvider,
       );
     },
   };
