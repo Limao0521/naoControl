@@ -30,6 +30,7 @@ def test_deploy_script_validates_nemotron_runtime_before_success():
     assert '"$base/nao/scripts/runtime/control_server/commands/nemotron_commands.py"' in content
     assert '"$base/nao/scripts/runtime/intelligence/provider_config.py"' in content
     assert '"$base/nao/scripts/runtime/intelligence/led_controller.py"' in content
+    assert 'test -f "$staged/config/agent_knowledge.json"' in content
 
 
 def test_deploy_preserves_the_configured_pc_gateway_target():
@@ -88,6 +89,7 @@ def test_start_script_builds_and_serves_the_pc_gateway_bundle():
     assert "pc_gateway_bundle.tar.gz" in content
     assert "pc_gateway config/action_registry.json" in content
     assert "config/behavior_registry.json" in content
+    assert "config/agent_knowledge.json" in content
     assert "SimpleHTTPServer 6677" in content
     assert "start_service pc_bundle" in content
 

@@ -1,7 +1,7 @@
 # Cambio de proveedor: Nemotron y Gemma local
 
-El control inteligente puede usar NVIDIA Nemotron en la nube o el servidor
-Gemma local del mismo PC que ejecuta el gateway. El audio, la cámara, la
+El control inteligente puede usar NVIDIA Nemotron en la nube o un servidor
+Gemma local o autenticado dentro de la red privada. El audio, la cámara, la
 validación de herramientas y la ejecución NAOqi son compartidos; cambiar el
 proveedor no cambia el espacio de acciones ni permite acceso directo al robot.
 
@@ -14,6 +14,7 @@ PC. No se copia al NAO ni se envía al navegador.
 INTELLIGENCE_PROVIDER=nemotron
 NVIDIA_API_KEY=<clave configurada solo en este PC>
 GEMMA_BASE_URL=http://127.0.0.1:8080/v1
+GEMMA_API_KEY=
 GEMMA_MODEL=
 ```
 
@@ -21,16 +22,38 @@ GEMMA_MODEL=
   sincronizado su selección persistida.
 - `NVIDIA_API_KEY` es obligatoria para activar Nemotron. Puede omitirse si este
   PC usará exclusivamente Gemma y el valor inicial es `gemma_local`.
-- `GEMMA_BASE_URL` solo admite loopback (`127.0.0.1`, `localhost` o `::1`). La
-  interfaz web no puede modificarla.
+- `GEMMA_BASE_URL` admite loopback o una IPv4 literal de las redes privadas
+  `10.0.0.0/8`, `172.16.0.0/12` y `192.168.0.0/16`. No admite destinos públicos
+  ni nombres DNS remotos. La interfaz web no puede modificarla.
+- `GEMMA_API_KEY` puede quedar vacía para loopback. Es obligatoria para una IP
+  privada LAN y se envía como `Authorization: Bearer ...`.
 - `GEMMA_MODEL` vacío consulta `GET /v1/models` y toma el primer modelo activo.
 
-Para Gemma, inicie primero el servidor local documentado y compruebe:
+Para Gemma en el mismo PC, inicie primero el servidor local y compruebe:
 
 ```powershell
 Invoke-RestMethod http://127.0.0.1:8080/health
 Invoke-RestMethod http://127.0.0.1:8080/v1/models | ConvertTo-Json -Depth 10
 ```
+
+### Gemma autenticado en otro PC
+
+La configuración operativa actual usa:
+
+```dotenv
+GEMMA_BASE_URL=http://172.23.12.52:8080/v1
+GEMMA_API_KEY=<clave privada del servidor Gemma>
+```
+
+Estas variables pertenecen al PC que ejecuta el gateway, en:
+
+```text
+%LOCALAPPDATA%\naoControlGatewayHost\.env
+```
+
+No copie la clave al repositorio, al NAO ni a la interfaz web. Para validar la
+red sin revelar la clave, una petición sin cabecera debe responder `HTTP 401`;
+el gateway valida después `/v1/models` usando la credencial del `.env`.
 
 El gateway no inicia Docker ni el modelo Gemma. El launcher del puerto 6676
 solo instala y ejecuta el gateway recibido desde el NAO.
@@ -40,9 +63,11 @@ solo instala y ejecuta el gateway recibido desde el NAO.
 1. Inicie el control web y abra `http://<IP_DEL_NAO>:3000`.
 2. Abra el panel **Nemotron**, cuyo contenido se titula **Sistema inteligente**.
 3. En **Proveedor de inteligencia**, seleccione **Nemotron NVIDIA** o
-   **Gemma local**.
-4. Pulse **Guardar proveedor**.
-5. Compruebe por separado **Seleccionado**, **Activo** y la disponibilidad.
+   **Gemma LAN autenticado**.
+4. En **Idioma de respuesta**, seleccione **Español** o **English**. Este valor
+   controla tanto la respuesta del modelo como la voz del NAO.
+5. Pulse **Guardar configuración**.
+6. Compruebe por separado **Seleccionado**, **Activo** y la disponibilidad.
 
 La selección se guarda en:
 
@@ -50,14 +75,16 @@ La selección se guarda en:
 /home/nao/naoControl/config/intelligence_provider.json
 ```
 
-El archivo contiene únicamente identificadores y estado limitado; no contiene
-claves ni URLs. El gateway del NAO publica el cambio por el WebSocket firmado.
+El archivo contiene únicamente identificadores, el idioma y estado limitado;
+no contiene claves ni URLs. El gateway del NAO publica el cambio por el
+WebSocket firmado.
 El PC comprueba el proveedor y lo activa antes del siguiente turno. No se
 cambia de modelo a mitad de una interacción.
 
-Si Gemma no está iniciado, **Seleccionado** puede indicar Gemma mientras
+Si Gemma no está iniciado, no es alcanzable o rechaza la clave, **Seleccionado**
+puede indicar Gemma mientras
 **Activo** continúa mostrando Nemotron junto con el error. Inicie Gemma y pulse
-**Guardar proveedor** de nuevo para repetir la comprobación.
+**Guardar configuración** de nuevo para repetir la comprobación.
 
 ## Diagnóstico
 
@@ -74,7 +101,7 @@ En el NAO:
 tail -F /home/nao/logs/naoControl/intelligence.log
 ```
 
-El estado web nunca devuelve la clave NVIDIA, el endpoint Gemma ni el contenido
+El estado web nunca devuelve las claves NVIDIA/Gemma, el endpoint Gemma ni el contenido
 del `.env`.
 
 ## LEDs del modo inteligente

@@ -56,7 +56,9 @@ async def handle_audio_result(robot, host, payload: dict) -> None:
 async def handle_provider_config(robot, providers, payload: dict) -> None:
     """Activate an allowlisted provider and report bounded status to the NAO."""
     selected = payload.get("selected", "") if isinstance(payload, dict) else ""
+    language = payload.get("language", "es") if isinstance(payload, dict) else "es"
     try:
+        providers.set_language(language)
         status = await providers.activate(selected)
     except Exception as error:
         status = providers.status()
@@ -131,7 +133,7 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
     providers = ProviderRouter({
         "nemotron": create_nemotron,
         "gemma_local": lambda: GemmaLocalClient(
-            settings.gemma_base_url, settings.gemma_model,
+            settings.gemma_base_url, settings.gemma_model, settings.gemma_api_key,
         ),
     })
     await providers.activate(settings.default_provider)

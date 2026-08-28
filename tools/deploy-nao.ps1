@@ -64,6 +64,7 @@ test -f "$staged/nao/scripts/runtime/control_server/commands/network_commands.py
 test -f "$staged/nao/scripts/runtime/control_server/commands/nemotron_commands.py"
 test -f "$staged/nao/scripts/runtime/start_nemotron.sh"
 test -f "$staged/NaoControlReact/build/index.html"
+test -f "$staged/config/agent_knowledge.json"
 if test -f "$base/config/robot_gateway.secret"; then
     mkdir -p "$staged/config"
     cp "$base/config/robot_gateway.secret" "$staged/config/robot_gateway.secret"

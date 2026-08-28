@@ -8,6 +8,7 @@ import time
 
 
 ALLOWED_PROVIDERS = ("nemotron", "gemma_local")
+ALLOWED_LANGUAGES = ("es", "en")
 DEFAULT_PATH = "/home/nao/naoControl/config/intelligence_provider.json"
 
 try:
@@ -32,8 +33,21 @@ class ProviderConfigStore(object):
             "healthy": False,
             "error": "",
             "selection_version": 0,
+            "language": "es",
+            "language_version": 0,
             "updated_at_ms": 0,
         }
+
+    def _migrate(self, data):
+        if not isinstance(data, dict):
+            return data
+        legacy_keys = set(self._default()) - {"language", "language_version"}
+        if set(data) == legacy_keys:
+            migrated = dict(data)
+            migrated["language"] = "es"
+            migrated["language_version"] = 0
+            return migrated
+        return data
 
     def _valid(self, data):
         if not isinstance(data, dict):
@@ -49,6 +63,10 @@ class ProviderConfigStore(object):
             and isinstance(data.get("selection_version"), int)
             and not isinstance(data.get("selection_version"), bool)
             and data.get("selection_version") >= 0
+            and data.get("language") in ALLOWED_LANGUAGES
+            and isinstance(data.get("language_version"), int)
+            and not isinstance(data.get("language_version"), bool)
+            and data.get("language_version") >= 0
             and isinstance(data.get("updated_at_ms"), (int, float))
         )
 
@@ -56,7 +74,7 @@ class ProviderConfigStore(object):
         try:
             with open(self.path, "rb") as source:
                 raw = source.read().decode("utf-8")
-            data = json.loads(raw)
+            data = self._migrate(json.loads(raw))
             if self._valid(data):
                 return dict(data)
         except (IOError, OSError, TypeError, ValueError, UnicodeError):
@@ -88,6 +106,15 @@ class ProviderConfigStore(object):
         data = self.load()
         data["selected"] = selected
         data["selection_version"] += 1
+        data["updated_at_ms"] = self.now_ms()
+        return self._save(data)
+
+    def save_language(self, language):
+        if language not in ALLOWED_LANGUAGES:
+            raise ProviderConfigError("unsupported language")
+        data = self.load()
+        data["language"] = language
+        data["language_version"] += 1
         data["updated_at_ms"] = self.now_ms()
         return self._save(data)
 
@@ -125,9 +152,15 @@ class ProviderConfigBroadcaster(object):
     def sync(self, force=False):
         state = self.store.load()
         selected = state["selected"]
-        selection = (selected, state["selection_version"])
+        language = state["language"]
+        selection = (
+            selected, state["selection_version"],
+            language, state["language_version"],
+        )
         if not force and selection == self.last_selection:
             return False
         self.last_selection = selection
-        self.send_all("provider_config", {"selected": selected})
+        self.send_all("provider_config", {
+            "selected": selected, "language": language,
+        })
         return True

@@ -81,12 +81,12 @@ test('reads selected and active intelligent provider from the control socket', a
   ]);
   socket.message({ intelligenceProviderStatus: {
     success: true, selected: 'gemma_local', active: 'nemotron',
-    healthy: true, error: '', selection_version: 2, updated_at_ms: 1234,
+    healthy: true, error: '', language: 'es', selection_version: 2, updated_at_ms: 1234,
   } });
 
   await expect(pending).resolves.toEqual({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
-    error: '', updated_at_ms: 1234,
+    error: '', language: 'es', updated_at_ms: 1234,
   });
 });
 
@@ -106,7 +106,7 @@ test('saves only an allowlisted provider identifier', async () => {
   }]);
   socket.message({ setIntelligenceProvider: {
     success: true, selected: 'gemma_local', active: 'nemotron',
-    healthy: true, error: '', selection_version: 2, updated_at_ms: 1234,
+    healthy: true, error: '', language: 'es', selection_version: 2, updated_at_ms: 1234,
   } });
 
   await expect(pending).resolves.toMatchObject({ selected: 'gemma_local' });
@@ -114,4 +114,29 @@ test('saves only an allowlisted provider identifier', async () => {
     'Proveedor inteligente no disponible.'
   );
   expect(FakeWebSocket.instances).toHaveLength(1);
+});
+
+
+test('saves only Spanish or English as intelligent response language', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '169.254.197.40' },
+    timeoutMs: 1000,
+  });
+
+  const pending = api.setLanguage('en');
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+  expect(socket.sent.map(JSON.parse)).toEqual([{
+    action: 'setIntelligenceLanguage', language: 'en',
+  }]);
+  socket.message({ setIntelligenceLanguage: {
+    success: true, selected: 'gemma_local', active: 'nemotron',
+    healthy: true, error: '', language: 'en', updated_at_ms: 1234,
+  } });
+
+  await expect(pending).resolves.toMatchObject({ language: 'en' });
+  await expect(api.setLanguage('French')).rejects.toThrow(
+    'Proveedor inteligente no disponible.'
+  );
 });

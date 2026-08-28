@@ -17,6 +17,10 @@ class FakeProvider:
     def __init__(self, healthy=True):
         self.healthy = healthy
         self.closed = False
+        self.language = "es"
+
+    def set_language(self, language):
+        self.language = language
 
     async def validate(self):
         if not self.healthy:
@@ -69,6 +73,22 @@ async def test_router_rejects_unknown_provider_without_calling_factory():
 
 
 @pytest.mark.asyncio
+async def test_router_applies_selected_language_to_current_and_future_provider():
+    first = FakeProvider()
+    second = FakeProvider()
+    router = ProviderRouter({"nemotron": lambda: first, "gemma_local": lambda: second})
+
+    router.set_language("en")
+    await router.activate("nemotron")
+    await router.activate("gemma_local")
+
+    assert first.language == "en"
+    assert second.language == "en"
+    with pytest.raises(ProviderActivationError, match="unsupported language"):
+        router.set_language("French")
+
+
+@pytest.mark.asyncio
 async def test_gemma_discovers_model_and_sends_wav_image_as_local_multimodal_content():
     """Changing Gemma media fields would make the documented llama.cpp API ignore audio."""
     assert GemmaLocalClient is not None, "Gemma local client is missing"
@@ -103,6 +123,25 @@ async def test_gemma_discovers_model_and_sends_wav_image_as_local_multimodal_con
 
 
 @pytest.mark.asyncio
+async def test_gemma_lan_client_authenticates_every_request_with_configured_key():
+    authorization = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        authorization.append(request.headers.get("authorization"))
+        return httpx.Response(200, json={"data": [{"id": "gemma-lan-model"}]})
+
+    client = GemmaLocalClient(
+        "http://172.23.12.52:8080/v1",
+        api_key="private-lan-test-key",
+        transport=httpx.MockTransport(handler),
+    )
+
+    await client.validate()
+
+    assert authorization == ["Bearer private-lan-test-key"]
+
+
+@pytest.mark.asyncio
 async def test_gemma_decision_uses_same_native_safe_tool_contract():
     assert GemmaLocalClient is not None, "Gemma local client is missing"
     captured = {}
@@ -130,6 +169,28 @@ async def test_gemma_decision_uses_same_native_safe_tool_contract():
     assert decision.speech == "Me sentaré."
     assert decision.tool_calls[0].name == "set_posture"
     assert decision.tool_calls[0].arguments == {"posture": "Sit", "speed": 0.35}
+
+
+@pytest.mark.asyncio
+async def test_gemma_decision_uses_runtime_language_and_shared_identity():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={"choices": [{"message": {
+            "content": '{"speech":"Hello","tool_calls":[]}',
+        }}]})
+
+    client = GemmaLocalClient(
+        "http://127.0.0.1:8080/v1", model="gemma-local-model",
+        language="en", transport=httpx.MockTransport(handler),
+    )
+
+    await client.decide("Hello", "A person", [])
+
+    system_prompt = captured["messages"][0]["content"]
+    assert "Respond only in English" in system_prompt
+    assert "robotic captain of the HSL team" in system_prompt
 
 
 @pytest.mark.asyncio

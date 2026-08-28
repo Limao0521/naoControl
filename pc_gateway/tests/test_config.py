@@ -35,6 +35,41 @@ def test_local_provider_configuration_does_not_require_nvidia_key() -> None:
     assert settings.gemma_base_url == "http://127.0.0.1:8080/v1"
 
 
+def test_authenticated_private_lan_gemma_endpoint_is_allowed() -> None:
+    environment = valid_environment(
+        INTELLIGENCE_PROVIDER="gemma_local",
+        GEMMA_BASE_URL="http://172.23.12.52:8080/v1",
+        GEMMA_API_KEY="private-lan-test-key",
+    )
+    del environment["NVIDIA_API_KEY"]
+
+    settings = GatewaySettings.from_env(environment)
+
+    assert settings.gemma_base_url == "http://172.23.12.52:8080/v1"
+    assert settings.gemma_api_key == "private-lan-test-key"
+
+
+def test_private_lan_gemma_endpoint_requires_api_key() -> None:
+    environment = valid_environment(
+        INTELLIGENCE_PROVIDER="gemma_local",
+        GEMMA_BASE_URL="http://172.23.12.52:8080/v1",
+    )
+    del environment["NVIDIA_API_KEY"]
+
+    with pytest.raises(ConfigurationError, match="GEMMA_API_KEY"):
+        GatewaySettings.from_env(environment)
+
+
+def test_public_gemma_endpoint_is_rejected_even_with_api_key() -> None:
+    environment = valid_environment(
+        GEMMA_BASE_URL="http://8.8.8.8:8080/v1",
+        GEMMA_API_KEY="must-not-authorize-public-destinations",
+    )
+
+    with pytest.raises(ConfigurationError, match="private network"):
+        GatewaySettings.from_env(environment)
+
+
 def test_nvidia_base_url_must_use_https() -> None:
     environment = valid_environment(NVIDIA_BASE_URL="http://example.test/v1")
 

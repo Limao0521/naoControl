@@ -23,7 +23,8 @@ def test_missing_or_malformed_file_falls_back_to_nonsecret_nemotron_selection(tm
     config = store(tmp_path / "provider.json")
     assert config.load() == {
         "selected": "nemotron", "active": "", "healthy": False,
-        "error": "", "selection_version": 0, "updated_at_ms": 0,
+        "error": "", "selection_version": 0, "language": "es",
+        "language_version": 0, "updated_at_ms": 0,
     }
 
     (tmp_path / "provider.json").write_text('{"selected":"other","api_key":"leak"}')
@@ -56,7 +57,8 @@ def test_pc_status_update_preserves_selection_and_bounds_error(tmp_path):
 
     assert result == {
         "selected": "gemma_local", "active": "nemotron", "healthy": True,
-        "error": "", "selection_version": 1, "updated_at_ms": 1234,
+        "error": "", "selection_version": 1, "language": "es",
+        "language_version": 0, "updated_at_ms": 1234,
     }
     with pytest.raises(ProviderConfigError, match="invalid"):
         config.save_status({"active": "nemotron", "healthy": False, "error": "x" * 201})
@@ -78,7 +80,41 @@ def test_broadcaster_sends_only_allowlisted_selection_when_file_changes(tmp_path
     broadcaster.sync()
 
     assert sent == [
-        ("provider_config", {"selected": "nemotron"}),
-        ("provider_config", {"selected": "gemma_local"}),
-        ("provider_config", {"selected": "gemma_local"}),
+        ("provider_config", {"selected": "nemotron", "language": "es"}),
+        ("provider_config", {"selected": "gemma_local", "language": "es"}),
+        ("provider_config", {"selected": "gemma_local", "language": "es"}),
     ]
+
+
+def test_language_is_allowlisted_persisted_and_broadcast(tmp_path):
+    config = store(tmp_path / "provider.json")
+    sent = []
+    broadcaster = ProviderConfigBroadcaster(
+        config, lambda kind, payload: sent.append((kind, payload))
+    )
+    broadcaster.sync(force=True)
+
+    result = config.save_language("en")
+    assert result["language"] == "en"
+    assert result["language_version"] == 1
+    broadcaster.sync()
+    assert sent[-1] == (
+        "provider_config", {"selected": "nemotron", "language": "en"}
+    )
+
+    with pytest.raises(ProviderConfigError, match="unsupported language"):
+        config.save_language("French")
+
+
+def test_legacy_provider_state_migrates_to_spanish_without_losing_selection(tmp_path):
+    path = tmp_path / "provider.json"
+    path.write_text(json.dumps({
+        "selected": "gemma_local", "active": "nemotron", "healthy": True,
+        "error": "", "selection_version": 2, "updated_at_ms": 123,
+    }), encoding="utf-8")
+
+    state = store(path).load()
+
+    assert state["selected"] == "gemma_local"
+    assert state["language"] == "es"
+    assert state["language_version"] == 0

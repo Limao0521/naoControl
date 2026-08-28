@@ -14,6 +14,28 @@ def test_decision_prompt_uses_nao_first_person_and_explicit_physical_actions():
     assert "Me pondré de pie" in DECISION_SYSTEM_PROMPT
 
 
+@pytest.mark.asyncio
+async def test_nemotron_decision_uses_selected_language_and_curated_identity():
+    captured = {}
+
+    def handler(request):
+        captured.update(json.loads(request.content))
+        return httpx.Response(200, json={
+            "choices": [{"message": {"content": '{"speech":"Hello","tool_calls":[]}'}}]
+        })
+
+    client = NemotronClient(
+        "test-key", "https://example.test/v1", "agent-model", "omni-model",
+        language="en", transport=httpx.MockTransport(handler),
+    )
+
+    await client.decide("Hello", "A person", [])
+
+    system_prompt = captured["messages"][0]["content"]
+    assert "Respond only in English" in system_prompt
+    assert "robotic captain of the HSL team" in system_prompt
+
+
 def test_behavior_ids_are_enum_in_function_schema():
     allowed = ["dance_siu", "wave"]
     schema = _function_parameters("run_behavior", {"allowed_behavior_ids": allowed})

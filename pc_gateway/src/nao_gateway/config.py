@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from ipaddress import IPv4Address, IPv4Network, ip_address
 from typing import Mapping
 from urllib.parse import urlparse
 
@@ -23,6 +24,7 @@ class GatewaySettings:
     default_provider: str
     gemma_base_url: str
     gemma_model: str
+    gemma_api_key: str
 
     @classmethod
     def from_env(cls, environ: Mapping[str, str]) -> "GatewaySettings":
@@ -51,11 +53,38 @@ class GatewaySettings:
             "GEMMA_BASE_URL", "http://127.0.0.1:8080/v1"
         ).rstrip("/")
         parsed_gemma = urlparse(gemma_base_url)
-        if (
-            parsed_gemma.scheme not in {"http", "https"}
-            or parsed_gemma.hostname not in {"127.0.0.1", "localhost", "::1"}
-        ):
-            raise ConfigurationError("GEMMA_BASE_URL must use PC loopback")
+        if parsed_gemma.scheme not in {"http", "https"} or not parsed_gemma.hostname:
+            raise ConfigurationError("GEMMA_BASE_URL must be an HTTP URL")
+        if parsed_gemma.username is not None or parsed_gemma.password is not None:
+            raise ConfigurationError("GEMMA_BASE_URL must not contain credentials")
+        gemma_host = parsed_gemma.hostname
+        gemma_address = None
+        try:
+            gemma_address = ip_address(gemma_host)
+        except ValueError:
+            pass
+        is_loopback = (
+            gemma_host == "localhost"
+            or (gemma_address is not None and gemma_address.is_loopback)
+        )
+        private_networks = (
+            IPv4Network("10.0.0.0/8"),
+            IPv4Network("172.16.0.0/12"),
+            IPv4Network("192.168.0.0/16"),
+        )
+        is_private_lan = (
+            isinstance(gemma_address, IPv4Address)
+            and any(gemma_address in network for network in private_networks)
+        )
+        if not is_loopback and not is_private_lan:
+            raise ConfigurationError(
+                "GEMMA_BASE_URL must use loopback or a private network IPv4 address"
+            )
+        gemma_api_key = environ.get("GEMMA_API_KEY", "").strip()
+        if not is_loopback and not gemma_api_key:
+            raise ConfigurationError(
+                "GEMMA_API_KEY is required for a private network Gemma server"
+            )
 
         robot_url = environ.get("NAO_GATEWAY_URL", "ws://nao.local:6674")
         parsed_robot = urlparse(robot_url)
@@ -78,4 +107,5 @@ class GatewaySettings:
             default_provider=default_provider,
             gemma_base_url=gemma_base_url,
             gemma_model=environ.get("GEMMA_MODEL", "").strip(),
+            gemma_api_key=gemma_api_key,
         )

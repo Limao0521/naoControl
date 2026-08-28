@@ -144,10 +144,62 @@ async def test_provider_config_event_activates_router_and_reports_status_to_robo
             published.append(payload)
 
     class Router:
+        def set_language(self, language):
+            assert language == "en"
+
         async def activate(self, name):
             assert name == "gemma_local"
             return {"active": name, "healthy": True, "error": ""}
 
-    await handler(Robot(), Router(), {"selected": "gemma_local"})
+    await handler(Robot(), Router(), {"selected": "gemma_local", "language": "en"})
 
     assert published == [{"active": "gemma_local", "healthy": True, "error": ""}]
+
+
+@pytest.mark.asyncio
+async def test_run_gateway_passes_lan_api_key_only_to_gemma_client(monkeypatch, tmp_path):
+    registry_path = tmp_path / "registry.json"
+    registry_path.write_text("{}", encoding="utf-8")
+    (tmp_path / "behavior_registry.json").write_text(
+        '{"behaviors": {}}', encoding="utf-8"
+    )
+    settings = GatewaySettings.from_env({
+        "INTELLIGENCE_PROVIDER": "gemma_local",
+        "GEMMA_BASE_URL": "http://172.23.12.52:8080/v1",
+        "GEMMA_API_KEY": "private-lan-test-key",
+        "NAO_GATEWAY_SECRET": "test-shared-secret-with-enough-entropy",
+        "NAO_GATEWAY_URL": "ws://169.254.1.2:6674",
+    })
+    received = []
+
+    class FakeRobot:
+        def __init__(self, *args):
+            pass
+
+        async def publish_interaction_state(self, payload):
+            pass
+
+    class FakeGemma:
+        def __init__(self, base_url, model, api_key):
+            received.append((base_url, model, api_key))
+
+        async def validate(self):
+            pass
+
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(main_module, "RobotClient", FakeRobot)
+    monkeypatch.setattr(main_module, "GemmaLocalClient", FakeGemma)
+    monkeypatch.setattr(main_module, "AgentHost", lambda *args, **kwargs: object())
+
+    async def fake_robot_connection(robot, host):
+        pass
+
+    monkeypatch.setattr(main_module, "maintain_robot_connection", fake_robot_connection)
+
+    await main_module.run_gateway(settings, Path(registry_path))
+
+    assert received == [(
+        "http://172.23.12.52:8080/v1", "", "private-lan-test-key",
+    )]

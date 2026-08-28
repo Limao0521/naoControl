@@ -13,11 +13,13 @@ from nemotron_commands import NemotronStatusCommand
 try:
     from nemotron_commands import (
         IntelligenceProviderStatusCommand,
+        SetIntelligenceLanguageCommand,
         SetIntelligenceProviderCommand,
     )
 except ImportError:
     IntelligenceProviderStatusCommand = None
     SetIntelligenceProviderCommand = None
+    SetIntelligenceLanguageCommand = None
 from command_factory import CommandFactory
 
 
@@ -116,7 +118,7 @@ class FakeProviderStore(object):
     def __init__(self):
         self.state = {
             "selected": "nemotron", "active": "nemotron", "healthy": True,
-            "error": "", "updated_at_ms": 1234,
+            "error": "", "language": "es", "updated_at_ms": 1234,
         }
 
     def load(self):
@@ -124,6 +126,10 @@ class FakeProviderStore(object):
 
     def save_selected(self, selected):
         self.state["selected"] = selected
+        return dict(self.state)
+
+    def save_language(self, language):
+        self.state["language"] = language
         return dict(self.state)
 
 
@@ -138,7 +144,7 @@ def test_provider_status_exposes_only_bounded_nonsecret_state_to_configured_pc()
     assert command.execute({"action": "intelligenceProviderStatus"}, socket) is True
     assert socket.messages == [{"intelligenceProviderStatus": {
         "success": True, "selected": "nemotron", "active": "nemotron",
-        "healthy": True, "error": "", "updated_at_ms": 1234,
+        "healthy": True, "error": "", "language": "es", "updated_at_ms": 1234,
     }}]
     assert "key" not in json.dumps(socket.messages).lower()
     assert "url" not in json.dumps(socket.messages).lower()
@@ -189,3 +195,32 @@ def test_command_factory_exposes_provider_status_and_selection_commands():
         factory.create_command("setIntelligenceProvider"),
         SetIntelligenceProviderCommand,
     )
+    assert isinstance(
+        factory.create_command("setIntelligenceLanguage"),
+        SetIntelligenceLanguageCommand,
+    )
+
+
+def test_intelligence_language_updates_tts_and_persisted_agent_language():
+    class Facade(object):
+        def __init__(self):
+            self.languages = []
+
+        def set_language(self, language):
+            self.languages.append(language)
+            return True
+
+    socket = FakeSocket()
+    facade = Facade()
+    provider_store = FakeProviderStore()
+    command = SetIntelligenceLanguageCommand(
+        facade, FakeLogger(), provider_store=provider_store,
+        target_store=FakeTargetStore(),
+    )
+
+    assert command.execute({
+        "action": "setIntelligenceLanguage", "language": "en",
+    }, socket) is True
+    assert facade.languages == ["English"]
+    assert provider_store.state["language"] == "en"
+    assert socket.messages[0]["setIntelligenceLanguage"]["language"] == "en"

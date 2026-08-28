@@ -9,6 +9,7 @@ import { nemotronApi } from '../services/nemotronApi';
 jest.mock('../services/nemotronApi', () => ({
   nemotronApi: {
     status: jest.fn(), providerStatus: jest.fn(), setProvider: jest.fn(),
+    setLanguage: jest.fn(),
   },
 }));
 
@@ -24,11 +25,15 @@ beforeEach(() => {
   });
   nemotronApi.providerStatus.mockResolvedValue({
     selected: 'nemotron', active: 'nemotron', healthy: true,
-    error: '', updated_at_ms: 1234,
+    error: '', language: 'es', updated_at_ms: 1234,
   });
   nemotronApi.setProvider.mockResolvedValue({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
-    error: '', updated_at_ms: 1235,
+    error: '', language: 'es', updated_at_ms: 1235,
+  });
+  nemotronApi.setLanguage.mockResolvedValue({
+    selected: 'gemma_local', active: 'nemotron', healthy: true,
+    error: '', language: 'en', updated_at_ms: 1236,
   });
 });
 
@@ -60,8 +65,9 @@ test('selects Gemma local from the intelligent control panel without exposing en
   render(<NemotronMenu />);
 
   const selector = await screen.findByLabelText('Proveedor de inteligencia');
+  expect(screen.getByRole('option', { name: 'Gemma LAN autenticado' })).toBeInTheDocument();
   fireEvent.change(selector, { target: { value: 'gemma_local' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Guardar proveedor' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
 
   await waitFor(() => {
     expect(nemotronApi.setProvider).toHaveBeenCalledWith('gemma_local');
@@ -72,10 +78,24 @@ test('selects Gemma local from the intelligent control panel without exposing en
 });
 
 
+test('selects English for model responses and NAO speech from the intelligent panel', async () => {
+  render(<NemotronMenu />);
+
+  const selector = await screen.findByLabelText('Idioma de respuesta');
+  fireEvent.change(selector, { target: { value: 'en' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Guardar configuración' }));
+
+  await waitFor(() => {
+    expect(nemotronApi.setLanguage).toHaveBeenCalledWith('en');
+  });
+  expect(screen.getByText(/idioma y voz del robot/i)).toBeInTheDocument();
+});
+
+
 test('shows provider activation error while preserving visible active provider', async () => {
   nemotronApi.providerStatus.mockResolvedValue({
     selected: 'gemma_local', active: 'nemotron', healthy: true,
-    error: 'Gemma local no responde', updated_at_ms: 1236,
+    error: 'Gemma local no responde', language: 'es', updated_at_ms: 1236,
   });
 
   render(<NemotronMenu />);

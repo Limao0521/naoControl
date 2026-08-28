@@ -141,3 +141,45 @@ class SetIntelligenceProviderCommand(_ProviderCommand):
         state["success"] = True
         self._send(websocket, self.ACTION, state)
         return True
+
+
+class SetIntelligenceLanguageCommand(_ProviderCommand):
+    ACTION = "setIntelligenceLanguage"
+    TTS_LANGUAGES = {"es": "Spanish", "en": "English"}
+
+    def get_action_name(self):
+        return self.ACTION
+
+    def execute(self, message, websocket):
+        if not self._authorized(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
+            })
+            return False
+        if not isinstance(message, dict) or set(message) != {"action", "language"}:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
+            })
+            return False
+        language = message.get("language")
+        tts_language = self.TTS_LANGUAGES.get(language)
+        if tts_language is None:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "unsupported_language",
+            })
+            return False
+        if not self.nao.set_language(tts_language):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "tts_language_failed",
+            })
+            return False
+        try:
+            state = self.provider_store.save_language(language)
+        except ProviderConfigError:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "unsupported_language",
+            })
+            return False
+        state["success"] = True
+        self._send(websocket, self.ACTION, state)
+        return True

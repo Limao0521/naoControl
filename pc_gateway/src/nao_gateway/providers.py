@@ -21,6 +21,7 @@ from .nemotron import (
     _normalize_decision,
     _normalize_string_list,
 )
+from .agent_identity import build_decision_system_prompt
 
 
 class ProviderActivationError(RuntimeError):
@@ -35,6 +36,16 @@ class ProviderRouter:
         self.clients: dict[str, Any] = {}
         self.active_name = ""
         self.last_error = ""
+        self.language = "es"
+
+    def set_language(self, language: str) -> None:
+        if language not in {"es", "en"}:
+            raise ProviderActivationError("unsupported language")
+        self.language = language
+        for client in self.clients.values():
+            setter = getattr(client, "set_language", None)
+            if setter is not None:
+                setter(language)
 
     async def activate(self, name: str) -> dict[str, Any]:
         if name not in self.factories:
@@ -47,6 +58,9 @@ class ProviderRouter:
             except Exception as error:
                 self.last_error = str(error) or type(error).__name__
                 raise ProviderActivationError(self.last_error) from error
+        setter = getattr(client, "set_language", None)
+        if setter is not None:
+            setter(self.language)
         try:
             validate = getattr(client, "validate", None)
             if validate is not None:
@@ -97,21 +111,29 @@ class ProviderRouter:
 
 
 class GemmaLocalClient:
-    """OpenAI-compatible multimodal adapter for the loopback llama.cpp API."""
+    """OpenAI-compatible adapter for authenticated local or private-LAN Gemma."""
 
     def __init__(
         self,
         base_url: str,
         model: str = "",
+        api_key: str = "",
         transport: httpx.AsyncBaseTransport | None = None,
+        language: str = "es",
     ) -> None:
         self.model = model.strip()
+        self.language = language
+        self.decision_system_prompt = build_decision_system_prompt(language)
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
-            headers={"Authorization": "Bearer local-no-key"},
+            headers={"Authorization": "Bearer " + (api_key.strip() or "local-no-key")},
             timeout=httpx.Timeout(180, connect=5),
             transport=transport,
         )
+
+    def set_language(self, language: str) -> None:
+        self.language = language
+        self.decision_system_prompt = build_decision_system_prompt(language)
 
     async def validate(self) -> None:
         response = await self.client.get("/models")
@@ -139,7 +161,7 @@ class GemmaLocalClient:
     ) -> Perception:
         content = [
             {"type": "text", "text": (
-                "Transcribe el audio en español y describe solo la evidencia visible. "
+                "Transcribe fielmente el audio en el idioma hablado y describe solo la evidencia visible. "
                 "Devuelve el objeto JSON solicitado."
             )},
             {"type": "input_audio", "input_audio": {
@@ -172,7 +194,7 @@ class GemmaLocalClient:
         response = await self._post({
             "model": self.model,
             "messages": [
-                {"role": "system", "content": DECISION_SYSTEM_PROMPT},
+                {"role": "system", "content": self.decision_system_prompt},
                 {"role": "user", "content": json.dumps({
                     "transcript": transcript,
                     "visual_context": scene,

@@ -33,7 +33,8 @@ cleanup_bundle_tmp() {
 }
 trap cleanup_bundle_tmp 0 1 2 3 15
 tar -czf "$bundle_tmp" \
-    -C "$BASE" pc_gateway config/action_registry.json config/behavior_registry.json
+    -C "$BASE" pc_gateway config/action_registry.json config/behavior_registry.json \
+    config/agent_knowledge.json
 mv "$bundle_tmp" "$BUNDLE_DIR/pc_gateway_bundle.tar.gz"
 bundle_tmp=""
 trap - 0 1 2 3 15

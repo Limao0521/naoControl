@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "verified_at": "2026-08-27",
+  "sources": [
+    {
+      "id": "sabana-herons-web",
+      "authority": "team",
+      "title": "Sabana Herons - Applied Robotics Unisabana",
+      "url": "https://lafrul.github.io/SabanaHeronsWeb/index.html",
+      "note": "Fuente del semillero; su propio aviso aclara que no representa oficialmente a la Universidad de La Sabana."
+    },
+    {
+      "id": "unisabana-facultad-ingenieria",
+      "authority": "official",
+      "title": "Facultad de Ingeniería - Universidad de La Sabana",
+      "url": "https://www.unisabana.edu.co/programas/unidades-academicas/facultad-de-ingenieria"
+    },
+    {
+      "id": "unisabana-ingenieria-informatica",
+      "authority": "official",
+      "title": "Ingeniería Informática - Universidad de La Sabana",
+      "url": "https://www.unisabana.edu.co/programas/pregrados/ingenieria-informatica"
+    },
+    {
+      "id": "unisabana-ingenieria-mecanica",
+      "authority": "official",
+      "title": "Ingeniería Mecánica - Universidad de La Sabana",
+      "url": "https://www.unisabana.edu.co/programas/pregrados/ingenieria-mecanica"
+    },
+    {
+      "id": "unisabana-diseno-innovacion",
+      "authority": "official",
+      "title": "Ingeniería de Diseño e Innovación - Universidad de La Sabana",
+      "url": "https://www.unisabana.edu.co/programas/pregrados/ingenieria-de-diseno-e-innovacion"
+    },
+    {
+      "id": "unisabana-pei",
+      "authority": "official",
+      "title": "Proyecto Educativo Institucional - Universidad de La Sabana",
+      "url": "https://www.unisabana.edu.co/proyecto-educativo-institucional"
+    }
+  ],
+  "facts": [
+    "[equipo] Sabana Herons es la identidad competitiva del Semillero de Investigación en Robótica Aplicada de la Universidad de La Sabana.",
+    "[equipo] El semillero trabaja en robótica, automatización e inteligencia artificial mediante investigación aplicada, aprendizaje práctico y colaboración interdisciplinaria.",
+    "[equipo] Sus proyectos públicos incluyen RoboCup Humanoid Soccer League, RoboCupRescue Robot League y UR5 ChessBot.",
+    "[equipo] En RoboCup Humanoid Soccer League los robots caminan, perciben y toman decisiones estratégicas de manera autónoma.",
+    "[equipo] La página del equipo reporta participación en RoboCup 2019 en Sídney, 2022 en Bangkok y 2024 en Países Bajos, con segundo lugar en el Challenge Shield de 2019.",
+    "[equipo] La arquitectura HSL publicada se apoya en B-Human Code Release 2023 y describe trabajo en percepción, comportamientos autónomos, aprendizaje por refuerzo y detección eficiente de silbatos.",
+    "[oficial] La Facultad de Ingeniería integra ciencia, tecnología y sociedad, y promueve investigación, innovación y soluciones con impacto tangible.",
+    "[oficial] Ingeniería Informática forma profesionales que diseñan soluciones tecnológicas centradas en las personas e integra software, inteligencia artificial, analítica de datos, ciberseguridad, IoT y transformación digital.",
+    "[oficial] Ingeniería Mecánica aborda el diseño y desarrollo de sistemas mecánicos, automatización, manufactura, energía, materiales y soluciones de ingeniería con responsabilidad social y ambiental.",
+    "[oficial] Ingeniería de Diseño e Innovación integra creatividad, diseño, tecnología e innovación para desarrollar soluciones y productos orientados a necesidades humanas y retos del entorno.",
+    "[oficial] La Universidad de La Sabana promueve formación integral, rigor académico, investigación interdisciplinaria, servicio, respeto por la dignidad humana y contribución al bien común.",
+    "[identidad narrativa] NAO es el capitán robótico del equipo HSL de Sabana Herons; esta identidad pertenece al personaje del agente y no constituye un nombramiento institucional."
+  ]
+}

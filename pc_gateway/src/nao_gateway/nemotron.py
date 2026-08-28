@@ -12,32 +12,20 @@ import httpx
 from pydantic import TypeAdapter
 from pydantic.dataclasses import dataclass
 
+from .agent_identity import build_decision_system_prompt
+
 
 logger = logging.getLogger(__name__)
 
 
 PERCEPTION_SYSTEM_PROMPT = (
-    "Eres el módulo de percepción multimodal de NAO. Transcribe el audio en español "
+    "Eres el módulo de percepción multimodal de NAO. Transcribe fielmente el audio "
+    "en el idioma hablado "
     "y describe solamente evidencia visible en la imagen. No inventes objetos ni "
     "atributos. Responde JSON con transcript, scene_summary, objects y uncertainties."
 )
 
-DECISION_SYSTEM_PROMPT = (
-    "Eres el cerebro conversacional de NAO. Responde breve y amablemente en español. "
-    "Habla siempre como NAO en primera persona y nunca describas al usuario como si "
-    "fuera el robot. Emite una acción física solo si el usuario la pidió explícitamente. "
-    "Usa solo las herramientas proporcionadas y nunca inventes una acción o información "
-    "visual. Si hay incertidumbre, dilo. Devuelve exclusivamente JSON con speech y "
-    "tool_calls; speech será pronunciado por NAO. Cada llamada tiene exactamente name y "
-    "arguments. Nunca prometas una acción física en speech sin emitir la tool_call "
-    "correspondiente. Si el usuario pide sentarse, usa exactamente "
-    "{\"name\":\"set_posture\",\"arguments\":{\"posture\":\"Sit\",\"speed\":0.35}}. "
-    "Si pide ponerse de pie, responde por ejemplo 'Me pondré de pie' y usa Stand. "
-    "Si pide saludar, asentir, negar, pensar, bailar, tocar saxofón o hacer taichí, "
-    "usa run_behavior con uno de los behavior_id permitidos por el esquema. "
-    "No uses Markdown. Ejemplo conversacional sin acción: "
-    "{\"speech\":\"Hola\",\"tool_calls\":[]}."
-)
+DECISION_SYSTEM_PROMPT = build_decision_system_prompt("es")
 
 
 @dataclass
@@ -161,16 +149,22 @@ class NemotronClient:
 
     def __init__(
         self, api_key: str, base_url: str, agent_model: str, omni_model: str,
-        transport: httpx.AsyncBaseTransport | None = None,
+        transport: httpx.AsyncBaseTransport | None = None, language: str = "es",
     ) -> None:
         self.agent_model = agent_model
         self.omni_model = omni_model
+        self.language = language
+        self.decision_system_prompt = build_decision_system_prompt(language)
         self.client = httpx.AsyncClient(
             base_url=base_url.rstrip("/"),
             headers={"Authorization": f"Bearer {api_key}"},
             timeout=httpx.Timeout(60, connect=10),
             transport=transport,
         )
+
+    def set_language(self, language: str) -> None:
+        self.language = language
+        self.decision_system_prompt = build_decision_system_prompt(language)
 
     async def _post(self, body: dict, stage: str) -> httpx.Response:
         """Retry temporary NVIDIA capacity failures with bounded backoff."""
@@ -240,7 +234,7 @@ class NemotronClient:
         response = await self._post({
             "model": self.agent_model,
             "messages": [
-                {"role": "system", "content": DECISION_SYSTEM_PROMPT},
+                {"role": "system", "content": self.decision_system_prompt},
                 {"role": "user", "content": json.dumps(prompt, ensure_ascii=False)},
             ],
             "temperature": 0,

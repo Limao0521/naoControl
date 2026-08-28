@@ -6,6 +6,7 @@ const ACTION_STATUSES = new Set([
 const ERROR_MESSAGE = 'Estado Nemotron no disponible.';
 const PROVIDER_ERROR_MESSAGE = 'Proveedor inteligente no disponible.';
 const PROVIDERS = new Set(['nemotron', 'gemma_local']);
+const LANGUAGES = new Set(['es', 'en']);
 
 
 const invalid = () => new Error(ERROR_MESSAGE);
@@ -42,11 +43,13 @@ const normalizeProvider = (raw) => {
   if (raw.active !== '' && !PROVIDERS.has(raw.active)) throw invalidProvider();
   if (typeof raw.healthy !== 'boolean') throw invalidProvider();
   if (typeof raw.error !== 'string' || raw.error.length > 200) throw invalidProvider();
+  if (!LANGUAGES.has(raw.language)) throw invalidProvider();
   return {
     selected: raw.selected,
     active: raw.active,
     healthy: raw.healthy,
     error: raw.error,
+    language: raw.language,
     updated_at_ms: Number.isFinite(raw.updated_at_ms) ? raw.updated_at_ms : 0,
   };
 };
@@ -114,6 +117,13 @@ export const createNemotronApi = (options = {}) => {
       return request(
         { action: 'setIntelligenceProvider', provider },
         'setIntelligenceProvider', normalizeProvider, invalidProvider,
+      );
+    },
+    setLanguage: (language) => {
+      if (!LANGUAGES.has(language)) return Promise.reject(invalidProvider());
+      return request(
+        { action: 'setIntelligenceLanguage', language },
+        'setIntelligenceLanguage', normalizeProvider, invalidProvider,
       );
     },
   };

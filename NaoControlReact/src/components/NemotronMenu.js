@@ -24,7 +24,7 @@ const ACTION_LABELS = {
 
 const PROVIDER_LABELS = {
   nemotron: 'Nemotron NVIDIA',
-  gemma_local: 'Gemma local',
+  gemma_local: 'Gemma LAN autenticado',
 };
 
 
@@ -34,12 +34,15 @@ const NemotronMenu = () => {
   });
   const [connected, setConnected] = useState(true);
   const [provider, setProvider] = useState({
-    selected: 'nemotron', active: '', healthy: false, error: '', updated_at_ms: 0,
+    selected: 'nemotron', active: '', healthy: false, error: '', language: 'es',
+    updated_at_ms: 0,
   });
   const [providerChoice, setProviderChoice] = useState('nemotron');
   const [providerTouched, setProviderTouched] = useState(false);
   const [providerBusy, setProviderBusy] = useState(false);
   const [providerMessage, setProviderMessage] = useState('');
+  const [languageChoice, setLanguageChoice] = useState('es');
+  const [languageTouched, setLanguageTouched] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -55,6 +58,7 @@ const NemotronMenu = () => {
           setState(next);
           setProvider(nextProvider);
           if (!providerTouched) setProviderChoice(nextProvider.selected);
+          if (!languageTouched) setLanguageChoice(nextProvider.language);
           setConnected(true);
         }
       } catch (_error) {
@@ -69,16 +73,19 @@ const NemotronMenu = () => {
       active = false;
       clearInterval(interval);
     };
-  }, [providerTouched]);
+  }, [providerTouched, languageTouched]);
 
-  const saveProvider = async (event) => {
+  const saveConfiguration = async (event) => {
     event.preventDefault();
     setProviderBusy(true);
     setProviderMessage('');
     try {
-      const next = await nemotronApi.setProvider(providerChoice);
+      let next = provider;
+      if (providerTouched) next = await nemotronApi.setProvider(providerChoice);
+      if (languageTouched) next = await nemotronApi.setLanguage(languageChoice);
       setProvider(next);
       setProviderTouched(false);
+      setLanguageTouched(false);
       setProviderMessage('Cambio solicitado. Se aplicará antes del siguiente turno.');
     } catch (_error) {
       setProviderMessage('No fue posible cambiar el proveedor.');
@@ -95,8 +102,8 @@ const NemotronMenu = () => {
         <strong>{connected ? PHASE_LABELS[state.phase] : 'Sin conexión'}</strong>
       </div>
 
-      <form className="nemotron-card provider-card" onSubmit={saveProvider}>
-        <h4>Proveedor</h4>
+      <form className="nemotron-card provider-card" onSubmit={saveConfiguration}>
+        <h4>Proveedor e idioma</h4>
         <label htmlFor="intelligence-provider">Proveedor de inteligencia</label>
         <select
           id="intelligence-provider"
@@ -108,8 +115,22 @@ const NemotronMenu = () => {
           disabled={providerBusy}
         >
           <option value="nemotron">Nemotron NVIDIA</option>
-          <option value="gemma_local">Gemma local</option>
+          <option value="gemma_local">Gemma LAN autenticado</option>
         </select>
+        <label htmlFor="intelligence-language">Idioma de respuesta</label>
+        <select
+          id="intelligence-language"
+          value={languageChoice}
+          onChange={(event) => {
+            setLanguageChoice(event.target.value);
+            setLanguageTouched(true);
+          }}
+          disabled={providerBusy}
+        >
+          <option value="es">Español</option>
+          <option value="en">English</option>
+        </select>
+        <p>Controla el idioma y voz del robot para las respuestas inteligentes.</p>
         <p>Seleccionado: {PROVIDER_LABELS[provider.selected]}</p>
         <p>Activo: {provider.active ? PROVIDER_LABELS[provider.active] : 'ninguno'}</p>
         <p className={provider.healthy ? 'provider-ok' : 'provider-offline'}>
@@ -117,7 +138,7 @@ const NemotronMenu = () => {
         </p>
         {provider.error && <p className="provider-error">{provider.error}</p>}
         <button type="submit" disabled={providerBusy || !connected}>
-          {providerBusy ? 'Guardando…' : 'Guardar proveedor'}
+          {providerBusy ? 'Guardando…' : 'Guardar configuración'}
         </button>
         {providerMessage && <p role="status">{providerMessage}</p>}
       </form>
