@@ -103,8 +103,8 @@ const NemotronMenu = () => {
       setLanguageTouched(false);
       setGemmaEndpointTouched(false);
       setProviderMessage('Cambio solicitado. Se aplicará antes del siguiente turno.');
-    } catch (_error) {
-      setProviderMessage('No fue posible cambiar el proveedor.');
+    } catch (error) {
+      setProviderMessage(error?.message || 'No fue posible cambiar el proveedor.');
     } finally {
       setProviderBusy(false);
     }

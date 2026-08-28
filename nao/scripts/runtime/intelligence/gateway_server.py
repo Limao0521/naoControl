@@ -380,12 +380,19 @@ def _load_runtime():
                 facade.say("Modo inteligente listo")
             elif event.name == "MODE_ENTRY_REJECTED":
                 apply_mode_led(led_controller, event.name, event.mode)
+                print("GATEWAY mode_entry_rejected reason={}".format(
+                    entry_gate.last_reason
+                ))
                 if entry_gate.last_reason == "pc_target_not_configured":
                     facade.say("Configura la dirección del computador en el menú de red")
                 elif entry_gate.last_reason == "pc_gateway_unavailable":
                     facade.say("No pude iniciar el sistema inteligente en el computador")
                 elif entry_gate.last_reason == "native_nemotron_not_configured":
                     facade.say("Nemotron no está configurado en el robot")
+                elif entry_gate.last_reason == "battery_below_minimum":
+                    facade.say("La batería está por debajo del treinta por ciento")
+                elif entry_gate.last_reason == "battery_unavailable":
+                    facade.say("No pude consultar el nivel de batería")
                 else:
                     facade.say("No es seguro iniciar el modo inteligente")
             elif event.name == "MODE_EXIT_REQUESTED":

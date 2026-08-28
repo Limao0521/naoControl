@@ -10,7 +10,9 @@ class SafetySupervisor(object):
     def check_intelligent_entry(self):
         reasons = []
         battery = self.facade.get_battery_level()
-        if battery is None or battery < self.minimum_battery:
+        if battery is None:
+            reasons.append("battery_unavailable")
+        elif battery < self.minimum_battery:
             reasons.append("battery_below_minimum")
         return (not reasons, reasons)
 

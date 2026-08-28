@@ -171,3 +171,23 @@ test('sends only a private Gemma host IP and keeps the endpoint syntax fixed', a
     'Proveedor inteligente no disponible.'
   );
 });
+
+
+test('surfaces an old robot backend instead of hiding the provider rejection', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '192.168.23.66' },
+    timeoutMs: 1000,
+  });
+
+  const pending = api.setGemmaEndpoint('192.168.23.1');
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+  socket.message({ setGemmaEndpoint: {
+    success: false, error: 'invalid_request',
+  } });
+
+  await expect(pending).rejects.toThrow(
+    'El NAO ejecuta una versión anterior; reinicia los servicios.'
+  );
+});

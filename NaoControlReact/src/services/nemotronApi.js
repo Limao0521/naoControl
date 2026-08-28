@@ -10,7 +10,15 @@ const LANGUAGES = new Set(['es', 'en']);
 
 
 const invalid = () => new Error(ERROR_MESSAGE);
-const invalidProvider = () => new Error(PROVIDER_ERROR_MESSAGE);
+const PROVIDER_ERRORS = {
+  forbidden: 'El NAO rechazó este PC como origen del cambio.',
+  invalid_request: 'El NAO ejecuta una versión anterior; reinicia los servicios.',
+  invalid_gemma_endpoint: 'La IP del servidor Gemma no es válida.',
+  unsupported_provider: 'El proveedor seleccionado no es compatible.',
+};
+const invalidProvider = (reason = '') => new Error(
+  PROVIDER_ERRORS[reason] || PROVIDER_ERROR_MESSAGE
+);
 
 const validPrivateIpv4 = (value) => {
   try {
@@ -52,7 +60,7 @@ const normalize = (raw) => {
 
 
 const normalizeProvider = (raw) => {
-  if (!raw || raw.success !== true) throw invalidProvider();
+  if (!raw || raw.success !== true) throw invalidProvider(raw?.error);
   if (!PROVIDERS.has(raw.selected)) throw invalidProvider();
   if (raw.active !== '' && !PROVIDERS.has(raw.active)) throw invalidProvider();
   if (typeof raw.healthy !== 'boolean') throw invalidProvider();
@@ -115,7 +123,7 @@ export const createNemotronApi = (options = {}) => {
         catch (_error) { fail(); return; }
         if (!message?.[responseKey]) return;
         try { finish(resolve, normalizer(message[responseKey])); }
-        catch (_error) { fail(); }
+        catch (error) { finish(reject, error); }
       };
       socket.onerror = fail;
       socket.onclose = fail;
