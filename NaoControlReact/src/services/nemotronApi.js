@@ -54,6 +54,9 @@ const normalize = (raw) => {
     transcript: raw.transcript,
     response: raw.response,
     actions,
+    capture_finished_at_ms: Number.isFinite(raw.capture_finished_at_ms) ? raw.capture_finished_at_ms : 0,
+    response_started_at_ms: Number.isFinite(raw.response_started_at_ms) ? raw.response_started_at_ms : 0,
+    response_latency_ms: Number.isFinite(raw.response_latency_ms) ? raw.response_latency_ms : 0,
     updated_at_ms: Number.isFinite(raw.updated_at_ms) ? raw.updated_at_ms : 0,
   };
 };
@@ -157,6 +160,18 @@ export const createNemotronApi = (options = {}) => {
       return request(
         { action: 'setGemmaEndpoint', gemma_ip: gemmaIp },
         'setGemmaEndpoint', normalizeProvider, invalidProvider,
+      );
+    },
+    configure: (provider, language, gemmaIp = '') => {
+      if (!PROVIDERS.has(provider) || !LANGUAGES.has(language)
+          || (provider === 'gemma_local' && !validPrivateIpv4(gemmaIp))
+          || (provider === 'nemotron' && gemmaIp !== '')) {
+        return Promise.reject(invalidProvider());
+      }
+      const payload = { action: 'configureIntelligence', provider, language };
+      if (provider === 'gemma_local') payload.gemma_ip = gemmaIp;
+      return request(
+        payload, 'configureIntelligence', normalizeProvider, invalidProvider,
       );
     },
   };

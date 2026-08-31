@@ -23,6 +23,7 @@ INTELLIGENCE_DIR = os.path.join(RUNTIME_DIR, "intelligence")
 if INTELLIGENCE_DIR not in sys.path:
     sys.path.insert(0, INTELLIGENCE_DIR)
 from service_supervisor import NemotronServiceSupervisor
+from provider_config import ProviderConfigStore, system_message, tts_language
 
 # Compatibilidad con Python 2 para TimeoutExpired
 try:
@@ -124,7 +125,7 @@ class RobustLauncher:
         self.balancer_was_enabled = False
         self.pressed = False
         self.press_start = 0.0
-        
+
         # Procesos
         self.server_proc = None
         self.http_proc = None
@@ -146,6 +147,15 @@ class RobustLauncher:
         
         log("SYSTEM", "Iniciando NAO Control Launcher...")
         self.initialize()
+
+    def say_system(self, key):
+        """Speak one lifecycle outcome in the persisted intelligent language."""
+        language = ProviderConfigStore().load().get("language", "es")
+        try:
+            self.tts.setLanguage(tts_language(language))
+        except Exception:
+            pass
+        self.tts.say(system_message(language, key))
     
     def initialize(self):
         """Inicializa el launcher con el mejor método disponible."""
@@ -174,8 +184,7 @@ class RobustLauncher:
         
         # Mensaje inicial
         try:
-            self.tts.say("Launcher iniciado.")
-            log("SUCCESS", "Mensaje inicial enviado", "LAUNCHER")
+            log("SUCCESS", "Launcher inicializado", "LAUNCHER")
         except Exception as e:
             log("WARN", "No se pudo enviar mensaje inicial: " + str(e), "LAUNCHER")
         
@@ -336,9 +345,9 @@ class RobustLauncher:
             if success_steps >= 3:  # Al menos 3 de 4 pasos exitosos
                 if self.tts:
                     if errors:
-                        self.tts.say("Apagando nao control. Control apagado con advertencias")
+                        self.say_system("control_stopped_warning")
                     else:
-                        self.tts.say("Apagando nao control. Control apagado")
+                        self.say_system("control_stopped")
                 
                 log("SUCCESS", "Servicios de control detenidos ({}/{} pasos exitosos)".format(success_steps, total_steps), "CHOREOGRAPHE")
                 if errors:
@@ -350,7 +359,7 @@ class RobustLauncher:
             else:
                 # Fallo crítico
                 if self.tts:
-                    self.tts.say("Error apagando nao control")
+                    self.say_system("control_stop_failed")
                 
                 log("ERROR", "Error crítico preparando para Choregraphe ({}/{} pasos fallaron)".format(total_steps - success_steps, total_steps), "CHOREOGRAPHE")
                 for error in errors:
@@ -363,7 +372,7 @@ class RobustLauncher:
             log("ERROR", error_msg, "CHOREOGRAPHE")
             
             if self.tts:
-                self.tts.say("Error fatal apagando nao control")
+                self.say_system("control_stop_failed")
             
             return False
     
@@ -436,9 +445,9 @@ class RobustLauncher:
             if success_steps >= 2:  # Al menos 2 de 3 pasos exitosos
                 if self.tts:
                     if errors:
-                        self.tts.say("Iniciando nao control. Control iniciado con advertencias")
+                        self.say_system("control_started_warning")
                     else:
-                        self.tts.say("Iniciando nao control. Control iniciado")
+                        self.say_system("control_started")
                 
                 log("SUCCESS", "Modo control restaurado ({}/{} pasos exitosos)".format(success_steps, total_steps), "CONTROL")
                 if errors:
@@ -450,7 +459,7 @@ class RobustLauncher:
             else:
                 # Fallo crítico
                 if self.tts:
-                    self.tts.say("Error iniciando nao control")
+                    self.say_system("control_start_failed")
                 
                 log("ERROR", "Error crítico restaurando modo control ({}/{} pasos fallaron)".format(total_steps - success_steps, total_steps), "CONTROL")
                 for error in errors:
@@ -463,7 +472,7 @@ class RobustLauncher:
             log("ERROR", error_msg, "CONTROL")
             
             if self.tts:
-                self.tts.say("Error fatal iniciando nao control")
+                self.say_system("control_start_failed")
             
             return False
     
@@ -473,8 +482,6 @@ class RobustLauncher:
         
         if self.services_running:
             log("INFO", "Cambiando a modo Choregraphe...", "LAUNCHER")
-            if self.tts:
-                self.tts.say("Desactivando control")
             success = self.prepare_for_choreographe()
             if success:
                 log("SUCCESS", "Cambio a modo Choregraphe completado", "LAUNCHER")
@@ -482,8 +489,6 @@ class RobustLauncher:
                 log("ERROR", "Cambio a modo Choregraphe falló - manteniendo estado actual", "LAUNCHER")
         else:
             log("INFO", "Cambiando a modo control...", "LAUNCHER")
-            if self.tts:
-                self.tts.say("Activando modo control")
             success = self.restore_control_mode()
             if success:
                 log("SUCCESS", "Cambio a modo control completado", "LAUNCHER")
@@ -784,15 +789,6 @@ def main():
         print("   Servicios activos → Preparar para Choregraphe")
         print("   Choregraphe listo → Restaurar servicios")
         print()
-        
-        # Mensaje inicial de TTS indicando estado
-        try:
-            if launcher.services_running:
-                launcher.tts.say("nao control iniciado. Presiona mi cabeza tres segundos para desactivar control")
-            else:
-                launcher.tts.say("Presiona mi cabeza tres segundos para activar modo control")
-        except Exception as e:
-            print("Aviso: No se pudo enviar mensaje inicial de TTS: " + str(e))
         
         # Ejecutar el launcher
         launcher.run()

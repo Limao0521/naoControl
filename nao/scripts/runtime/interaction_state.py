@@ -42,10 +42,30 @@ class InteractionStateStore(object):
     def _default(self):
         return {
             "interaction_id": "", "phase": "idle", "transcript": "",
-            "response": "", "actions": [], "updated_at_ms": 0,
+            "response": "", "actions": [], "capture_finished_at_ms": 0,
+            "response_started_at_ms": 0, "response_latency_ms": 0,
+            "updated_at_ms": 0,
         }
 
-    def normalize(self, payload):
+    def _timestamp(self, value, field):
+        if value is None:
+            return 0
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("{} must be a timestamp".format(field))
+        value = int(value)
+        if value < 0 or value > 32503680000000:
+            raise ValueError("{} is out of range".format(field))
+        return value
+
+    def _duration(self, value, field):
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            raise ValueError("{} must be a duration".format(field))
+        value = int(value)
+        if value < 0 or value > 86400000:
+            raise ValueError("{} is out of range".format(field))
+        return value
+
+    def normalize(self, payload, previous=None, measure_latency=False):
         if not isinstance(payload, dict):
             raise ValueError("interaction state must be an object")
         interaction_id = _text(payload.get("interaction_id", ""), "interaction_id", 64)
@@ -73,14 +93,36 @@ class InteractionStateStore(object):
             if reason is not None:
                 reason = _text(reason, "action reason", 160)
             actions.append({"name": name, "status": status, "reason": reason})
+        previous = previous or self._default()
+        capture_finished_at_ms = self._timestamp(
+            payload.get("capture_finished_at_ms", 0), "capture_finished_at_ms"
+        )
+        if not capture_finished_at_ms and previous.get("interaction_id") == interaction_id:
+            capture_finished_at_ms = previous.get("capture_finished_at_ms", 0)
+        now = self.now_ms()
+        response_started_at_ms = self._timestamp(
+            payload.get("response_started_at_ms", 0), "response_started_at_ms"
+        )
+        response_latency_ms = self._duration(
+            payload.get("response_latency_ms", 0), "response_latency_ms"
+        )
+        if measure_latency and phase == "ready" and response and capture_finished_at_ms:
+            response_started_at_ms = now
+            response_latency_ms = max(0, now - capture_finished_at_ms)
         return {
             "interaction_id": interaction_id, "phase": phase,
             "transcript": transcript, "response": response,
-            "actions": actions, "updated_at_ms": self.now_ms(),
+            "actions": actions,
+            "capture_finished_at_ms": capture_finished_at_ms,
+            "response_started_at_ms": response_started_at_ms,
+            "response_latency_ms": response_latency_ms,
+            "updated_at_ms": now,
         }
 
     def save(self, payload):
-        state = self.normalize(payload)
+        state = self.normalize(
+            payload, previous=self.load(), measure_latency=True
+        )
         directory = os.path.dirname(self.path)
         if directory and not os.path.isdir(directory):
             os.makedirs(directory)

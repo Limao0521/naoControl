@@ -74,7 +74,9 @@ solo instala y ejecuta el gateway recibido desde el NAO.
    que abrió el control y guardó la configuración. No se ingresa manualmente.
 5. En **Idioma de respuesta**, seleccione **Español** o **English**. Este valor
    controla tanto la respuesta del modelo como la voz del NAO.
-6. Pulse **Guardar configuración**.
+6. Pulse **Guardar configuración**. La interfaz envía una sola configuración
+   atómica: proveedor, idioma y, solo para Gemma, IP del modelo. El NAO no
+   deja un proveedor a medias por guardar esos campos en solicitudes separadas.
 7. Compruebe por separado **Seleccionado**, **Activo** y la disponibilidad.
 
 La selección se guarda en:
@@ -86,6 +88,11 @@ La selección se guarda en:
 El archivo contiene únicamente identificadores, idioma, estado limitado y el
 endpoint privado de Gemma; nunca contiene claves. El gateway del NAO publica el
 cambio por el WebSocket firmado.
+
+Al volver temporalmente a Nemotron se conserva la última IP válida de Gemma;
+por eso puedes regresar a Gemma sin volver a escribirla. La IP del PC gateway
+no se escribe en el formulario: el NAO la toma del navegador que guardó la
+configuración.
 El PC comprueba el proveedor y lo activa antes del siguiente turno. No se
 cambia de modelo a mitad de una interacción.
 

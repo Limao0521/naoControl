@@ -47,6 +47,7 @@ from conversation_commands import (
 )
 from network_commands import NetworkAdminCommand
 from nemotron_commands import (
+    ConfigureIntelligenceCommand,
     IntelligenceProviderStatusCommand,
     NemotronStatusCommand,
     SetGemmaEndpointCommand,
@@ -187,6 +188,7 @@ class CommandFactory(object):
             'setIntelligenceProvider': SetIntelligenceProviderCommand,
             'setGemmaEndpoint': SetGemmaEndpointCommand,
             'setIntelligenceLanguage': SetIntelligenceLanguageCommand,
+            'configureIntelligence': ConfigureIntelligenceCommand,
         }
     
     def create_command(self, action):

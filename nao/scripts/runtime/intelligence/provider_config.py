@@ -27,6 +27,54 @@ class ProviderConfigError(ValueError):
     pass
 
 
+def tts_language(language):
+    return "English" if language == "en" else "Spanish"
+
+
+SYSTEM_MESSAGES = {
+    "es": {
+        "control_started": u"Control web iniciado.",
+        "control_started_warning": u"Control web iniciado con advertencias.",
+        "control_start_failed": u"No pude iniciar el control web.",
+        "control_stopped": u"Control web detenido.",
+        "control_stopped_warning": u"Control web detenido con advertencias.",
+        "control_stop_failed": u"No pude detener el control web.",
+        "intelligent_ready": u"Modo inteligente listo.",
+        "web_control": u"Modo control web.",
+        "pc_not_configured": u"Configura el computador gateway desde el control web.",
+        "pc_unavailable": u"No pude iniciar el sistema inteligente en el computador.",
+        "native_not_configured": u"Nemotron no está configurado en el robot.",
+        "battery_low": u"La batería está por debajo del treinta por ciento.",
+        "battery_unavailable": u"No pude consultar el nivel de batería.",
+        "unsafe_entry": u"No es seguro iniciar el modo inteligente.",
+        "processing_failed": u"No pude procesar la solicitud.",
+    },
+    "en": {
+        "control_started": "Web control started.",
+        "control_started_warning": "Web control started with warnings.",
+        "control_start_failed": "I could not start web control.",
+        "control_stopped": "Web control stopped.",
+        "control_stopped_warning": "Web control stopped with warnings.",
+        "control_stop_failed": "I could not stop web control.",
+        "intelligent_ready": "Intelligent mode is ready.",
+        "web_control": "Web control mode.",
+        "pc_not_configured": "Configure the gateway computer from web control.",
+        "pc_unavailable": "I could not start the intelligent system on the computer.",
+        "native_not_configured": "Nemotron is not configured on the robot.",
+        "battery_low": "The battery is below thirty percent.",
+        "battery_unavailable": "I could not read the battery level.",
+        "unsafe_entry": "It is not safe to start intelligent mode.",
+        "processing_failed": "I could not process the request.",
+    },
+}
+
+
+def system_message(language, key):
+    return SYSTEM_MESSAGES.get(language, SYSTEM_MESSAGES["es"]).get(
+        key, SYSTEM_MESSAGES["es"][key]
+    )
+
+
 def valid_gemma_base_url(value):
     """Allow only a private, credential-free OpenAI-compatible LAN endpoint."""
     if not isinstance(value, STRING_TYPES) or len(value) > MAX_GEMMA_ENDPOINT_LENGTH:
@@ -166,6 +214,32 @@ class ProviderConfigStore(object):
         data = self.load()
         data["gemma_base_url"] = gemma_base_url.rstrip("/")
         data["gemma_endpoint_version"] += 1
+        data["updated_at_ms"] = self.now_ms()
+        return self._save(data)
+
+    def save_configuration(self, selected, language, gemma_base_url=None):
+        """Persist one complete provider choice in a single atomic file write."""
+        if selected not in ALLOWED_PROVIDERS:
+            raise ProviderConfigError("unsupported provider")
+        if language not in ALLOWED_LANGUAGES:
+            raise ProviderConfigError("unsupported language")
+        if gemma_base_url is not None and not valid_gemma_base_url(gemma_base_url):
+            raise ProviderConfigError("invalid Gemma endpoint")
+        data = self.load()
+        if gemma_base_url is None:
+            gemma_base_url = data["gemma_base_url"]
+        if selected == "gemma_local" and not gemma_base_url:
+            raise ProviderConfigError("Gemma endpoint is required")
+        if data["selected"] != selected:
+            data["selected"] = selected
+            data["selection_version"] += 1
+        if data["language"] != language:
+            data["language"] = language
+            data["language_version"] += 1
+        normalized_endpoint = gemma_base_url.rstrip("/")
+        if data["gemma_base_url"] != normalized_endpoint:
+            data["gemma_base_url"] = normalized_endpoint
+            data["gemma_endpoint_version"] += 1
         data["updated_at_ms"] = self.now_ms()
         return self._save(data)
 

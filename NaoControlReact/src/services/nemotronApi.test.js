@@ -173,6 +173,31 @@ test('sends only a private Gemma host IP and keeps the endpoint syntax fixed', a
 });
 
 
+test('saves provider, language, and optional Gemma IP in one request', async () => {
+  const api = createNemotronApi({
+    WebSocketImpl: FakeWebSocket,
+    locationObject: { protocol: 'http:', hostname: '192.168.23.66' },
+    timeoutMs: 1000,
+  });
+  const pending = api.configure('gemma_local', 'en', '192.168.23.1');
+  const socket = FakeWebSocket.instances[0];
+  socket.open();
+  expect(socket.sent.map(JSON.parse)).toEqual([{
+    action: 'configureIntelligence', provider: 'gemma_local',
+    language: 'en', gemma_ip: '192.168.23.1',
+  }]);
+  socket.message({ configureIntelligence: {
+    success: true, selected: 'gemma_local', active: '', healthy: false,
+    error: '', language: 'en', gemma_base_url: 'http://192.168.23.1:8080/v1',
+    updated_at_ms: 1234,
+  } });
+
+  await expect(pending).resolves.toMatchObject({
+    selected: 'gemma_local', language: 'en',
+  });
+});
+
+
 test('surfaces an old robot backend instead of hiding the provider rejection', async () => {
   const api = createNemotronApi({
     WebSocketImpl: FakeWebSocket,

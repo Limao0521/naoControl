@@ -286,10 +286,6 @@ class ModularControlServer(object):
             logger.info("Control Server v2.0 iniciado exitosamente")
             logger.info("WebSocket activo en puerto {}".format(WS_PORT))
             
-            # Mensaje TTS de confirmación
-            if self.nao_facade:
-                self.nao_facade.say("Control server modular iniciado")
-            
             # Servir para siempre
             self.websocket_server.serveforever()
             
@@ -307,11 +303,6 @@ class ModularControlServer(object):
         logger.info("Cerrando Control Server v2.0...")
         
         self.server_running = False
-        
-        # Mensaje TTS de cierre
-        if self.nao_facade:
-            self.nao_facade.say("Control server desconectado")
-            time.sleep(1)  # Dar tiempo para que se reproduzca
         
         # Cerrar servidor WebSocket
         if self.websocket_server:

@@ -10,6 +10,7 @@ import socket
 from base_command import BaseCommand
 from interaction_state import InteractionStateStore
 from intelligence.provider_config import (
+    ALLOWED_LANGUAGES,
     ALLOWED_PROVIDERS,
     ProviderConfigError,
     ProviderConfigStore,
@@ -278,6 +279,65 @@ class SetIntelligenceLanguageCommand(_ProviderCommand):
         except ProviderConfigError:
             self._send(websocket, self.ACTION, {
                 "success": False, "error": "unsupported_language",
+            })
+            return False
+        state["success"] = True
+        self._send(websocket, self.ACTION, state)
+        return True
+
+
+class ConfigureIntelligenceCommand(_ProviderCommand):
+    """Apply provider, model LAN endpoint, and response language together."""
+    ACTION = "configureIntelligence"
+    TTS_LANGUAGES = {"es": "Spanish", "en": "English"}
+
+    def get_action_name(self):
+        return self.ACTION
+
+    def execute(self, message, websocket):
+        expected = set(("action", "provider", "language"))
+        if not isinstance(message, dict) or set(message) not in (
+                expected, expected | set(("gemma_ip",))):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
+            })
+            return False
+        selected = message.get("provider")
+        language = message.get("language")
+        gemma_ip = message.get("gemma_ip")
+        if selected not in ALLOWED_PROVIDERS or language not in ALLOWED_LANGUAGES:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
+            })
+            return False
+        if selected == "gemma_local" and not _private_peer_ip(gemma_ip):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_gemma_endpoint",
+            })
+            return False
+        if selected == "nemotron" and gemma_ip:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
+            })
+            return False
+        if not self._bind_requesting_pc(websocket):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "forbidden",
+            })
+            return False
+        endpoint = None
+        if selected == "gemma_local":
+            endpoint = "http://{}:8080/v1".format(gemma_ip)
+        if not self.nao.set_language(self.TTS_LANGUAGES[language]):
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "tts_language_failed",
+            })
+            return False
+        try:
+            state = self.provider_store.save_configuration(selected, language, endpoint)
+        except ProviderConfigError:
+            self._send(websocket, self.ACTION, {
+                "success": False, "error": "invalid_request",
             })
             return False
         state["success"] = True

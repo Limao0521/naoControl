@@ -14,14 +14,16 @@ try:
     from nemotron_commands import (
         IntelligenceProviderStatusCommand,
         SetGemmaEndpointCommand,
-        SetIntelligenceLanguageCommand,
-        SetIntelligenceProviderCommand,
+    SetIntelligenceLanguageCommand,
+    SetIntelligenceProviderCommand,
+    ConfigureIntelligenceCommand,
     )
 except ImportError:
     IntelligenceProviderStatusCommand = None
     SetIntelligenceProviderCommand = None
     SetIntelligenceLanguageCommand = None
     SetGemmaEndpointCommand = None
+    ConfigureIntelligenceCommand = None
 from command_factory import CommandFactory
 
 
@@ -141,6 +143,13 @@ class FakeProviderStore(object):
 
     def save_gemma_base_url(self, endpoint):
         self.state["gemma_base_url"] = endpoint
+        return dict(self.state)
+
+    def save_configuration(self, selected, language, endpoint):
+        self.state.update({
+            "selected": selected, "language": language,
+            "gemma_base_url": endpoint,
+        })
         return dict(self.state)
 
 
@@ -268,3 +277,33 @@ def test_intelligence_language_updates_tts_and_persisted_agent_language():
     assert facade.languages == ["English"]
     assert provider_store.state["language"] == "en"
     assert socket.messages[0]["setIntelligenceLanguage"]["language"] == "en"
+
+
+def test_single_provider_configuration_binds_browser_gateway_and_model_endpoint():
+    assert ConfigureIntelligenceCommand is not None, "combined configuration command is missing"
+
+    class Facade(object):
+        def __init__(self):
+            self.languages = []
+
+        def set_language(self, language):
+            self.languages.append(language)
+            return True
+
+    socket = FakeSocket(address=("192.168.23.233", 5555))
+    target_store = FakeTargetStore("192.168.23.99")
+    provider_store = FakeProviderStore()
+    command = ConfigureIntelligenceCommand(
+        Facade(), FakeLogger(), provider_store=provider_store,
+        target_store=target_store,
+    )
+
+    assert command.execute({
+        "action": "configureIntelligence", "provider": "gemma_local",
+        "language": "en", "gemma_ip": "192.168.23.1",
+    }, socket) is True
+    assert target_store.pc_ip == "192.168.23.233"
+    assert provider_store.state["gemma_base_url"] == "http://192.168.23.1:8080/v1"
+    assert provider_store.state["selected"] == "gemma_local"
+    assert provider_store.state["language"] == "en"
+    assert socket.messages[0]["configureIntelligence"]["success"] is True

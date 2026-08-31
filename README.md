@@ -116,6 +116,12 @@ Añadir `-StartServices` si se desea iniciar los servicios inmediatamente tras
 el despliegue. El script preserva el secreto del robot y no copia `.env` ni las
 credenciales NVIDIA. La guía operativa actual está en `docs/nemotron/physical-test.md`.
 
+La documentación vigente del sistema se concentra en:
+
+- [Arquitectura y catálogo de responsabilidades](docs/architecture.md)
+- [Operación, despliegue y diagnóstico](docs/operations.md)
+- [Cambio de proveedor Nemotron/Gemma](docs/nemotron/provider-switching.md)
+
 ### Gestión de red desde la web
 
 El gestor de red forma parte del control WebSocket del NAO y queda disponible

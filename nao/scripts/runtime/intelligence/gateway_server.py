@@ -27,6 +27,7 @@ from pc_gateway_launch import (
     IntelligentEntryGate,
     RemoteGatewayLauncher,
 )
+from provider_config import system_message, tts_language
 
 
 def create_entry_gate(safety, secret, target_path=DEFAULT_TARGET_PATH,
@@ -195,6 +196,7 @@ class CaptureController(object):
                 "interaction_id": self.interaction_id or "",
                 "phase": "processing",
                 "transcript": "", "response": "", "actions": [],
+                "capture_finished_at_ms": now_ms,
             })
             print("GATEWAY audio_ready duration_ms={}".format(result["duration_ms"]))
             print("GATEWAY audio_diagnostics={}".format(result["audio_diagnostics"]))
@@ -251,6 +253,11 @@ def _load_runtime():
     provider_store = ProviderConfigStore(
         os.path.join(base, "config", "intelligence_provider.json")
     )
+
+    def say_system(key):
+        language = provider_store.load().get("language", "es")
+        facade.set_language(tts_language(language))
+        facade.say(system_message(language, key))
     native_config = NativeCloudConfig(
         os.path.join(base, "config", "nvidia_api_key")
     )
@@ -350,7 +357,7 @@ def _load_runtime():
             provider_store.save_status({
                 "active": "", "healthy": False, "error": safe_error,
             })
-            facade.say("No pude procesar la solicitud")
+            say_system("processing_failed")
             capture_controller.recover(
                 "native_processing_failed", core.now_ms(), error
             )
@@ -377,28 +384,28 @@ def _load_runtime():
             print("GATEWAY event={} mode={}".format(event.name, event.mode))
             if event.name == "MODE_ENTER_REQUESTED":
                 apply_mode_led(led_controller, event.name, event.mode)
-                facade.say("Modo inteligente listo")
+                say_system("intelligent_ready")
             elif event.name == "MODE_ENTRY_REJECTED":
                 apply_mode_led(led_controller, event.name, event.mode)
                 print("GATEWAY mode_entry_rejected reason={}".format(
                     entry_gate.last_reason
                 ))
                 if entry_gate.last_reason == "pc_target_not_configured":
-                    facade.say("Configura la dirección del computador en el menú de red")
+                    say_system("pc_not_configured")
                 elif entry_gate.last_reason == "pc_gateway_unavailable":
-                    facade.say("No pude iniciar el sistema inteligente en el computador")
+                    say_system("pc_unavailable")
                 elif entry_gate.last_reason == "native_nemotron_not_configured":
-                    facade.say("Nemotron no está configurado en el robot")
+                    say_system("native_not_configured")
                 elif entry_gate.last_reason == "battery_below_minimum":
-                    facade.say("La batería está por debajo del treinta por ciento")
+                    say_system("battery_low")
                 elif entry_gate.last_reason == "battery_unavailable":
-                    facade.say("No pude consultar el nivel de batería")
+                    say_system("battery_unavailable")
                 else:
-                    facade.say("No es seguro iniciar el modo inteligente")
+                    say_system("unsafe_entry")
             elif event.name == "MODE_EXIT_REQUESTED":
                 capture.cancel()
                 apply_mode_led(led_controller, event.name, event.mode)
-                facade.say("Modo control web")
+                say_system("web_control")
             elif event.name == "CAPTURE_STARTED":
                 capture_controller.start(now)
             elif event.name == "CAPTURE_FINISHED":

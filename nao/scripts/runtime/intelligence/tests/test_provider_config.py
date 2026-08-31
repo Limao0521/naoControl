@@ -140,3 +140,18 @@ def test_legacy_provider_state_migrates_to_spanish_without_losing_selection(tmp_
     assert state["selected"] == "gemma_local"
     assert state["language"] == "es"
     assert state["language_version"] == 0
+
+
+def test_provider_configuration_is_saved_in_one_atomic_state_update(tmp_path):
+    config = store(tmp_path / "provider.json")
+
+    saved = config.save_configuration(
+        "gemma_local", "en", "http://192.168.23.1:8080/v1"
+    )
+
+    assert saved["selected"] == "gemma_local"
+    assert saved["language"] == "en"
+    assert saved["gemma_base_url"] == "http://192.168.23.1:8080/v1"
+    assert saved["selection_version"] == 1
+    assert saved["language_version"] == 1
+    assert saved["gemma_endpoint_version"] == 1

@@ -8,6 +8,8 @@ Maneja la inicialización de proxies, manejo de errores y operaciones comunes.
 """
 
 from __future__ import print_function
+import json
+import os
 import time
 import math
 from naoqi import ALProxy
@@ -107,15 +109,28 @@ class NAOFacade(object):
                 self.safe_call(self.motion.setMotionConfig, 
                               [["ENABLE_FOOT_CONTACT_PROTECTION", True]])
 
-            # Toda respuesta del modo inteligente se pronuncia en español.
+            # Keep all system speech aligned with the language saved by web control.
             if self.tts:
-                if self.set_language("Spanish"):
-                    self.logger.info("Idioma TTS configurado en español")
+                language = self._configured_tts_language()
+                if self.set_language(language):
+                    self.logger.info("Idioma TTS configurado en {}".format(language))
                 else:
                     self.logger.warning("No se pudo configurar el idioma TTS en español")
                 
         except Exception as e:
             self.logger.error("Error configurando estado inicial: {}".format(e))
+
+    def _configured_tts_language(self):
+        path = os.environ.get(
+            "NAO_INTELLIGENCE_PROVIDER_FILE",
+            "/home/nao/naoControl/config/intelligence_provider.json",
+        )
+        try:
+            with open(path, "rb") as source:
+                data = json.loads(source.read().decode("utf-8"))
+            return "English" if data.get("language") == "en" else "Spanish"
+        except (IOError, OSError, TypeError, ValueError, UnicodeError):
+            return "Spanish"
     
     # Sentinel value para indicar error en safe_call (diferente de None)
     _SAFE_CALL_ERROR = object()
