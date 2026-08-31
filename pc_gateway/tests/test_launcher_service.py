@@ -15,6 +15,10 @@ from nao_gateway.launcher_service import (
 from nao_gateway.protocol import ReplayGuard, sign_envelope, verify_envelope
 
 
+def test_gateway_bundle_limit_allows_the_bundled_kws_encoder_without_being_unbounded():
+    assert GatewayRuntime.MAX_BUNDLE_BYTES == 64 * 1024 * 1024
+
+
 def bundle_bytes(entries: dict[str, bytes]) -> bytes:
     output = io.BytesIO()
     with tarfile.open(fileobj=output, mode="w:gz") as archive:

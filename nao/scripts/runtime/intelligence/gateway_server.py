@@ -93,6 +93,12 @@ class GatewayCore(object):
                 self.system_handler("TURN_FINISHED")
                 result = {"status": "ok"}
                 response_type = "event_result"
+            elif message_type == "keyword_detected":
+                if payload != {}:
+                    raise ProtocolError("invalid keyword payload")
+                self.system_handler("KEYWORD_DETECTED")
+                result = {"status": "ok"}
+                response_type = "event_result"
             elif message_type == "interaction_update":
                 self.interaction_handler(payload)
                 result = {"status": "ok"}
@@ -287,6 +293,8 @@ def _load_runtime():
         if name == "TURN_FINISHED":
             apply_mode_led(led_controller, name, manager.mode)
         for event in events:
+            if event.name == "CAPTURE_STARTED":
+                capture_controller.start(event.occurred_at_ms)
             send_all("mode_event", event.as_dict())
 
     core = GatewayCore(

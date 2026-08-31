@@ -96,7 +96,9 @@ def _safe_extract(archive: tarfile.TarFile, destination: Path) -> None:
 
 
 class GatewayRuntime:
-    MAX_BUNDLE_BYTES = 8 * 1024 * 1024
+    # The openWakeWord encoder plus NAO classifier is about 21 MiB uncompressed.
+    # Keep a firm bound while allowing the signed KWS bundle to reach the PC.
+    MAX_BUNDLE_BYTES = 64 * 1024 * 1024
 
     def __init__(
         self,

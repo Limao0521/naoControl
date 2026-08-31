@@ -121,6 +121,7 @@ La documentación vigente del sistema se concentra en:
 - [Arquitectura y catálogo de responsabilidades](docs/architecture.md)
 - [Operación, despliegue y diagnóstico](docs/operations.md)
 - [Cambio de proveedor Nemotron/Gemma](docs/nemotron/provider-switching.md)
+- [Activación por palabra clave “NAO”](docs/nemotron/keyword-spotting.md)
 
 ### Gestión de red desde la web
 

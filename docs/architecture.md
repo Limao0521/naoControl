@@ -37,6 +37,8 @@ bumpers ─> gateway_server :6674 ─> audio + cámara + estado del turno
 | `pc_gateway/src/nao_gateway/main.py` | Entrada del gateway Python 3 para Gemma LAN. |
 | `pc_gateway/src/nao_gateway/agent_host.py` | Ejecuta percepción/decisión remota, publica el estado y solicita tools al NAO. |
 | `pc_gateway/src/nao_gateway/providers.py` | Selecciona y reemplaza clientes Nemotron/Gemma sin exponer credenciales. |
+| `pc_gateway/src/nao_gateway/kws.py` | Detector ONNX opcional de la palabra “NAO” en el micrófono del PC; emite solo un evento autenticado, nunca audio. |
+| `pc_gateway/models/kws/` | Clasificador y encoder openWakeWord importados localmente; se excluyen de Git y se incluyen en el bundle del gateway. |
 | `NaoControlReact/src/components/NemotronMenu.js` | Panel para proveedor, idioma, IP Gemma, transcripción, respuesta, acciones y latencia. |
 | `NaoControlReact/src/services/nemotronApi.js` | Cliente WebSocket estricto del panel inteligente. |
 | `config/action_registry.json` | Espacio de acciones permitido; el modelo nunca recibe permisos fuera de este registro. |
@@ -59,3 +61,10 @@ NAO desde que se suelta el bumper y termina la grabación hasta que el comando
 de voz es aceptado por NAOqi. Incluye la transmisión y la inferencia del
 proveedor (local o nube); no depende de que los relojes del NAO y del PC estén
 sincronizados.
+
+## Palabra clave
+
+El modelo KWS se ejecuta únicamente en el PC gateway (Python 3.11). Cuando el
+NAO ya está en modo inteligente, una detección de “NAO” inicia la grabación del
+NAO; una pulsación del bumper la detiene. La guía de preparación está en
+[`keyword-spotting.md`](nemotron/keyword-spotting.md).

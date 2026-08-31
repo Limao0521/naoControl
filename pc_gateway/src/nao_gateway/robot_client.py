@@ -45,6 +45,9 @@ class RobotClient:
     def provider_status_envelope(self, payload: dict) -> dict:
         return self._envelope("provider_status_update", payload)
 
+    def keyword_detected_envelope(self) -> dict:
+        return self._envelope("keyword_detected", {})
+
     def ingest(self, raw: str) -> tuple[str, dict]:
         envelope = json.loads(raw)
         payload = verify_envelope(envelope, self.secret, self.now_ms(), self.replay_guard)
@@ -100,6 +103,12 @@ class RobotClient:
         if self.socket is None:
             raise RuntimeError("robot client is not connected")
         await self.socket.send(json.dumps(self.provider_status_envelope(payload)))
+
+    async def notify_keyword_detected(self) -> None:
+        if self.socket is None:
+            raise RuntimeError("robot client is not connected")
+        async with self.command_lock:
+            await self.socket.send(json.dumps(self.keyword_detected_envelope()))
 
     async def close(self) -> None:
         if self.socket is not None:

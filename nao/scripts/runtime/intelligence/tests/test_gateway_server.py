@@ -163,6 +163,23 @@ def test_turn_finished_invokes_system_handler():
     assert events == ["TURN_FINISHED"]
 
 
+def test_signed_keyword_detection_invokes_the_robot_mode_handler():
+    events = []
+    core = GatewayCore(
+        b"shared-secret", FakeExecutor(), now_ms=lambda: 1000,
+        system_handler=lambda name: events.append(name),
+    )
+    envelope = sign_envelope(
+        unsigned("keyword_detected", "wake-1", {}), b"shared-secret"
+    )
+
+    result = core.handle_message(envelope)
+
+    assert result["message_type"] == "event_result"
+    assert result["payload"]["status"] == "ok"
+    assert events == ["KEYWORD_DETECTED"]
+
+
 def test_turn_finished_preserves_temporary_face_override():
     """The end-of-turn ready signal must not erase a requested eye color."""
     calls = []

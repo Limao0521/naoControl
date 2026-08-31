@@ -38,6 +38,7 @@ class ModeManager(object):
         self._left_consumed = False
         self._right_pressed = False
         self._both_pressed = False
+        self._capture_source = ""
 
     def _transition(self, name, next_mode, now_ms):
         previous = self.mode
@@ -77,16 +78,28 @@ class ModeManager(object):
 
         if right and not self._right_pressed and self.mode == NEMOTRON_READY:
             self._right_pressed = True
+            self._capture_source = "bumper"
             return [self._transition("CAPTURE_STARTED", CAPTURING, now_ms)]
+        if (right and not self._right_pressed and self.mode == CAPTURING
+                and self._capture_source == "keyword"):
+            self._right_pressed = True
+            self._capture_source = ""
+            return [self._transition("CAPTURE_FINISHED", PROCESSING, now_ms)]
         if not right and self._right_pressed:
             self._right_pressed = False
             if self.mode == CAPTURING:
+                self._capture_source = ""
                 return [self._transition("CAPTURE_FINISHED", PROCESSING, now_ms)]
         else:
             self._right_pressed = right
         return []
 
     def handle_system(self, event_name, now_ms):
+        if event_name == "KEYWORD_DETECTED":
+            if self.mode != NEMOTRON_READY:
+                return []
+            self._capture_source = "keyword"
+            return [self._transition("CAPTURE_STARTED", CAPTURING, now_ms)]
         transitions = {
             "ACTING_STARTED": ("ACTING_STARTED", ACTING),
             "SPEAKING_STARTED": ("SPEAKING_STARTED", SPEAKING),
@@ -98,4 +111,6 @@ class ModeManager(object):
         transition = transitions.get(event_name)
         if transition is None:
             return []
+        if event_name in ("TURN_FINISHED", "INTERACTION_CANCELLED", "MODE_EXIT_REQUESTED"):
+            self._capture_source = ""
         return [self._transition(transition[0], transition[1], now_ms)]

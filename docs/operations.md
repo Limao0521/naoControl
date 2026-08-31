@@ -14,6 +14,10 @@
    el flujo configurado. El panel muestra lo escuchado, respondido, las tools y
    el tiempo hasta que empezó la voz.
 
+Si preparaste KWS, decir “NAO” en el micrófono del PC gateway también inicia la
+grabación mientras el NAO está listo; el bumper la detiene. Consulta
+[`keyword-spotting.md`](nemotron/keyword-spotting.md).
+
 ## Proveedores
 
 | Modo | Requisito diario |

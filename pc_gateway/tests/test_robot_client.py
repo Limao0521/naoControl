@@ -77,6 +77,16 @@ def test_provider_status_update_envelope_contains_no_configuration_or_secret():
     assert "key" not in json.dumps(envelope).lower()
 
 
+def test_keyword_detection_envelope_is_authenticated_and_has_no_audio():
+    client = RobotClient("ws://robot:6674", b"shared-secret", now_ms=lambda: 1000)
+
+    envelope = client.keyword_detected_envelope()
+    payload = verify_envelope(envelope, b"shared-secret", 1000, ReplayGuard())
+
+    assert envelope["message_type"] == "keyword_detected"
+    assert payload == {}
+
+
 @pytest.mark.asyncio
 async def test_receive_loop_reports_connection_loss_instead_of_crashing_gateway():
     class BrokenSocket(object):

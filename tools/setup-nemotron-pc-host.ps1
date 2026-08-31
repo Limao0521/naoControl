@@ -36,7 +36,7 @@ $repo = (Resolve-Path -LiteralPath $RepoRoot).Path
 $package = Join-Path $repo 'pc_gateway'
 $sourceEnv = Join-Path $repo '.env'
 $exampleEnv = Join-Path $repo '.env.example'
-$venv = Join-Path $RuntimeRoot '.venv'
+$venv = Join-Path $RuntimeRoot '.venv311'
 $python = Join-Path $venv 'Scripts\python.exe'
 $runtimeEnv = Join-Path $RuntimeRoot '.env'
 
@@ -46,15 +46,15 @@ if (-not (Test-Path -LiteralPath $python)) {
     Write-Step 'Creando entorno Python del lanzador'
     $pythonCommand = Get-Command py -ErrorAction SilentlyContinue
     if ($pythonCommand) {
-        & py -3 -m venv $venv
+        & py -3.11 -m venv $venv
     } else {
-        & python -m venv $venv
+        throw 'Para KWS instala Python 3.11 y asegúrate de que el comando py -3.11 esté disponible.'
     }
-    if ($LASTEXITCODE -ne 0) { throw 'No fue posible crear el entorno Python 3.11+.' }
+    if ($LASTEXITCODE -ne 0) { throw 'No fue posible crear el entorno Python 3.11 requerido por KWS.' }
 }
 
-Write-Step 'Instalando lanzador y dependencias del gateway'
-& $python -m pip install --disable-pip-version-check $package
+Write-Step 'Instalando lanzador, gateway y dependencias opcionales de palabra clave'
+& $python -m pip install --disable-pip-version-check "$package[kws]"
 if ($LASTEXITCODE -ne 0) { throw 'La instalación del gateway falló.' }
 
 $needsEnvConfiguration = $false

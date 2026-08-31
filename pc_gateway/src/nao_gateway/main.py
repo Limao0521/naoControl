@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 
 from .agent_host import AgentHost
 from .config import GatewaySettings, validate_gemma_base_url
+from .kws import KwsConfigurationError, KwsSettings, WakeWordDetector
 from .nemotron import NemotronClient
 from .providers import GemmaLocalClient, ProviderActivationError, ProviderRouter
 from .robot_client import RobotClient
@@ -81,10 +82,12 @@ async def handle_provider_config(robot, providers, payload: dict, settings=None)
     })
 
 
-async def run_robot_session(robot, host) -> dict:
+async def run_robot_session(robot, host, wake_word=None) -> dict:
     """Process one connected robot session until the socket is lost."""
     receiver = asyncio.create_task(robot.receive_forever())
     heartbeat = asyncio.create_task(robot.heartbeat_forever())
+    if wake_word is not None:
+        await wake_word.start(robot.notify_keyword_detected)
     try:
         while True:
             message_type, payload = await robot.events.get()
@@ -99,20 +102,22 @@ async def run_robot_session(robot, host) -> dict:
             elif message_type == "emergency":
                 print("Emergency stop requested on robot.")
     finally:
+        if wake_word is not None:
+            await wake_word.stop()
         receiver.cancel()
         heartbeat.cancel()
         await asyncio.gather(receiver, heartbeat, return_exceptions=True)
 
 
 async def maintain_robot_connection(
-    robot, host, retry_delay: float = 2.0, sleep=asyncio.sleep
+    robot, host, wake_word=None, retry_delay: float = 2.0, sleep=asyncio.sleep
 ) -> None:
     """Reconnect forever so a cable or robot restart does not kill Nemotron."""
     while True:
         try:
             await robot.connect()
             print("PC Nemotron gateway connected. Waiting for bumper interactions.")
-            details = await run_robot_session(robot, host)
+            details = await run_robot_session(robot, host, wake_word=wake_word)
             logger.warning("Robot connection lost: %s", details.get("reason", "unknown"))
         except asyncio.CancelledError:
             raise
@@ -159,7 +164,16 @@ async def run_gateway(settings: GatewaySettings, registry_path: Path) -> None:
         state_publisher=robot.publish_interaction_state,
     )
     try:
-        await maintain_robot_connection(robot, host)
+        try:
+            kws_settings = KwsSettings.from_env(os.environ)
+            wake_word = WakeWordDetector(kws_settings) if kws_settings.enabled else None
+        except KwsConfigurationError as error:
+            logger.warning("KWS disabled: %s", error)
+            wake_word = None
+        if wake_word is None:
+            await maintain_robot_connection(robot, host)
+        else:
+            await maintain_robot_connection(robot, host, wake_word=wake_word)
     finally:
         await providers.close()
 

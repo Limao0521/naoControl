@@ -33,6 +33,24 @@ def test_right_release_finishes_capture():
     assert manager.mode == "PROCESSING"
 
 
+def test_keyword_starts_capture_and_a_bumper_press_stops_that_capture():
+    manager = ModeManager(initial_mode="NEMOTRON_READY")
+
+    started = manager.handle_system("KEYWORD_DETECTED", 100)
+    stopped = manager.handle_bumper(False, True, 450)
+
+    assert [event.name for event in started] == ["CAPTURE_STARTED"]
+    assert [event.name for event in stopped] == ["CAPTURE_FINISHED"]
+    assert manager.mode == "PROCESSING"
+
+
+def test_keyword_is_ignored_outside_intelligent_ready_mode():
+    manager = ModeManager(initial_mode="WEB_CONTROL")
+
+    assert manager.handle_system("KEYWORD_DETECTED", 100) == []
+    assert manager.mode == "WEB_CONTROL"
+
+
 def test_both_bumpers_preempt_every_state():
     manager = ModeManager(initial_mode="ACTING")
 
