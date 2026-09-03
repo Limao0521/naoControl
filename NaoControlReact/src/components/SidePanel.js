@@ -13,9 +13,7 @@ const SidePanel = ({
   onVolumeChange,
   onUIChange,
   onEmote,
-  currentUI,
-  sendMessage,
-  lastMessage
+  currentUI
 }) => {
   const menuItems = [
     { id: 'voice', icon: FaMicrophone, label: 'Voz' },
@@ -58,8 +56,6 @@ const SidePanel = ({
             onUIChange={onUIChange}
             onEmote={onEmote}
             currentUI={currentUI}
-            sendMessage={sendMessage}
-            lastMessage={lastMessage}
           />
         )}
       </div>

@@ -18,9 +18,7 @@ const MenuContent = ({
   onVolumeChange,
   onUIChange,
   onEmote,
-  currentUI,
-  sendMessage,
-  lastMessage
+  currentUI
 }) => {
   if (!activeMenu) return null;
 
@@ -32,8 +30,6 @@ const MenuContent = ({
             isOpen={true}
             onClose={() => {}} // No necesitamos cerrar desde aquí
             onSendVoice={onSendVoice}
-            sendMessage={sendMessage}
-            lastMessage={lastMessage}
             isEmbedded={true}
           />
         );
